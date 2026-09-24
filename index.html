@@ -330,7 +330,7 @@ function renderWeather(weather) {
       <div class="forecast-chip">
         <div>${h.time}</div>
         <div class="fc-temp">${h.temp != null ? Math.round(h.temp) + '°' : '–'}</div>
-        <div class="fc-rain">${h.rainChance != null ? '💧' + h.rainChance + '%' : ''}</div>
+        <div class="fc-rain">${h.rainChance != null ? '🌧️' + h.rainChance + '%' : ''}</div>
       </div>
     `).join('');
     show(forecastRow, true, 'flex');
