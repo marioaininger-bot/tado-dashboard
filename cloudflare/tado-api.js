@@ -148,12 +148,28 @@ async function handleDebug(env) {
     const homes = me.homes || [];
     const homesWithZones = await Promise.all(
       homes.map(async (home) => {
+        const result = { id: home.id, name: home.name };
         try {
           const zones = await tadoFetch(env, accessToken, `/homes/${home.id}/zones`);
-          return { id: home.id, name: home.name, zoneCount: zones.length, zoneNames: zones.map((z) => z.name) };
+          result.zoneCount = zones.length;
+          result.zoneNames = zones.map((z) => z.name);
         } catch (err) {
-          return { id: home.id, name: home.name, error: err.message };
+          result.zonesError = err.message;
         }
+        try {
+          const roomsAndDevices = await tadoFetch(env, accessToken, `/homes/${home.id}/roomsAndDevices`);
+          result.roomsAndDevices = roomsAndDevices;
+        } catch (err) {
+          result.roomsAndDevicesError = err.message;
+        }
+        try {
+          const devices = await tadoFetch(env, accessToken, `/homes/${home.id}/devices`);
+          result.deviceCount = devices.length;
+          result.deviceTypes = devices.map((d) => d.deviceType || d.shortSerialNo || d.serialNo);
+        } catch (err) {
+          result.devicesError = err.message;
+        }
+        return result;
       })
     );
     return json(200, { homes: homesWithZones, pickedHomeId: homes[0] ? homes[0].id : null }, env);
