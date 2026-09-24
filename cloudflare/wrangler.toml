@@ -20,4 +20,4 @@ ALLOWED_ORIGIN = "*"
 
 [[kv_namespaces]]
 binding = "TADO_KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "a564f39df932445aade6b98e9f121036"
