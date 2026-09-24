@@ -12,6 +12,10 @@
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
 const API_BASE = 'https://my.tado.com/api/v2';
+// Neuere "tado X" Geräte (weiße, runde Thermostate) laufen über eine
+// komplett andere API ("rooms" statt "zones"), aber mit demselben
+// OAuth-Access-Token wie die klassische API.
+const HOPS_API_BASE = 'https://hops.tado.com';
 const TOKEN_KV_KEY = 'tokens';
 
 function corsHeaders(env) {
@@ -75,6 +79,16 @@ async function tadoFetch(env, accessToken, path) {
   });
   if (!res.ok) {
     throw new Error(`Tado API ${path} -> ${res.status}`);
+  }
+  return res.json();
+}
+
+async function hopsFetch(env, accessToken, path) {
+  const res = await fetch(`${HOPS_API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) {
+    throw new Error(`Tado X API ${path} -> ${res.status}`);
   }
   return res.json();
 }
@@ -157,10 +171,17 @@ async function handleDebug(env) {
           result.zonesError = err.message;
         }
         try {
-          const roomsAndDevices = await tadoFetch(env, accessToken, `/homes/${home.id}/roomsAndDevices`);
-          result.roomsAndDevices = roomsAndDevices;
+          const homeDetails = await tadoFetch(env, accessToken, `/homes/${home.id}`);
+          result.generation = homeDetails.generation;
         } catch (err) {
-          result.roomsAndDevicesError = err.message;
+          result.generationError = err.message;
+        }
+        try {
+          const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
+          result.roomCount = rooms.length;
+          result.roomNames = rooms.map((r) => r.name);
+        } catch (err) {
+          result.roomsError = err.message;
         }
         try {
           const devices = await tadoFetch(env, accessToken, `/homes/${home.id}/devices`);
@@ -191,33 +212,58 @@ async function handleDashboard(env) {
       return json(404, { error: 'Kein Tado-Zuhause gefunden.' }, env);
     }
 
-    const [zones, zoneStates, weather] = await Promise.all([
-      tadoFetch(env, accessToken, `/homes/${home.id}/zones`),
-      tadoFetch(env, accessToken, `/homes/${home.id}/zoneStates`),
-      tadoFetch(env, accessToken, `/homes/${home.id}/weather`).catch(() => null),
-    ]);
+    const homeDetails = await tadoFetch(env, accessToken, `/homes/${home.id}`).catch(() => null);
+    const isTadoX = homeDetails && homeDetails.generation === 'LINE_X';
 
-    const states = zoneStates.zoneStates || zoneStates;
+    let zoneList;
+    if (isTadoX) {
+      // "tado X" Geräte: eigene API (hops.tado.com) mit "rooms" statt "zones".
+      const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
+      zoneList = rooms.map((room) => {
+        const setting = room.setting || {};
+        const sensor = room.sensorDataPoints || {};
+        return {
+          id: room.id,
+          name: room.name,
+          type: 'HEATING',
+          power: setting.power || null,
+          targetTemp: setting.temperature ? setting.temperature.value : null,
+          currentTemp: sensor.insideTemperature ? sensor.insideTemperature.value : null,
+          humidity: sensor.humidity ? sensor.humidity.percentage : null,
+          heatingPower: room.heatingPower ? room.heatingPower.percentage : null,
+          acPower: null,
+          openWindow: Boolean(room.openWindow),
+          link: room.connection ? room.connection.state : null,
+        };
+      });
+    } else {
+      const [zones, zoneStates] = await Promise.all([
+        tadoFetch(env, accessToken, `/homes/${home.id}/zones`),
+        tadoFetch(env, accessToken, `/homes/${home.id}/zoneStates`),
+      ]);
+      const states = zoneStates.zoneStates || zoneStates;
+      zoneList = zones.map((zone) => {
+        const state = states[String(zone.id)] || {};
+        const setting = state.setting || {};
+        const sensor = state.sensorDataPoints || {};
+        const activity = state.activityDataPoints || {};
+        return {
+          id: zone.id,
+          name: zone.name,
+          type: zone.type, // HEATING | AC | HOT_WATER
+          power: setting.power || null,
+          targetTemp: setting.temperature ? setting.temperature.celsius : null,
+          currentTemp: sensor.insideTemperature ? sensor.insideTemperature.celsius : null,
+          humidity: sensor.humidity ? sensor.humidity.percentage : null,
+          heatingPower: activity.heatingPower ? activity.heatingPower.percentage : null,
+          acPower: activity.acPower ? activity.acPower.value : null,
+          openWindow: Boolean(state.openWindow || state.openWindowDetected),
+          link: state.link ? state.link.state : null,
+        };
+      });
+    }
 
-    const zoneList = zones.map((zone) => {
-      const state = states[String(zone.id)] || {};
-      const setting = state.setting || {};
-      const sensor = state.sensorDataPoints || {};
-      const activity = state.activityDataPoints || {};
-      return {
-        id: zone.id,
-        name: zone.name,
-        type: zone.type, // HEATING | AC | HOT_WATER
-        power: setting.power || null,
-        targetTemp: setting.temperature ? setting.temperature.celsius : null,
-        currentTemp: sensor.insideTemperature ? sensor.insideTemperature.celsius : null,
-        humidity: sensor.humidity ? sensor.humidity.percentage : null,
-        heatingPower: activity.heatingPower ? activity.heatingPower.percentage : null,
-        acPower: activity.acPower ? activity.acPower.value : null,
-        openWindow: Boolean(state.openWindow || state.openWindowDetected),
-        link: state.link ? state.link.state : null,
-      };
-    });
+    const weather = await tadoFetch(env, accessToken, `/homes/${home.id}/weather`).catch(() => null);
 
     return json(200, {
       homeName: home.name,
