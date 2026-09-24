@@ -16,7 +16,7 @@ compatibility_date = "2024-09-01"
 #   wrangler deploy
 
 [vars]
-ALLOWED_ORIGIN = "*"
+ALLOWED_ORIGIN = "https://tado.aininger.com"
 
 [[kv_namespaces]]
 binding = "TADO_KV"
