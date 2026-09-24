@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌡️ Tado Dashboard</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-1:#0c1320;
+    --bg-2:#101b30;
+    --card:#16233c;
+    --card-border:#243352;
+    --text:#eef1f8;
+    --text-dim:#94a3c0;
+    --orange:#f4a259;
+    --blue:#5ab4f0;
+    --green:#7fd8a0;
+    --red:#f0705a;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Nunito',sans-serif;
+    color:var(--text);
+    background:linear-gradient(180deg,var(--bg-1),var(--bg-2));
+    min-height:100%;
+  }
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 60px;}
+
+  .hero{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px;flex-wrap:wrap;gap:12px;}
+  .hero h1{font-size:clamp(24px,4vw,32px);margin:0;display:flex;align-items:center;gap:10px;}
+  .hero .sub{color:var(--text-dim);font-size:14px;margin:4px 0 0;}
+  .icon-btn{
+    background:var(--card);border:1px solid var(--card-border);color:var(--text-dim);
+    padding:9px 14px;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13.5px;
+  }
+  .icon-btn:hover{color:var(--text);border-color:var(--blue);}
+
+  .weather-strip{
+    display:flex;align-items:center;gap:18px;
+    background:var(--card);border:1px solid var(--card-border);border-radius:16px;
+    padding:14px 20px;margin-bottom:22px;color:var(--text-dim);font-size:14px;
+  }
+  .weather-strip b{color:var(--text);font-size:16px;}
+
+  .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
+  .zone-card{
+    background:linear-gradient(180deg,var(--card),#111c33);
+    border:1px solid var(--card-border);border-radius:18px;padding:18px;
+    position:relative;overflow:hidden;
+  }
+  .zone-card.open-window{border-color:var(--red);}
+  .zone-card .type-badge{
+    position:absolute;top:14px;right:16px;font-size:22px;opacity:.85;
+  }
+  .zone-card h3{margin:0 0 14px;font-size:16px;padding-right:32px;}
+  .temp-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+  .temp-row .current{font-size:34px;font-weight:800;}
+  .temp-row .target{color:var(--text-dim);font-size:14px;}
+  .meta-row{display:flex;gap:14px;color:var(--text-dim);font-size:13px;margin-bottom:12px;}
+  .power-bar-track{background:#0b1120;border-radius:999px;height:8px;overflow:hidden;}
+  .power-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--orange),#ffd08a);transition:width .4s ease;}
+  .zone-card.type-AC .power-bar-fill{background:linear-gradient(90deg,var(--blue),#bfe6ff);}
+  .power-label{color:var(--text-dim);font-size:12px;margin-top:6px;}
+  .off-chip{
+    display:inline-block;background:#1e2740;border:1px solid var(--card-border);
+    color:var(--text-dim);font-size:12px;padding:3px 10px;border-radius:999px;margin-top:4px;
+  }
+  .warn-chip{
+    display:inline-flex;align-items:center;gap:6px;
+    background:#3a1c1c;border:1px solid var(--red);color:#ffb4a6;
+    font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
+  }
+
+  /* Login-Screen */
+  #loginScreen{
+    display:flex;flex-direction:column;align-items:center;text-align:center;
+    background:var(--card);border:1px solid var(--card-border);border-radius:20px;
+    padding:40px 24px;margin-top:40px;gap:16px;
+  }
+  #loginScreen h2{margin:0;font-size:22px;}
+  #loginScreen p{color:var(--text-dim);margin:0;max-width:420px;line-height:1.5;}
+  .code-box{
+    font-family:monospace;font-size:32px;letter-spacing:6px;
+    background:#0b1120;border:1px solid var(--card-border);border-radius:14px;
+    padding:14px 24px;margin:6px 0;color:var(--orange);
+  }
+  .btn-primary{
+    background:linear-gradient(90deg,var(--orange),#ffd08a);color:#241a03;
+    border:none;padding:13px 24px;border-radius:14px;font-weight:700;font-size:15px;
+    cursor:pointer;font-family:inherit;
+  }
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-link{
+    background:none;border:none;color:var(--blue);text-decoration:underline;
+    cursor:pointer;font-family:inherit;font-size:14px;
+  }
+  .status-line{color:var(--text-dim);font-size:13px;min-height:18px;}
+
+  .empty-state{text-align:center;color:var(--text-dim);padding:40px 0;}
+  .spinner{
+    width:28px;height:28px;border-radius:50%;
+    border:3px solid var(--card-border);border-top-color:var(--orange);
+    animation:spin .8s linear infinite;margin:0 auto 12px;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hero">
+    <div>
+      <h1>🌡️ <span id="homeName">Tado Dashboard</span></h1>
+      <p class="sub">Heizkörper &amp; Klima auf einen Blick</p>
+    </div>
+    <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
+  </div>
+
+  <div id="weatherStrip" class="weather-strip" style="display:none;"></div>
+
+  <div id="loginScreen" style="display:none;">
+    <h2>Mit Tado verbinden</h2>
+    <p>Klicke auf „Verbinden“, öffne die Tado-Seite und bestätige dort mit deinem Tado-Login. Danach lädt sich das Dashboard automatisch.</p>
+    <button class="btn-primary" id="connectBtn">Verbinden</button>
+    <div id="deviceCodeBox" style="display:none;">
+      <div class="code-box" id="userCode">----</div>
+      <a class="btn-link" id="verifyLink" href="#" target="_blank" rel="noopener">Tado-Seite öffnen</a>
+      <p class="status-line" id="pollStatus">Warte auf Bestätigung …</p>
+    </div>
+  </div>
+
+  <div id="dashboard" style="display:none;">
+    <div id="zoneGrid" class="zone-grid"></div>
+  </div>
+
+  <div id="loadingState" class="empty-state" style="display:none;">
+    <div class="spinner"></div>
+    Lade Zonen …
+  </div>
+
+</div>
+
+<script>
+// URL des Cloudflare Workers (tado-api.js). Nach `wrangler deploy` hier
+// eintragen, z.B. https://tado-dashboard-api.mario-aininger.workers.dev
+const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
+
+const ZONE_ICONS = { HEATING: '🔥', AC: '❄️', HOT_WATER: '💧' };
+const WEATHER_ICONS = {
+  NIGHT_CLEAR: '🌙', SUN: '☀️', CLOUDY: '☁️', CLOUDY_PARTLY: '⛅',
+  CLOUDY_MOSTLY: '🌥️', SCATTERED_SHOWERS: '🌦️', DRIZZLE: '🌧️',
+  RAIN: '🌧️', SNOW: '🌨️', FOGGY: '🌫️', THUNDERSTORM: '⛈️',
+};
+
+const loginScreen = document.getElementById('loginScreen');
+const dashboard = document.getElementById('dashboard');
+const loadingState = document.getElementById('loadingState');
+const weatherStrip = document.getElementById('weatherStrip');
+const logoutBtn = document.getElementById('logoutBtn');
+const zoneGrid = document.getElementById('zoneGrid');
+
+async function api(path, options) {
+  const res = await fetch(API_ENDPOINT + path, options);
+  return res.json();
+}
+
+function show(el, visible, display) {
+  el.style.display = visible ? (display || 'block') : 'none';
+}
+
+async function init() {
+  try {
+    const status = await api('/api/auth/status');
+    if (status.loggedIn) {
+      startDashboard();
+    } else {
+      show(loginScreen, true, 'flex');
+    }
+  } catch (e) {
+    show(loginScreen, true, 'flex');
+  }
+}
+
+/* ---------- Login (Device Code Flow) ---------- */
+let pollTimer = null;
+
+document.getElementById('connectBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('connectBtn');
+  btn.disabled = true;
+  try {
+    const data = await api('/api/auth/start', { method: 'POST' });
+    if (!data.user_code) throw new Error(data.error || 'Login konnte nicht gestartet werden.');
+
+    document.getElementById('userCode').textContent = data.user_code;
+    const link = document.getElementById('verifyLink');
+    link.href = data.verification_uri_complete || data.verification_uri;
+    show(document.getElementById('deviceCodeBox'), true, 'block');
+
+    const intervalMs = (data.interval || 5) * 1000;
+    pollTimer = setInterval(() => pollAuth(data.device_code), intervalMs);
+  } catch (e) {
+    document.getElementById('pollStatus').textContent = 'Fehler: ' + e.message;
+    btn.disabled = false;
+  }
+});
+
+async function pollAuth(deviceCode) {
+  const statusEl = document.getElementById('pollStatus');
+  try {
+    const data = await api('/api/auth/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_code: deviceCode }),
+    });
+    if (data.status === 'success') {
+      clearInterval(pollTimer);
+      statusEl.textContent = 'Verbunden!';
+      startDashboard();
+    } else if (data.status === 'error') {
+      clearInterval(pollTimer);
+      statusEl.textContent = 'Fehler: ' + data.error;
+      document.getElementById('connectBtn').disabled = false;
+    } else {
+      statusEl.textContent = 'Warte auf Bestätigung …';
+    }
+  } catch (e) {
+    statusEl.textContent = 'Verbindungsfehler, versuche es weiter …';
+  }
+}
+
+logoutBtn.addEventListener('click', async () => {
+  await api('/api/auth/logout', { method: 'POST' });
+  show(dashboard, false);
+  show(weatherStrip, false);
+  show(logoutBtn, false);
+  show(loginScreen, true, 'flex');
+  document.getElementById('deviceCodeBox').style.display = 'none';
+  document.getElementById('connectBtn').disabled = false;
+});
+
+/* ---------- Dashboard ---------- */
+let refreshTimer = null;
+
+function startDashboard() {
+  show(loginScreen, false);
+  show(logoutBtn, true, 'inline-block');
+  show(loadingState, true, 'block');
+  loadDashboard();
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(loadDashboard, 60000);
+}
+
+async function loadDashboard() {
+  try {
+    const data = await api('/api/dashboard');
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('homeName').textContent = data.homeName || 'Tado Dashboard';
+    renderWeather(data.weather);
+    renderZones(data.zones || []);
+
+    show(loadingState, false);
+    show(dashboard, true, 'block');
+  } catch (e) {
+    loadingState.innerHTML = `<p>Konnte Daten nicht laden: ${e.message}</p>`;
+    show(loadingState, true, 'block');
+    show(dashboard, false);
+  }
+}
+
+function renderWeather(weather) {
+  if (!weather) { show(weatherStrip, false); return; }
+  const icon = WEATHER_ICONS[weather.state] || '🌡️';
+  weatherStrip.innerHTML = `
+    <span style="font-size:26px;">${icon}</span>
+    <span>Außen: <b>${weather.outsideTemp != null ? weather.outsideTemp.toFixed(1) + '°C' : '–'}</b></span>
+    <span>Sonne: <b>${weather.solarIntensity != null ? Math.round(weather.solarIntensity) + '%' : '–'}</b></span>
+  `;
+  show(weatherStrip, true, 'flex');
+}
+
+function renderZones(zones) {
+  if (!zones.length) {
+    zoneGrid.innerHTML = '<div class="empty-state">Keine Zonen gefunden.</div>';
+    return;
+  }
+  zoneGrid.innerHTML = zones.map(zoneCardHtml).join('');
+}
+
+function zoneCardHtml(zone) {
+  const icon = ZONE_ICONS[zone.type] || '🏠';
+  const isOff = zone.power === 'OFF';
+  const powerPct = zone.type === 'AC'
+    ? (typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0))
+    : (zone.heatingPower || 0);
+
+  const current = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
+  const target = zone.targetTemp != null ? 'Ziel ' + zone.targetTemp.toFixed(1) + '°' : '';
+  const humidity = zone.humidity != null ? Math.round(zone.humidity) + '% Luftfeuchte' : '';
+
+  return `
+    <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''}">
+      <span class="type-badge">${icon}</span>
+      <h3>${zone.name}</h3>
+      ${isOff ? `
+        <div class="temp-row"><span class="current">${current}</span></div>
+        <span class="off-chip">Ausgeschaltet</span>
+      ` : `
+        <div class="temp-row">
+          <span class="current">${current}</span>
+          <span class="target">${target}</span>
+        </div>
+        <div class="meta-row">${humidity ? `<span>${humidity}</span>` : ''}</div>
+        <div class="power-bar-track"><div class="power-bar-fill" style="width:${powerPct}%"></div></div>
+        <div class="power-label">${Math.round(powerPct)}% Leistung</div>
+      `}
+      ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
+    </div>
+  `;
+}
+
+init();
+</script>
+</body>
+</html>
