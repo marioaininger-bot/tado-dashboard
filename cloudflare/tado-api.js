@@ -151,54 +151,6 @@ async function handleAuthLogout(env) {
   return json(200, { status: 'ok' }, env);
 }
 
-async function handleDebug(env) {
-  const accessToken = await getValidAccessToken(env);
-  if (!accessToken) {
-    return json(401, { error: 'Nicht eingeloggt.' }, env);
-  }
-
-  try {
-    const me = await tadoFetch(env, accessToken, '/me');
-    const homes = me.homes || [];
-    const homesWithZones = await Promise.all(
-      homes.map(async (home) => {
-        const result = { id: home.id, name: home.name };
-        try {
-          const zones = await tadoFetch(env, accessToken, `/homes/${home.id}/zones`);
-          result.zoneCount = zones.length;
-          result.zoneNames = zones.map((z) => z.name);
-        } catch (err) {
-          result.zonesError = err.message;
-        }
-        try {
-          const homeDetails = await tadoFetch(env, accessToken, `/homes/${home.id}`);
-          result.generation = homeDetails.generation;
-        } catch (err) {
-          result.generationError = err.message;
-        }
-        try {
-          const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
-          result.roomCount = rooms.length;
-          result.roomNames = rooms.map((r) => r.name);
-        } catch (err) {
-          result.roomsError = err.message;
-        }
-        try {
-          const devices = await tadoFetch(env, accessToken, `/homes/${home.id}/devices`);
-          result.deviceCount = devices.length;
-          result.deviceTypes = devices.map((d) => d.deviceType || d.shortSerialNo || d.serialNo);
-        } catch (err) {
-          result.devicesError = err.message;
-        }
-        return result;
-      })
-    );
-    return json(200, { homes: homesWithZones, pickedHomeId: homes[0] ? homes[0].id : null }, env);
-  } catch (err) {
-    return json(502, { error: err.message }, env);
-  }
-}
-
 async function handleDashboard(env) {
   const accessToken = await getValidAccessToken(env);
   if (!accessToken) {
@@ -301,9 +253,6 @@ export default {
     }
     if (url.pathname === '/api/dashboard' && request.method === 'GET') {
       return handleDashboard(env);
-    }
-    if (url.pathname === '/api/debug' && request.method === 'GET') {
-      return handleDebug(env);
     }
 
     return json(404, { error: 'Not found' }, env);
