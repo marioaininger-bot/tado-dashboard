@@ -48,6 +48,17 @@
   }
   .weather-strip b{color:var(--text);font-size:16px;}
 
+  .forecast-row{
+    display:flex;gap:10px;overflow-x:auto;margin-bottom:22px;padding-bottom:2px;
+  }
+  .forecast-chip{
+    flex:0 0 auto;min-width:56px;text-align:center;
+    background:var(--card);border:1px solid var(--card-border);border-radius:12px;
+    padding:8px 10px;color:var(--text-dim);font-size:12px;
+  }
+  .forecast-chip .fc-temp{color:var(--text);font-weight:700;font-size:14px;margin:2px 0;}
+  .forecast-chip .fc-rain{color:var(--blue);}
+
   .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
   .zone-card{
     background:linear-gradient(180deg,var(--card),#f7f9fc);
@@ -131,6 +142,7 @@
   </div>
 
   <div id="weatherStrip" class="weather-strip" style="display:none;"></div>
+  <div id="forecastRow" class="forecast-row" style="display:none;"></div>
 
   <div id="loginScreen" style="display:none;">
     <h2>Mit Tado verbinden</h2>
@@ -181,6 +193,7 @@ const loginScreen = document.getElementById('loginScreen');
 const dashboard = document.getElementById('dashboard');
 const loadingState = document.getElementById('loadingState');
 const weatherStrip = document.getElementById('weatherStrip');
+const forecastRow = document.getElementById('forecastRow');
 const logoutBtn = document.getElementById('logoutBtn');
 const zoneGrid = document.getElementById('zoneGrid');
 
@@ -259,6 +272,7 @@ logoutBtn.addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' });
   show(dashboard, false);
   show(weatherStrip, false);
+  show(forecastRow, false);
   show(logoutBtn, false);
   show(loginScreen, true, 'flex');
   document.getElementById('deviceCodeBox').style.display = 'none';
@@ -296,14 +310,29 @@ async function loadDashboard() {
 }
 
 function renderWeather(weather) {
-  if (!weather) { show(weatherStrip, false); return; }
+  if (!weather) { show(weatherStrip, false); show(forecastRow, false); return; }
   const icon = WEATHER_ICONS[weather.state] || '🌡️';
   weatherStrip.innerHTML = `
     <span style="font-size:26px;">${icon}</span>
     <span>Außen: <b>${weather.outsideTemp != null ? weather.outsideTemp.toFixed(1) + '°C' : '–'}</b></span>
     <span>Sonne: <b>${weather.solarIntensity != null ? Math.round(weather.solarIntensity) + '%' : '–'}</b></span>
+    ${weather.humidity != null ? `<span>Luftfeuchte: <b>${Math.round(weather.humidity)}%</b></span>` : ''}
+    ${weather.windSpeed != null ? `<span>Wind: <b>${Math.round(weather.windSpeed)} km/h</b></span>` : ''}
   `;
   show(weatherStrip, true, 'flex');
+
+  if (weather.hourly && weather.hourly.length) {
+    forecastRow.innerHTML = weather.hourly.map((h) => `
+      <div class="forecast-chip">
+        <div>${h.time}</div>
+        <div class="fc-temp">${h.temp != null ? Math.round(h.temp) + '°' : '–'}</div>
+        <div class="fc-rain">${h.rainChance != null ? '💧' + h.rainChance + '%' : ''}</div>
+      </div>
+    `).join('');
+    show(forecastRow, true, 'flex');
+  } else {
+    show(forecastRow, false);
+  }
 }
 
 function renderZones(zones) {

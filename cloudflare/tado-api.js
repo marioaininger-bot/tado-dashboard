@@ -16,6 +16,9 @@ const API_BASE = 'https://my.tado.com/api/v2';
 // komplett andere API ("rooms" statt "zones"), aber mit demselben
 // OAuth-Access-Token wie die klassische API.
 const HOPS_API_BASE = 'https://hops.tado.com';
+// Kostenlose, key-lose Wetter-API für Zusatzdaten (Luftfeuchte, Wind,
+// Stunden-Vorhersage), die Tado selbst nicht liefert.
+const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
 const TOKEN_KV_KEY = 'tokens';
 
 function corsHeaders(env) {
@@ -91,6 +94,34 @@ async function hopsFetch(env, accessToken, path) {
     throw new Error(`Tado X API ${path} -> ${res.status}`);
   }
   return res.json();
+}
+
+async function fetchExtraWeather(lat, lon) {
+  const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}&current=relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=1&timezone=auto`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Open-Meteo -> ${res.status}`);
+  }
+  const data = await res.json();
+
+  const times = (data.hourly && data.hourly.time) || [];
+  const temps = (data.hourly && data.hourly.temperature_2m) || [];
+  const rain = (data.hourly && data.hourly.precipitation_probability) || [];
+  const nowHour = new Date().toISOString().slice(0, 13);
+  let startIdx = times.findIndex((t) => t.slice(0, 13) >= nowHour);
+  if (startIdx < 0) startIdx = 0;
+
+  const hourly = times.slice(startIdx, startIdx + 6).map((t, i) => ({
+    time: t.slice(11, 16),
+    temp: temps[startIdx + i] != null ? temps[startIdx + i] : null,
+    rainChance: rain[startIdx + i] != null ? rain[startIdx + i] : null,
+  }));
+
+  return {
+    humidity: data.current ? data.current.relative_humidity_2m : null,
+    windSpeed: data.current ? data.current.wind_speed_10m : null,
+    hourly,
+  };
 }
 
 async function handleAuthStart(env) {
@@ -226,14 +257,21 @@ async function handleDashboard(env) {
     }
 
     const weather = await tadoFetch(env, accessToken, `/homes/${home.id}/weather`).catch(() => null);
+    const geo = homeDetails && homeDetails.geolocation;
+    const extraWeather = geo
+      ? await fetchExtraWeather(geo.latitude, geo.longitude).catch(() => null)
+      : null;
 
     return json(200, {
       homeName: home.name,
       zones: zoneList,
-      weather: weather ? {
-        outsideTemp: weather.outsideTemperature ? weather.outsideTemperature.celsius : null,
-        solarIntensity: weather.solarIntensity ? weather.solarIntensity.percentage : null,
-        state: weather.weatherState ? weather.weatherState.value : null,
+      weather: (weather || extraWeather) ? {
+        outsideTemp: weather && weather.outsideTemperature ? weather.outsideTemperature.celsius : null,
+        solarIntensity: weather && weather.solarIntensity ? weather.solarIntensity.percentage : null,
+        state: weather && weather.weatherState ? weather.weatherState.value : null,
+        humidity: extraWeather ? extraWeather.humidity : null,
+        windSpeed: extraWeather ? extraWeather.windSpeed : null,
+        hourly: extraWeather ? extraWeather.hourly : [],
       } : null,
     }, env);
   } catch (err) {
