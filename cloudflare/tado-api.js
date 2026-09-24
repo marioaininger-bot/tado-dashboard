@@ -137,6 +137,31 @@ async function handleAuthLogout(env) {
   return json(200, { status: 'ok' }, env);
 }
 
+async function handleDebug(env) {
+  const accessToken = await getValidAccessToken(env);
+  if (!accessToken) {
+    return json(401, { error: 'Nicht eingeloggt.' }, env);
+  }
+
+  try {
+    const me = await tadoFetch(env, accessToken, '/me');
+    const homes = me.homes || [];
+    const homesWithZones = await Promise.all(
+      homes.map(async (home) => {
+        try {
+          const zones = await tadoFetch(env, accessToken, `/homes/${home.id}/zones`);
+          return { id: home.id, name: home.name, zoneCount: zones.length, zoneNames: zones.map((z) => z.name) };
+        } catch (err) {
+          return { id: home.id, name: home.name, error: err.message };
+        }
+      })
+    );
+    return json(200, { homes: homesWithZones, pickedHomeId: homes[0] ? homes[0].id : null }, env);
+  } catch (err) {
+    return json(502, { error: err.message }, env);
+  }
+}
+
 async function handleDashboard(env) {
   const accessToken = await getValidAccessToken(env);
   if (!accessToken) {
@@ -214,6 +239,9 @@ export default {
     }
     if (url.pathname === '/api/dashboard' && request.method === 'GET') {
       return handleDashboard(env);
+    }
+    if (url.pathname === '/api/debug' && request.method === 'GET') {
+      return handleDebug(env);
     }
 
     return json(404, { error: 'Not found' }, env);
