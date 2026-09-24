@@ -151,7 +151,18 @@
 // eintragen, z.B. https://tado-dashboard-api.mario-aininger.workers.dev
 const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
 
-const ZONE_ICONS = { HEATING: '🔥', AC: '❄️', HOT_WATER: '💧' };
+function zoneIcon(zone) {
+  const isOff = zone.power === 'OFF';
+  if (zone.type === 'AC') {
+    const cooling = typeof zone.acPower === 'number' ? zone.acPower > 0 : zone.acPower === 'ON';
+    return !isOff && cooling ? '❄️' : '🌬️';
+  }
+  if (zone.type === 'HOT_WATER') {
+    return !isOff && zone.heatingPower > 0 ? '🔥' : '💧';
+  }
+  // HEATING
+  return !isOff && zone.heatingPower > 0 ? '🔥' : '🌡️';
+}
 const WEATHER_ICONS = {
   NIGHT_CLEAR: '🌙', SUN: '☀️', CLOUDY: '☁️', CLOUDY_PARTLY: '⛅',
   CLOUDY_MOSTLY: '🌥️', SCATTERED_SHOWERS: '🌦️', DRIZZLE: '🌧️',
@@ -294,7 +305,7 @@ function renderZones(zones) {
 }
 
 function zoneCardHtml(zone) {
-  const icon = ZONE_ICONS[zone.type] || '🏠';
+  const icon = zoneIcon(zone);
   const isOff = zone.power === 'OFF';
   const powerPct = zone.type === 'AC'
     ? (typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0))
