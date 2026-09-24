@@ -97,7 +97,9 @@ async function hopsFetch(env, accessToken, path) {
 }
 
 async function fetchExtraWeather(lat, lon) {
-  const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}&current=relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=1&timezone=auto`;
+  // forecast_days=2, damit auch spätabends noch genug Stunden für die
+  // Vorhersage übrig sind (nicht nur bis Mitternacht des aktuellen Tages).
+  const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}&current=relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=2&timezone=auto`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Open-Meteo -> ${res.status}`);
@@ -111,7 +113,7 @@ async function fetchExtraWeather(lat, lon) {
   let startIdx = times.findIndex((t) => t.slice(0, 13) >= nowHour);
   if (startIdx < 0) startIdx = 0;
 
-  const hourly = times.slice(startIdx, startIdx + 6).map((t, i) => ({
+  const hourly = times.slice(startIdx, startIdx + 12).map((t, i) => ({
     time: t.slice(11, 16),
     temp: temps[startIdx + i] != null ? temps[startIdx + i] : null,
     rainChance: rain[startIdx + i] != null ? rain[startIdx + i] : null,
