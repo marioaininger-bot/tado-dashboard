@@ -224,6 +224,8 @@ document.getElementById('connectBtn').addEventListener('click', async () => {
     const intervalMs = (data.interval || 5) * 1000;
     pollTimer = setInterval(() => pollAuth(data.device_code), intervalMs);
   } catch (e) {
+    show(document.getElementById('deviceCodeBox'), true, 'block');
+    document.getElementById('userCode').textContent = '----';
     document.getElementById('pollStatus').textContent = 'Fehler: ' + e.message;
     btn.disabled = false;
   }
