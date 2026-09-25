@@ -20,6 +20,10 @@ const HOPS_API_BASE = 'https://hops.tado.com';
 // Stunden-Vorhersage), die Tado selbst nicht liefert.
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
 const TOKEN_KV_KEY = 'tokens';
+// Verlauf (Temperatur/Luftfeuchte je Zone), geschrieben vom Cron-Trigger
+// alle 15 Minuten, unabhängig davon ob das Dashboard offen ist.
+const HISTORY_KV_KEY = 'zone_history';
+const HISTORY_MAX_POINTS = 3;
 
 function corsHeaders(env) {
   return {
@@ -184,6 +188,111 @@ async function handleAuthLogout(env) {
   return json(200, { status: 'ok' }, env);
 }
 
+function mapClassicZone(zone, classicStates) {
+  const state = classicStates[String(zone.id)] || {};
+  const setting = state.setting || {};
+  const sensor = state.sensorDataPoints || {};
+  const activity = state.activityDataPoints || {};
+  return {
+    id: zone.id,
+    name: zone.name,
+    type: zone.type, // HEATING | AC | HOT_WATER
+    power: setting.power || null,
+    targetTemp: setting.temperature ? setting.temperature.celsius : null,
+    currentTemp: sensor.insideTemperature ? sensor.insideTemperature.celsius : null,
+    humidity: sensor.humidity ? sensor.humidity.percentage : null,
+    heatingPower: activity.heatingPower ? activity.heatingPower.percentage : null,
+    acPower: activity.acPower ? activity.acPower.value : null,
+    openWindow: Boolean(state.openWindow || state.openWindowDetected),
+    link: state.link ? state.link.state : null,
+  };
+}
+
+// Lädt Home + alle Zonen (klassisch + tado X). Wird sowohl vom
+// Dashboard-Endpunkt als auch vom Cron-Trigger (Verlaufs-Aufzeichnung)
+// genutzt.
+async function fetchHomeAndZones(env, accessToken) {
+  const me = await tadoFetch(env, accessToken, '/me');
+  const home = (me.homes || [])[0];
+  if (!home) {
+    throw new Error('Kein Tado-Zuhause gefunden.');
+  }
+
+  const homeDetails = await tadoFetch(env, accessToken, `/homes/${home.id}`).catch(() => null);
+  const isTadoX = homeDetails && homeDetails.generation === 'LINE_X';
+
+  // Klassische zones/zoneStates-API abfragen. Bei tado X (LINE_X) laufen
+  // die Heizkörper zwar über die neue rooms-API, aber Zubehör wie eine
+  // per "Smart AC Control" angebundene Klimaanlage bleibt eine klassische
+  // Zone - deshalb hier immer mitziehen (best effort, falls leer/Fehler).
+  const [classicZones, classicZoneStates] = await Promise.all([
+    tadoFetch(env, accessToken, `/homes/${home.id}/zones`).catch(() => []),
+    tadoFetch(env, accessToken, `/homes/${home.id}/zoneStates`).catch(() => ({})),
+  ]);
+  const classicStates = classicZoneStates.zoneStates || classicZoneStates;
+
+  let zoneList;
+  if (isTadoX) {
+    // "tado X" Heizkörper: eigene API (hops.tado.com) mit "rooms" statt "zones".
+    const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
+    zoneList = rooms.map((room) => {
+      const setting = room.setting || {};
+      const sensor = room.sensorDataPoints || {};
+      return {
+        id: room.id,
+        name: room.name,
+        type: 'HEATING',
+        power: setting.power || null,
+        targetTemp: setting.temperature ? setting.temperature.value : null,
+        currentTemp: sensor.insideTemperature ? sensor.insideTemperature.value : null,
+        humidity: sensor.humidity ? sensor.humidity.percentage : null,
+        heatingPower: room.heatingPower ? room.heatingPower.percentage : null,
+        acPower: null,
+        openWindow: Boolean(room.openWindow),
+        link: room.connection ? room.connection.state : null,
+      };
+    });
+    // Zubehör wie Klimaanlage/Warmwasser läuft weiterhin klassisch dazunehmen.
+    const extras = classicZones
+      .filter((zone) => zone.type !== 'HEATING')
+      .map((zone) => mapClassicZone(zone, classicStates));
+    zoneList = zoneList.concat(extras);
+  } else {
+    zoneList = classicZones.map((zone) => mapClassicZone(zone, classicStates));
+  }
+
+  return { home, homeDetails, isTadoX, zoneList };
+}
+
+// Hängt an jede Zone ihre letzten Messpunkte (Temperatur/Luftfeuchte) an,
+// die der Cron-Trigger alle 15 Minuten aufgezeichnet hat.
+async function attachHistory(env, zoneList) {
+  const raw = await env.TADO_KV.get(HISTORY_KV_KEY);
+  const history = raw ? JSON.parse(raw) : {};
+  return zoneList.map((zone) => ({
+    ...zone,
+    history: history[String(zone.id)] || [],
+  }));
+}
+
+// Schreibt für jede Zone mit gültiger Temperatur einen neuen Messpunkt in
+// den Verlauf und behält nur die letzten HISTORY_MAX_POINTS Einträge.
+async function recordHistory(env, zoneList) {
+  const raw = await env.TADO_KV.get(HISTORY_KV_KEY);
+  const history = raw ? JSON.parse(raw) : {};
+  const t = new Date().toISOString();
+
+  for (const zone of zoneList) {
+    if (zone.currentTemp == null) continue;
+    const key = String(zone.id);
+    const points = history[key] || [];
+    points.push({ t, temp: zone.currentTemp, humidity: zone.humidity });
+    history[key] = points.slice(-HISTORY_MAX_POINTS);
+  }
+
+  await env.TADO_KV.put(HISTORY_KV_KEY, JSON.stringify(history));
+}
+
 async function handleDashboard(env) {
   const accessToken = await getValidAccessToken(env);
   if (!accessToken) {
@@ -191,72 +300,8 @@ async function handleDashboard(env) {
   }
 
   try {
-    const me = await tadoFetch(env, accessToken, '/me');
-    const home = (me.homes || [])[0];
-    if (!home) {
-      return json(404, { error: 'Kein Tado-Zuhause gefunden.' }, env);
-    }
-
-    const homeDetails = await tadoFetch(env, accessToken, `/homes/${home.id}`).catch(() => null);
-    const isTadoX = homeDetails && homeDetails.generation === 'LINE_X';
-
-    // Klassische zones/zoneStates-API abfragen. Bei tado X (LINE_X) laufen
-    // die Heizkörper zwar über die neue rooms-API, aber Zubehör wie eine
-    // per "Smart AC Control" angebundene Klimaanlage bleibt eine klassische
-    // Zone - deshalb hier immer mitziehen (best effort, falls leer/Fehler).
-    const [classicZones, classicZoneStates] = await Promise.all([
-      tadoFetch(env, accessToken, `/homes/${home.id}/zones`).catch(() => []),
-      tadoFetch(env, accessToken, `/homes/${home.id}/zoneStates`).catch(() => ({})),
-    ]);
-    const classicStates = classicZoneStates.zoneStates || classicZoneStates;
-
-    function mapClassicZone(zone) {
-      const state = classicStates[String(zone.id)] || {};
-      const setting = state.setting || {};
-      const sensor = state.sensorDataPoints || {};
-      const activity = state.activityDataPoints || {};
-      return {
-        id: zone.id,
-        name: zone.name,
-        type: zone.type, // HEATING | AC | HOT_WATER
-        power: setting.power || null,
-        targetTemp: setting.temperature ? setting.temperature.celsius : null,
-        currentTemp: sensor.insideTemperature ? sensor.insideTemperature.celsius : null,
-        humidity: sensor.humidity ? sensor.humidity.percentage : null,
-        heatingPower: activity.heatingPower ? activity.heatingPower.percentage : null,
-        acPower: activity.acPower ? activity.acPower.value : null,
-        openWindow: Boolean(state.openWindow || state.openWindowDetected),
-        link: state.link ? state.link.state : null,
-      };
-    }
-
-    let zoneList;
-    if (isTadoX) {
-      // "tado X" Heizkörper: eigene API (hops.tado.com) mit "rooms" statt "zones".
-      const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
-      zoneList = rooms.map((room) => {
-        const setting = room.setting || {};
-        const sensor = room.sensorDataPoints || {};
-        return {
-          id: room.id,
-          name: room.name,
-          type: 'HEATING',
-          power: setting.power || null,
-          targetTemp: setting.temperature ? setting.temperature.value : null,
-          currentTemp: sensor.insideTemperature ? sensor.insideTemperature.value : null,
-          humidity: sensor.humidity ? sensor.humidity.percentage : null,
-          heatingPower: room.heatingPower ? room.heatingPower.percentage : null,
-          acPower: null,
-          openWindow: Boolean(room.openWindow),
-          link: room.connection ? room.connection.state : null,
-        };
-      });
-      // Zubehör wie Klimaanlage/Warmwasser läuft weiterhin klassisch dazunehmen.
-      const extras = classicZones.filter((zone) => zone.type !== 'HEATING').map(mapClassicZone);
-      zoneList = zoneList.concat(extras);
-    } else {
-      zoneList = classicZones.map(mapClassicZone);
-    }
+    const { home, homeDetails, zoneList } = await fetchHomeAndZones(env, accessToken);
+    const zonesWithHistory = await attachHistory(env, zoneList);
 
     const weather = await tadoFetch(env, accessToken, `/homes/${home.id}/weather`).catch(() => null);
     const geo = homeDetails && homeDetails.geolocation;
@@ -266,7 +311,7 @@ async function handleDashboard(env) {
 
     return json(200, {
       homeName: home.name,
-      zones: zoneList,
+      zones: zonesWithHistory,
       weather: (weather || extraWeather) ? {
         outsideTemp: weather && weather.outsideTemperature ? weather.outsideTemperature.celsius : null,
         solarIntensity: weather && weather.solarIntensity ? weather.solarIntensity.percentage : null,
@@ -278,6 +323,22 @@ async function handleDashboard(env) {
     }, env);
   } catch (err) {
     return json(502, { error: err.message }, env);
+  }
+}
+
+// Vom Cron-Trigger (siehe wrangler.toml, alle 15 Minuten) aufgerufen -
+// zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
+// Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
+// Lauf in 15 Minuten versucht es einfach erneut.
+async function handleScheduled(env) {
+  const accessToken = await getValidAccessToken(env);
+  if (!accessToken) return;
+
+  try {
+    const { zoneList } = await fetchHomeAndZones(env, accessToken);
+    await recordHistory(env, zoneList);
+  } catch (err) {
+    // best effort
   }
 }
 
@@ -306,5 +367,9 @@ export default {
     }
 
     return json(404, { error: 'Not found' }, env);
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(handleScheduled(env));
   },
 };

@@ -94,6 +94,27 @@
     font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
   }
 
+  .history{margin:12px 0 2px;padding-top:11px;border-top:1px dashed var(--card-border);}
+  .history-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+  .history-head .label{
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
+    color:var(--text-dim);font-weight:700;
+  }
+  .history-head svg{display:block;}
+  .history-table{display:grid;grid-template-columns:auto 1fr 1fr;gap:3px 10px;font-size:12.5px;}
+  .history-row{display:contents;}
+  .history-col-label{color:var(--text-dim);font-size:10px;padding-bottom:2px;}
+  .history-col-label.num{text-align:right;}
+  .h-time{color:var(--text-dim);font-variant-numeric:tabular-nums;}
+  .h-temp,.h-hum{text-align:right;font-variant-numeric:tabular-nums;color:var(--text-dim);}
+  .h-temp b{color:var(--text);font-weight:700;}
+  .history-row.now .h-time{color:var(--text);font-weight:700;}
+  .history-row.now .h-temp b,.history-row.now .h-hum{color:var(--text);font-weight:800;}
+  .trend{font-size:10px;margin-left:3px;}
+  .trend.up{color:var(--orange);}
+  .trend.down{color:var(--blue);}
+  .trend.flat{color:var(--text-dim);}
+
   /* Login-Screen */
   #loginScreen{
     display:flex;flex-direction:column;align-items:center;text-align:center;
@@ -348,6 +369,69 @@ function renderWeather(weather) {
   }
 }
 
+function trendArrow(diff) {
+  if (diff > 0.05) return '<span class="trend up">▲</span>';
+  if (diff < -0.05) return '<span class="trend down">▼</span>';
+  return '<span class="trend flat">–</span>';
+}
+
+function historySparkline(history) {
+  const temps = history.map((h) => h.temp).filter((t) => t != null);
+  if (temps.length < 2) return '';
+  const min = Math.min(...temps), max = Math.max(...temps);
+  const span = Math.max(max - min, 0.3);
+  const w = 56, h = 18, pad = 2;
+  const pts = temps.map((t, i) => {
+    const x = pad + (i / (temps.length - 1)) * (w - pad * 2);
+    const y = h - pad - ((t - min) / span) * (h - pad * 2);
+    return [x, y];
+  });
+  const line = pts.map((p) => p.join(',')).join(' ');
+  const area = `${pad},${h} ${line} ${w - pad},${h}`;
+  const last = pts[pts.length - 1];
+  const rising = temps[temps.length - 1] >= temps[0];
+  const stroke = rising ? 'var(--orange)' : 'var(--blue)';
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    <polygon points="${area}" fill="${stroke}" opacity="0.15"></polygon>
+    <polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></polyline>
+    <circle cx="${last[0]}" cy="${last[1]}" r="2" fill="${stroke}"></circle>
+  </svg>`;
+}
+
+function historyRows(history) {
+  return history.map((point, i) => {
+    const time = new Date(point.t).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+    const diff = i === 0 ? 0 : point.temp - history[i - 1].temp;
+    const arrow = i === 0 ? '' : trendArrow(diff);
+    const isNow = i === history.length - 1;
+    const temp = point.temp != null ? point.temp.toFixed(1) + '°' : '–';
+    const humidity = point.humidity != null ? Math.round(point.humidity) + '%' : '–';
+    return `<div class="history-row ${isNow ? 'now' : ''}">
+      <span class="h-time">${time}</span>
+      <span class="h-temp"><b>${temp}</b>${arrow}</span>
+      <span class="h-hum">${humidity}</span>
+    </div>`;
+  }).join('');
+}
+
+function historyHtml(history) {
+  if (!history || history.length < 2) return '';
+  return `
+    <div class="history">
+      <div class="history-head">
+        <span class="label">Verlauf · 15 Min</span>
+        ${historySparkline(history)}
+      </div>
+      <div class="history-table">
+        <span class="history-col-label">Zeit</span>
+        <span class="history-col-label num">Temp.</span>
+        <span class="history-col-label num">Feuchte</span>
+        ${historyRows(history)}
+      </div>
+    </div>
+  `;
+}
+
 function renderZones(zones) {
   if (!zones.length) {
     zoneGrid.innerHTML = '<div class="empty-state">Keine Zonen gefunden.</div>';
@@ -384,6 +468,7 @@ function zoneCardHtml(zone) {
         <div class="power-label">${Math.round(powerPct)}% Leistung</div>
       `}
       ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
+      ${historyHtml(zone.history)}
     </div>
   `;
 }
