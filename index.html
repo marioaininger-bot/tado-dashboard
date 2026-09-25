@@ -113,6 +113,26 @@
     font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
   }
   .runtime-label{color:var(--text-dim);font-size:12px;margin-top:4px;}
+  .next-change{color:var(--text-dim);font-size:12px;margin-top:-6px;margin-bottom:10px;}
+
+  .zone-controls{
+    display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
+    border-top:1px dashed var(--card-border);
+  }
+  .temp-btn{
+    width:28px;height:28px;border-radius:50%;border:1px solid var(--card-border);
+    background:var(--card);color:var(--text);font-size:16px;font-weight:700;
+    cursor:pointer;display:flex;align-items:center;justify-content:center;
+    font-family:inherit;line-height:1;padding:0;
+  }
+  .temp-btn:hover{border-color:var(--orange);color:var(--orange);}
+  .temp-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .temp-display{font-weight:700;font-size:14px;min-width:38px;text-align:center;font-variant-numeric:tabular-nums;}
+  .resume-link{
+    margin-left:auto;background:none;border:none;color:var(--blue);font-size:12px;
+    text-decoration:underline;cursor:pointer;font-family:inherit;padding:0;
+  }
+  .resume-link:disabled{opacity:.5;cursor:not-allowed;}
 
   .history{margin:12px 0 2px;padding-top:11px;border-top:1px dashed var(--card-border);}
   .history-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
@@ -549,6 +569,32 @@ function renderZones(zones) {
   zoneGrid.innerHTML = zones.map(zoneCardHtml).join('');
 }
 
+function formatTime(iso) {
+  return new Date(iso).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+}
+
+function nextChangeHtml(zone) {
+  const next = zone.nextScheduleChange;
+  if (!next || !next.start) return '';
+  const value = next.power === 'OFF' ? 'Aus' : (next.temperature != null ? next.temperature.toFixed(1) + '°' : '–');
+  return `<div class="next-change">Nächste Änderung ${formatTime(next.start)} → ${value}</div>`;
+}
+
+function controlsHtml(zone) {
+  if (zone.type !== 'HEATING') return '';
+  const base = zone.targetTemp != null
+    ? zone.targetTemp
+    : (zone.currentTemp != null ? Math.round(zone.currentTemp * 2) / 2 : 20);
+  return `
+    <div class="zone-controls">
+      <button class="temp-btn" data-action="dec" data-zone-id="${zone.id}" data-temp="${base}" aria-label="Kälter">−</button>
+      <span class="temp-display">${base.toFixed(1)}°</span>
+      <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-temp="${base}" aria-label="Wärmer">+</button>
+      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}">Zeitplan</button>` : ''}
+    </div>
+  `;
+}
+
 function zoneCardHtml(zone) {
   const icon = zoneIcon(zone);
   const isOff = zone.power === 'OFF';
@@ -577,9 +623,13 @@ function zoneCardHtml(zone) {
         <div class="power-bar-track"><div class="power-bar-fill" style="width:${powerPct}%"></div></div>
         <div class="power-label">${Math.round(powerPct)}% Leistung</div>
       `}
+      ${nextChangeHtml(zone)}
       ${runtimeHtml(zone.history)}
       ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
+      ${zone.batteryLow ? '<div class="warn-chip">🔋 Batterie schwach</div>' : ''}
+      ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
+      ${controlsHtml(zone)}
       ${historyHtml((zone.history || []).slice(-3))}
     </div>
   `;
@@ -639,7 +689,54 @@ function closeDayChart() {
   dayChartModal.style.display = 'none';
 }
 
+/* ---------- Zonensteuerung (Temperatur setzen / Zeitplan fortsetzen) ---------- */
+async function setZoneTemp(zoneId, temperature, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const res = await api('/api/zones/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zoneId, temperature }),
+    });
+    if (res.error) throw new Error(res.error);
+    await loadDashboard();
+  } catch (e) {
+    alert('Konnte Temperatur nicht setzen: ' + e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function resumeZoneSchedule(zoneId, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const res = await api('/api/zones/resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zoneId }),
+    });
+    if (res.error) throw new Error(res.error);
+    await loadDashboard();
+  } catch (e) {
+    alert('Konnte Zeitplan nicht fortsetzen: ' + e.message);
+    if (btn) btn.disabled = false;
+  }
+}
+
 zoneGrid.addEventListener('click', (e) => {
+  const controlBtn = e.target.closest('[data-action]');
+  if (controlBtn) {
+    const zoneId = controlBtn.dataset.zoneId;
+    const action = controlBtn.dataset.action;
+    if (action === 'resume') {
+      resumeZoneSchedule(zoneId, controlBtn);
+    } else {
+      const current = parseFloat(controlBtn.dataset.temp);
+      const next = Math.round((action === 'inc' ? current + 0.5 : current - 0.5) * 2) / 2;
+      setZoneTemp(zoneId, next, controlBtn);
+    }
+    return;
+  }
+
   const card = e.target.closest('.zone-card');
   if (!card) return;
   const zone = currentZones.find((z) => String(z.id) === card.dataset.zoneId);
