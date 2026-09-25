@@ -20,11 +20,12 @@ const HOPS_API_BASE = 'https://hops.tado.com';
 // Stunden-Vorhersage), die Tado selbst nicht liefert.
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
 const TOKEN_KV_KEY = 'tokens';
-// Verlauf (Temperatur/Luftfeuchte je Zone), geschrieben vom Cron-Trigger
-// alle 15 Minuten, unabhängig davon ob das Dashboard offen ist. 96 Punkte =
-// 24h. Die Kachel zeigt nur die letzten 3, der Tages-Chart die ganze Liste.
+// Verlauf (Temperatur/Luftfeuchte/Leistung je Zone), geschrieben vom
+// Cron-Trigger alle 5 Minuten, unabhängig davon ob das Dashboard offen ist.
+// 288 Punkte = 24h. Die Kachel zeigt nur die letzten 3, der Tages-Chart und
+// die Betriebsstunden-Schätzung nutzen die ganze Liste.
 const HISTORY_KV_KEY = 'zone_history';
-const HISTORY_MAX_POINTS = 96;
+const HISTORY_MAX_POINTS = 288;
 
 function corsHeaders(env) {
   return {
@@ -350,7 +351,7 @@ function powerPercent(zone) {
 }
 
 // Hängt an jede Zone ihre letzten Messpunkte (Temperatur/Luftfeuchte/
-// Leistung) an, die der Cron-Trigger alle 15 Minuten aufgezeichnet hat.
+// Leistung) an, die der Cron-Trigger alle 5 Minuten aufgezeichnet hat.
 async function attachHistory(env, zoneList) {
   const raw = await env.TADO_KV.get(HISTORY_KV_KEY);
   const history = raw ? JSON.parse(raw) : {};
@@ -534,10 +535,10 @@ async function handleResumeSchedule(request, env) {
   }
 }
 
-// Vom Cron-Trigger (siehe wrangler.toml, alle 15 Minuten) aufgerufen -
+// Vom Cron-Trigger (siehe wrangler.toml, alle 5 Minuten) aufgerufen -
 // zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
 // Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
-// Lauf in 15 Minuten versucht es einfach erneut.
+// Lauf in 5 Minuten versucht es einfach erneut.
 async function handleScheduled(env) {
   const accessToken = await getValidAccessToken(env);
   if (!accessToken) return;
