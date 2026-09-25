@@ -426,12 +426,13 @@ async function handleSetZone(request, env) {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(
           power === 'OFF'
-            ? { setting: { power: 'OFF' } }
-            : { setting: { power: 'ON', temperature: { value: temperature } } }
+            ? { setting: { type: 'HEATING', power: 'OFF' } }
+            : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination: { type: 'MANUAL' } }
         ),
       });
       if (!res.ok) {
-        throw new Error(`tado X Zone konnte nicht gesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`tado X Zone konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     } else {
       const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
@@ -445,7 +446,8 @@ async function handleSetZone(request, env) {
         }),
       });
       if (!res.ok) {
-        throw new Error(`Zone konnte nicht gesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Zone konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     }
 
@@ -487,7 +489,8 @@ async function handleResumeSchedule(request, env) {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
-        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     } else {
       const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
@@ -495,7 +498,8 @@ async function handleResumeSchedule(request, env) {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
-        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     }
 
