@@ -21,9 +21,10 @@ const HOPS_API_BASE = 'https://hops.tado.com';
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
 const TOKEN_KV_KEY = 'tokens';
 // Verlauf (Temperatur/Luftfeuchte je Zone), geschrieben vom Cron-Trigger
-// alle 15 Minuten, unabhängig davon ob das Dashboard offen ist.
+// alle 15 Minuten, unabhängig davon ob das Dashboard offen ist. 96 Punkte =
+// 24h. Die Kachel zeigt nur die letzten 3, der Tages-Chart die ganze Liste.
 const HISTORY_KV_KEY = 'zone_history';
-const HISTORY_MAX_POINTS = 3;
+const HISTORY_MAX_POINTS = 96;
 
 function corsHeaders(env) {
   return {
@@ -113,15 +114,32 @@ async function fetchExtraWeather(lat, lon) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
   const rain = (data.hourly && data.hourly.precipitation_probability) || [];
-  const nowHour = new Date().toISOString().slice(0, 13);
-  let startIdx = times.findIndex((t) => t.slice(0, 13) >= nowHour);
+  // "current.time" kommt (wie "hourly.time") in der lokalen Zeitzone des
+  // Hauses (timezone=auto) - im Gegensatz zur UTC-Uhr des Workers, die
+  // hier vorher fälschlich zum Vergleich benutzt wurde und je nach
+  // Sommer-/Winterzeit zu falschen Startpunkten führte.
+  const nowRef = (data.current && data.current.time) || new Date().toISOString();
+  const nowHour = nowRef.slice(0, 13);
+  // Strikt ">": die aktuelle, schon angebrochene Stunde wird übersprungen -
+  // die Vorschau startet erst mit der nächsten vollen Stunde.
+  let startIdx = times.findIndex((t) => t.slice(0, 13) > nowHour);
   if (startIdx < 0) startIdx = 0;
 
-  const hourly = times.slice(startIdx, startIdx + 12).map((t, i) => ({
-    time: t.slice(11, 16),
-    temp: temps[startIdx + i] != null ? temps[startIdx + i] : null,
-    rainChance: rain[startIdx + i] != null ? rain[startIdx + i] : null,
-  }));
+  // 24h rollend (nicht nur bis Mitternacht) - auf breiten Bildschirmen
+  // sonst zu wenig Inhalt für die verfügbare Breite. newDay markiert den
+  // Übergang auf den Folgetag fürs Frontend (kleine Trennung/Label).
+  let lastDate = null;
+  const hourly = times.slice(startIdx, startIdx + 24).map((t, i) => {
+    const datePart = t.slice(0, 10);
+    const newDay = lastDate !== null && datePart !== lastDate;
+    lastDate = datePart;
+    return {
+      time: t.slice(11, 16),
+      temp: temps[startIdx + i] != null ? temps[startIdx + i] : null,
+      rainChance: rain[startIdx + i] != null ? rain[startIdx + i] : null,
+      newDay,
+    };
+  });
 
   return {
     humidity: data.current ? data.current.relative_humidity_2m : null,
@@ -264,8 +282,17 @@ async function fetchHomeAndZones(env, accessToken) {
   return { home, homeDetails, isTadoX, zoneList };
 }
 
-// Hängt an jede Zone ihre letzten Messpunkte (Temperatur/Luftfeuchte) an,
-// die der Cron-Trigger alle 15 Minuten aufgezeichnet hat.
+// Heiz-/Kühlleistung als einheitlicher Prozentwert (0-100), unabhängig vom
+// Zonentyp - Basis für die Betriebsstunden-Schätzung im Frontend.
+function powerPercent(zone) {
+  if (zone.type === 'AC') {
+    return typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0);
+  }
+  return zone.heatingPower || 0;
+}
+
+// Hängt an jede Zone ihre letzten Messpunkte (Temperatur/Luftfeuchte/
+// Leistung) an, die der Cron-Trigger alle 15 Minuten aufgezeichnet hat.
 async function attachHistory(env, zoneList) {
   const raw = await env.TADO_KV.get(HISTORY_KV_KEY);
   const history = raw ? JSON.parse(raw) : {};
@@ -286,7 +313,7 @@ async function recordHistory(env, zoneList) {
     if (zone.currentTemp == null) continue;
     const key = String(zone.id);
     const points = history[key] || [];
-    points.push({ t, temp: zone.currentTemp, humidity: zone.humidity });
+    points.push({ t, temp: zone.currentTemp, humidity: zone.humidity, power: powerPercent(zone) });
     history[key] = points.slice(-HISTORY_MAX_POINTS);
   }
 
