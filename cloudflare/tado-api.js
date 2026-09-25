@@ -114,8 +114,15 @@ async function fetchExtraWeather(lat, lon) {
   const times = (data.hourly && data.hourly.time) || [];
   const temps = (data.hourly && data.hourly.temperature_2m) || [];
   const rain = (data.hourly && data.hourly.precipitation_probability) || [];
-  const nowHour = new Date().toISOString().slice(0, 13);
-  let startIdx = times.findIndex((t) => t.slice(0, 13) >= nowHour);
+  // "current.time" kommt (wie "hourly.time") in der lokalen Zeitzone des
+  // Hauses (timezone=auto) - im Gegensatz zur UTC-Uhr des Workers, die
+  // hier vorher fälschlich zum Vergleich benutzt wurde und je nach
+  // Sommer-/Winterzeit zu falschen Startpunkten führte.
+  const nowRef = (data.current && data.current.time) || new Date().toISOString();
+  const nowHour = nowRef.slice(0, 13);
+  // Strikt ">": die aktuelle, schon angebrochene Stunde wird übersprungen -
+  // die Vorschau startet erst mit der nächsten vollen Stunde.
+  let startIdx = times.findIndex((t) => t.slice(0, 13) > nowHour);
   if (startIdx < 0) startIdx = 0;
 
   const hourly = times.slice(startIdx, startIdx + 12).map((t, i) => ({
