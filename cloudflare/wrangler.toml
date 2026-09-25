@@ -21,3 +21,9 @@ ALLOWED_ORIGIN = "https://tado.aininger.com"
 [[kv_namespaces]]
 binding = "TADO_KV"
 id = "a564f39df932445aade6b98e9f121036"
+
+# Schreibt alle 15 Minuten einen Messpunkt (Temperatur/Luftfeuchte je Zone)
+# nach KV, unabhängig davon, ob das Dashboard gerade geöffnet ist. Basis für
+# den Verlauf in den Zonenkacheln.
+[triggers]
+crons = ["*/15 * * * *"]
