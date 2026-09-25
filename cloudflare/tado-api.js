@@ -21,9 +21,10 @@ const HOPS_API_BASE = 'https://hops.tado.com';
 const OPEN_METEO_BASE = 'https://api.open-meteo.com/v1/forecast';
 const TOKEN_KV_KEY = 'tokens';
 // Verlauf (Temperatur/Luftfeuchte je Zone), geschrieben vom Cron-Trigger
-// alle 15 Minuten, unabhängig davon ob das Dashboard offen ist.
+// alle 15 Minuten, unabhängig davon ob das Dashboard offen ist. 96 Punkte =
+// 24h. Die Kachel zeigt nur die letzten 3, der Tages-Chart die ganze Liste.
 const HISTORY_KV_KEY = 'zone_history';
-const HISTORY_MAX_POINTS = 3;
+const HISTORY_MAX_POINTS = 96;
 
 function corsHeaders(env) {
   return {

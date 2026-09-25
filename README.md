@@ -3,8 +3,11 @@
 Persönliches Dashboard für Tado-Heizkörper (und später die Panasonic-Klimaanlage,
 sobald sie über Tados "Smart AC Control" eingebunden ist). Zeigt alle Zonen mit
 Ist-/Solltemperatur, Luftfeuchte, Heiz-/Kühlleistung, offenen Fenstern und
-Außentemperatur – inklusive Verlauf der letzten 3 Messpunkte (alle 15 Minuten)
-pro Zone.
+Außentemperatur – inklusive Verlauf (alle 15 Minuten, 24h Historie) pro Zone.
+Die Kachel zeigt die letzten 3 Messpunkte, ein Klick auf die Kachel öffnet
+einen Tages-Chart für Temperatur und Luftfeuchte. Zonen, die trotz aktivem
+Heizen/Kühlen seit ≥30 Minuten keine Bewegung Richtung Zieltemperatur zeigen,
+bekommen zusätzlich einen Warnhinweis ("Reagiert nicht wie erwartet").
 
 Architektur wie bei [bedtimestory](https://github.com/marioaininger-bot/bedtimestory):
 statisches Frontend (`index.html`, gehostet via GitHub Pages) + ein Cloudflare
