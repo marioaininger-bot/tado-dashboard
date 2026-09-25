@@ -93,7 +93,7 @@
   .temp-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
   .temp-row .current{font-size:34px;font-weight:800;}
   .temp-row .target{color:var(--text-dim);font-size:14px;}
-  .meta-row{display:flex;gap:14px;color:var(--text-dim);font-size:13px;margin-bottom:12px;}
+  .meta-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;color:var(--text-dim);font-size:13px;margin-bottom:12px;}
   .power-bar-track{background:#e7ebf3;border-radius:999px;height:8px;overflow:hidden;}
   .power-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--orange),#ffd08a);transition:width .4s ease;}
   .zone-card.type-AC .power-bar-fill{background:linear-gradient(90deg,var(--blue),#bfe6ff);}
@@ -113,7 +113,8 @@
     font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
   }
   .runtime-label{color:var(--text-dim);font-size:12px;margin-top:4px;}
-  .next-change{color:var(--text-dim);font-size:12px;margin-top:-6px;margin-bottom:10px;}
+  .next-change-inline{white-space:nowrap;}
+  .battery-icon{font-size:14px;line-height:1;}
 
   .zone-controls{
     display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
@@ -577,7 +578,14 @@ function nextChangeHtml(zone) {
   const next = zone.nextScheduleChange;
   if (!next || !next.start) return '';
   const value = next.power === 'OFF' ? 'Aus' : (next.temperature != null ? next.temperature.toFixed(1) + '°' : '–');
-  return `<div class="next-change">Nächste Änderung ${formatTime(next.start)} → ${value}</div>`;
+  return `<span class="next-change-inline" title="Nächste geplante Änderung">🕒 ${formatTime(next.start)} → ${value}</span>`;
+}
+
+function batteryIconHtml(zone) {
+  if (!zone.hasBatteryInfo) return '';
+  return zone.batteryLow
+    ? '<span class="battery-icon" title="Batterie schwach">🪫</span>'
+    : '<span class="battery-icon" title="Batterie normal">🔋</span>';
 }
 
 function controlsHtml(zone) {
@@ -607,6 +615,12 @@ function zoneCardHtml(zone) {
   const humidity = zone.humidity != null ? Math.round(zone.humidity) + '% Luftfeuchte' : '';
   const hasChart = zone.history && zone.history.length >= 2;
 
+  const metaItems = [
+    humidity ? `<span>${humidity}</span>` : '',
+    nextChangeHtml(zone),
+    batteryIconHtml(zone),
+  ].filter(Boolean).join('');
+
   return `
     <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${hasChart ? 'clickable' : ''}" data-zone-id="${zone.id}">
       <span class="type-badge">${icon}</span>
@@ -619,14 +633,14 @@ function zoneCardHtml(zone) {
           <span class="current">${current}</span>
           <span class="target">${target}</span>
         </div>
-        <div class="meta-row">${humidity ? `<span>${humidity}</span>` : ''}</div>
+      `}
+      ${metaItems ? `<div class="meta-row">${metaItems}</div>` : ''}
+      ${!isOff ? `
         <div class="power-bar-track"><div class="power-bar-fill" style="width:${powerPct}%"></div></div>
         <div class="power-label">${Math.round(powerPct)}% Leistung</div>
-      `}
-      ${nextChangeHtml(zone)}
+      ` : ''}
       ${runtimeHtml(zone.history)}
       ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
-      ${zone.batteryLow ? '<div class="warn-chip">🔋 Batterie schwach</div>' : ''}
       ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
       ${controlsHtml(zone)}

@@ -210,11 +210,12 @@ async function handleAuthLogout(env) {
 // Zone (kommt direkt im Zonen-Objekt mit, kein Extra-Request nötig).
 function deviceStatusClassic(devices) {
   if (!Array.isArray(devices) || !devices.length) {
-    return { batteryLow: false, deviceOffline: false };
+    return { batteryLow: false, deviceOffline: false, hasBatteryInfo: false };
   }
   return {
     batteryLow: devices.some((d) => d.batteryState === 'LOW'),
     deviceOffline: devices.some((d) => d.connectionState && d.connectionState.value === false),
+    hasBatteryInfo: devices.some((d) => d.batteryState != null),
   };
 }
 
@@ -223,11 +224,12 @@ function deviceStatusClassic(devices) {
 // klassischen API.
 function deviceStatusRoomsAndDevices(devices) {
   if (!Array.isArray(devices) || !devices.length) {
-    return { batteryLow: false, deviceOffline: false };
+    return { batteryLow: false, deviceOffline: false, hasBatteryInfo: false };
   }
   return {
     batteryLow: devices.some((d) => d.batteryState === 'LOW'),
     deviceOffline: devices.some((d) => d.connection && d.connection.state !== 'CONNECTED'),
+    hasBatteryInfo: devices.some((d) => d.batteryState != null),
   };
 }
 
