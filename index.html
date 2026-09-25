@@ -488,31 +488,16 @@ function historyRows(history) {
   }).join('');
 }
 
-// Wählt aus der fein aufgezeichneten Historie (alle 5 Minuten) Punkte im
-// ~15-Minuten-Abstand aus, damit die Kachel weiterhin gut lesbare
-// Änderungen zeigt statt drei fast identischer 5-Minuten-Werte. Die
+// Wählt aus der fein aufgezeichneten Historie (alle 5 Minuten) die Punkte
+// auf vollen Viertelstunden (:00/:15/:30/:45) aus, damit die Kachel echte
+// Uhrzeiten zeigt statt Zeiten relativ zum letzten Datenpunkt (die je nach
+// Abrufzeitpunkt z.B. 19:10/19:25/19:40 wären statt 19:15/19:30/19:45). Die
 // Betriebsstunden-Schätzung nutzt weiterhin die volle 5-Minuten-Historie.
-function selectDisplayPoints(history, intervalMinutes, count) {
+function selectQuarterHourPoints(history, count) {
   if (!history || !history.length) return [];
-  const lastTime = new Date(history[history.length - 1].t).getTime();
-  const stepMs = intervalMinutes * 60 * 1000;
-  const picked = [];
-  for (let i = count - 1; i >= 0; i--) {
-    const targetTime = lastTime - i * stepMs;
-    let closest = history[0];
-    let closestDiff = Math.abs(new Date(closest.t).getTime() - targetTime);
-    for (const p of history) {
-      const diff = Math.abs(new Date(p.t).getTime() - targetTime);
-      if (diff < closestDiff) {
-        closest = p;
-        closestDiff = diff;
-      }
-    }
-    picked.push(closest);
-  }
-  // Direkt nach dem Deploy (noch keine 30 Min. Historie vorhanden) können
-  // mehrere "Zielzeiten" auf denselben ältesten Punkt fallen - Duplikate raus.
-  return picked.filter((p, idx) => idx === 0 || p.t !== picked[idx - 1].t);
+  const onQuarter = history.filter((p) => new Date(p.t).getUTCMinutes() % 15 === 0);
+  const source = onQuarter.length >= 2 ? onQuarter : history;
+  return source.slice(-count);
 }
 
 function historyHtml(history) {
@@ -679,7 +664,7 @@ function zoneCardHtml(zone) {
       ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
       ${controlsHtml(zone)}
-      ${historyHtml(selectDisplayPoints(zone.history, 15, 3))}
+      ${historyHtml(selectQuarterHourPoints(zone.history, 3))}
     </div>
   `;
 }
