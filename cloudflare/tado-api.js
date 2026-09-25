@@ -509,6 +509,26 @@ async function handleResumeSchedule(request, env) {
   }
 }
 
+// Siehe Kommentar bei der Route: nur zum Debuggen der undokumentierten
+// tado-X-Datenstruktur, danach wieder entfernbar.
+async function handleDebugRooms(env) {
+  const accessToken = await getValidAccessToken(env);
+  if (!accessToken) {
+    return json(401, { error: 'Nicht eingeloggt.' }, env);
+  }
+  try {
+    const me = await tadoFetch(env, accessToken, '/me');
+    const home = (me.homes || [])[0];
+    if (!home) {
+      return json(404, { error: 'Kein Tado-Zuhause gefunden.' }, env);
+    }
+    const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
+    return json(200, { rooms }, env);
+  } catch (err) {
+    return json(502, { error: err.message }, env);
+  }
+}
+
 // Vom Cron-Trigger (siehe wrangler.toml, alle 15 Minuten) aufgerufen -
 // zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
 // Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
@@ -553,6 +573,12 @@ export default {
     }
     if (url.pathname === '/api/zones/resume' && request.method === 'POST') {
       return handleResumeSchedule(request, env);
+    }
+    // Temporärer Debug-Endpunkt: zeigt die rohen tado-X "rooms"-Daten, um
+    // undokumentierte Feldnamen (z.B. für Batterie-/Verbindungsstatus)
+    // herauszufinden. Kann nach dem Fix wieder entfernt werden.
+    if (url.pathname === '/api/debug/rooms' && request.method === 'GET') {
+      return handleDebugRooms(env);
     }
 
     return json(404, { error: 'Not found' }, env);
