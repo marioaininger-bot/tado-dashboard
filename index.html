@@ -488,12 +488,39 @@ function historyRows(history) {
   }).join('');
 }
 
+// Wählt aus der fein aufgezeichneten Historie (alle 5 Minuten) Punkte im
+// ~15-Minuten-Abstand aus, damit die Kachel weiterhin gut lesbare
+// Änderungen zeigt statt drei fast identischer 5-Minuten-Werte. Die
+// Betriebsstunden-Schätzung nutzt weiterhin die volle 5-Minuten-Historie.
+function selectDisplayPoints(history, intervalMinutes, count) {
+  if (!history || !history.length) return [];
+  const lastTime = new Date(history[history.length - 1].t).getTime();
+  const stepMs = intervalMinutes * 60 * 1000;
+  const picked = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const targetTime = lastTime - i * stepMs;
+    let closest = history[0];
+    let closestDiff = Math.abs(new Date(closest.t).getTime() - targetTime);
+    for (const p of history) {
+      const diff = Math.abs(new Date(p.t).getTime() - targetTime);
+      if (diff < closestDiff) {
+        closest = p;
+        closestDiff = diff;
+      }
+    }
+    picked.push(closest);
+  }
+  // Direkt nach dem Deploy (noch keine 30 Min. Historie vorhanden) können
+  // mehrere "Zielzeiten" auf denselben ältesten Punkt fallen - Duplikate raus.
+  return picked.filter((p, idx) => idx === 0 || p.t !== picked[idx - 1].t);
+}
+
 function historyHtml(history) {
   if (!history || history.length < 2) return '';
   return `
     <div class="history">
       <div class="history-head">
-        <span class="label">Verlauf · 5 Min</span>
+        <span class="label">Verlauf · 15 Min</span>
         ${historySparkline(history)}
       </div>
       <div class="history-table">
@@ -652,7 +679,7 @@ function zoneCardHtml(zone) {
       ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
       ${controlsHtml(zone)}
-      ${historyHtml((zone.history || []).slice(-3))}
+      ${historyHtml(selectDisplayPoints(zone.history, 15, 3))}
     </div>
   `;
 }
