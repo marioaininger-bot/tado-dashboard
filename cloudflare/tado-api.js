@@ -206,27 +206,44 @@ async function handleAuthLogout(env) {
   return json(200, { status: 'ok' }, env);
 }
 
-// Batterie-/Verbindungsstatus aus der "devices"-Liste einer Zone (kommt bei
-// der klassischen API direkt im Zonen-Objekt mit, kein Extra-Request nötig).
-function deviceStatus(devices) {
+// Batterie-/Verbindungsstatus aus der "devices"-Liste einer klassischen
+// Zone (kommt direkt im Zonen-Objekt mit, kein Extra-Request nötig).
+function deviceStatusClassic(devices) {
   if (!Array.isArray(devices) || !devices.length) {
-    return { batteryLow: false, deviceOffline: false };
+    return { batteryLow: false, deviceOffline: false, hasBatteryInfo: false };
   }
   return {
     batteryLow: devices.some((d) => d.batteryState === 'LOW'),
     deviceOffline: devices.some((d) => d.connectionState && d.connectionState.value === false),
+    hasBatteryInfo: devices.some((d) => d.batteryState != null),
+  };
+}
+
+// Dasselbe für tado X, aus dem separaten "roomsAndDevices"-Endpunkt (die
+// rooms-API selbst liefert keine Geräteinfos). Andere Feldform als bei der
+// klassischen API.
+function deviceStatusRoomsAndDevices(devices) {
+  if (!Array.isArray(devices) || !devices.length) {
+    return { batteryLow: false, deviceOffline: false, hasBatteryInfo: false };
+  }
+  return {
+    batteryLow: devices.some((d) => d.batteryState === 'LOW'),
+    deviceOffline: devices.some((d) => d.connection && d.connection.state !== 'CONNECTED'),
+    hasBatteryInfo: devices.some((d) => d.batteryState != null),
   };
 }
 
 // Nächste geplante Zeitplan-Änderung (nur relevant, wenn gerade keine
-// manuelle Übersteuerung aktiv ist - kommt direkt im zoneState mit).
-function nextScheduleChange(state) {
-  if (!state.nextScheduleChange) return null;
-  const setting = state.nextScheduleChange.setting || {};
+// manuelle Übersteuerung aktiv ist). Kommt sowohl im klassischen zoneState
+// als auch im tado-X-Room-Objekt direkt mit - nur der Temperatur-Schlüssel
+// unterscheidet sich (celsius vs. value).
+function extractScheduleChange(change, tempKey) {
+  if (!change) return null;
+  const setting = change.setting || {};
   return {
-    start: state.nextScheduleChange.start,
+    start: change.start,
     power: setting.power || null,
-    temperature: setting.temperature ? setting.temperature.celsius : null,
+    temperature: setting.temperature ? setting.temperature[tempKey] : null,
   };
 }
 
@@ -248,8 +265,8 @@ function mapClassicZone(zone, classicStates) {
     openWindow: Boolean(state.openWindow || state.openWindowDetected),
     link: state.link ? state.link.state : null,
     manualOverride: Boolean(state.overlay),
-    nextScheduleChange: nextScheduleChange(state),
-    ...deviceStatus(zone.devices),
+    nextScheduleChange: extractScheduleChange(state.nextScheduleChange, 'celsius'),
+    ...deviceStatusClassic(zone.devices),
   };
 }
 
@@ -278,8 +295,19 @@ async function fetchHomeAndZones(env, accessToken) {
 
   let zoneList;
   if (isTadoX) {
-    // "tado X" Heizkörper: eigene API (hops.tado.com) mit "rooms" statt "zones".
-    const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
+    // "tado X" Heizkörper: eigene API (hops.tado.com) mit "rooms" statt
+    // "zones". Geräte-/Batteriestatus steckt dort nicht mit drin, sondern
+    // im separaten roomsAndDevices-Endpunkt (per Debug-Endpunkt ermittelt).
+    const [rooms, roomsAndDevices] = await Promise.all([
+      hopsFetch(env, accessToken, `/homes/${home.id}/rooms`),
+      hopsFetch(env, accessToken, `/homes/${home.id}/roomsAndDevices`).catch(() => null),
+    ]);
+    const devicesByRoom = {};
+    if (roomsAndDevices && Array.isArray(roomsAndDevices.rooms)) {
+      for (const r of roomsAndDevices.rooms) {
+        devicesByRoom[String(r.roomId)] = r.devices || [];
+      }
+    }
     zoneList = rooms.map((room) => {
       const setting = room.setting || {};
       const sensor = room.sensorDataPoints || {};
@@ -295,12 +323,9 @@ async function fetchHomeAndZones(env, accessToken) {
         acPower: null,
         openWindow: Boolean(room.openWindow),
         link: room.connection ? room.connection.state : null,
-        // Best effort: die rooms-API (tado X) ist nicht offiziell dokumentiert,
-        // devices/manualControl/nextScheduleChange liegen hier ggf. anders oder
-        // gar nicht vor - dann bleiben die Felder einfach leer/false.
-        manualOverride: Boolean(room.manualControlTermination || room.overlay),
-        nextScheduleChange: null,
-        ...deviceStatus(room.devices),
+        manualOverride: Boolean(room.manualControlTermination),
+        nextScheduleChange: extractScheduleChange(room.nextScheduleChange, 'value'),
+        ...deviceStatusRoomsAndDevices(devicesByRoom[String(room.id)]),
       };
     });
     // Zubehör wie Klimaanlage/Warmwasser läuft weiterhin klassisch dazunehmen.
@@ -426,12 +451,13 @@ async function handleSetZone(request, env) {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(
           power === 'OFF'
-            ? { setting: { power: 'OFF' } }
-            : { setting: { power: 'ON', temperature: { value: temperature } } }
+            ? { setting: { type: 'HEATING', power: 'OFF' } }
+            : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination: { type: 'MANUAL' } }
         ),
       });
       if (!res.ok) {
-        throw new Error(`tado X Zone konnte nicht gesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`tado X Zone konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     } else {
       const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
@@ -445,7 +471,8 @@ async function handleSetZone(request, env) {
         }),
       });
       if (!res.ok) {
-        throw new Error(`Zone konnte nicht gesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Zone konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     }
 
@@ -487,7 +514,8 @@ async function handleResumeSchedule(request, env) {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
-        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     } else {
       const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
@@ -495,7 +523,8 @@ async function handleResumeSchedule(request, env) {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!res.ok) {
-        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})`);
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
     }
 
