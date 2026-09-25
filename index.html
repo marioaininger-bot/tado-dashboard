@@ -509,8 +509,13 @@ function historyHtml(history) {
 // Warnt, wenn eine Zone seit min. 30 Min. aktiv heizt/kühlt, ohne dass sich
 // die Temperatur Richtung Ziel bewegt - möglicher Hinweis auf ein
 // klemmendes Ventil, ein offenes Fenster (das Tado nicht erkannt hat) o.ä.
+// Schaut auf ein festes Zeitfenster (nicht eine feste Anzahl Punkte)
+// zurück, damit das Ergebnis unabhängig vom Aufzeichnungsraster des
+// Workers bleibt (aktuell alle 5 Minuten, war mal 15).
+const STAGNATION_WINDOW_MINUTES = 30;
+
 function isStagnant(zone) {
-  if (!zone.history || zone.history.length < 3) return false;
+  if (!zone.history || zone.history.length < 2) return false;
   if (zone.power === 'OFF' || zone.openWindow) return false;
   if (zone.currentTemp == null || zone.targetTemp == null) return false;
 
@@ -525,9 +530,12 @@ function isStagnant(zone) {
     : zone.targetTemp - zone.currentTemp; // Heizen: Ist unter Ziel
   if (gap < 0.3) return false;
 
-  const recent = zone.history.slice(-3);
-  if (recent.some((p) => p.temp == null)) return false;
-  const delta = recent[recent.length - 1].temp - recent[0].temp;
+  const latestTime = new Date(zone.history[zone.history.length - 1].t).getTime();
+  const windowMs = STAGNATION_WINDOW_MINUTES * 60 * 1000;
+  const windowPoints = zone.history.filter((p) => latestTime - new Date(p.t).getTime() <= windowMs);
+  if (windowPoints.length < 2 || windowPoints.some((p) => p.temp == null)) return false;
+
+  const delta = windowPoints[windowPoints.length - 1].temp - windowPoints[0].temp;
   const improving = zone.type === 'AC' ? delta < -0.1 : delta > 0.1;
   return !improving;
 }
