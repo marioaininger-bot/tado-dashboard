@@ -125,11 +125,21 @@ async function fetchExtraWeather(lat, lon) {
   let startIdx = times.findIndex((t) => t.slice(0, 13) > nowHour);
   if (startIdx < 0) startIdx = 0;
 
-  const hourly = times.slice(startIdx, startIdx + 12).map((t, i) => ({
-    time: t.slice(11, 16),
-    temp: temps[startIdx + i] != null ? temps[startIdx + i] : null,
-    rainChance: rain[startIdx + i] != null ? rain[startIdx + i] : null,
-  }));
+  // 24h rollend (nicht nur bis Mitternacht) - auf breiten Bildschirmen
+  // sonst zu wenig Inhalt für die verfügbare Breite. newDay markiert den
+  // Übergang auf den Folgetag fürs Frontend (kleine Trennung/Label).
+  let lastDate = null;
+  const hourly = times.slice(startIdx, startIdx + 24).map((t, i) => {
+    const datePart = t.slice(0, 10);
+    const newDay = lastDate !== null && datePart !== lastDate;
+    lastDate = datePart;
+    return {
+      time: t.slice(11, 16),
+      temp: temps[startIdx + i] != null ? temps[startIdx + i] : null,
+      rainChance: rain[startIdx + i] != null ? rain[startIdx + i] : null,
+      newDay,
+    };
+  });
 
   return {
     humidity: data.current ? data.current.relative_humidity_2m : null,

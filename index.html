@@ -63,6 +63,13 @@
   }
   .forecast-chip .fc-temp{color:var(--text);font-weight:700;font-size:14px;margin:2px 0;}
   .forecast-chip .fc-rain{color:var(--blue);}
+  .day-divider{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    color:var(--text-dim);font-size:11px;font-weight:700;
+    text-transform:uppercase;letter-spacing:.04em;
+    border-left:1px dashed var(--card-border);padding:0 12px;
+    align-self:stretch;
+  }
 
   .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
   .zone-card{
@@ -397,6 +404,7 @@ function renderWeather(weather) {
 
   if (weather.hourly && weather.hourly.length) {
     forecastRow.innerHTML = weather.hourly.map((h) => `
+      ${h.newDay ? '<div class="day-divider">Morgen</div>' : ''}
       <div class="forecast-chip">
         <div>${h.time}</div>
         <div class="fc-temp">${h.temp != null ? Math.round(h.temp) + '°' : '–'}</div>
