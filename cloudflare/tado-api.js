@@ -206,15 +206,28 @@ async function handleAuthLogout(env) {
   return json(200, { status: 'ok' }, env);
 }
 
-// Batterie-/Verbindungsstatus aus der "devices"-Liste einer Zone (kommt bei
-// der klassischen API direkt im Zonen-Objekt mit, kein Extra-Request nötig).
-function deviceStatus(devices) {
+// Batterie-/Verbindungsstatus aus der "devices"-Liste einer klassischen
+// Zone (kommt direkt im Zonen-Objekt mit, kein Extra-Request nötig).
+function deviceStatusClassic(devices) {
   if (!Array.isArray(devices) || !devices.length) {
     return { batteryLow: false, deviceOffline: false };
   }
   return {
     batteryLow: devices.some((d) => d.batteryState === 'LOW'),
     deviceOffline: devices.some((d) => d.connectionState && d.connectionState.value === false),
+  };
+}
+
+// Dasselbe für tado X, aus dem separaten "roomsAndDevices"-Endpunkt (die
+// rooms-API selbst liefert keine Geräteinfos). Andere Feldform als bei der
+// klassischen API.
+function deviceStatusRoomsAndDevices(devices) {
+  if (!Array.isArray(devices) || !devices.length) {
+    return { batteryLow: false, deviceOffline: false };
+  }
+  return {
+    batteryLow: devices.some((d) => d.batteryState === 'LOW'),
+    deviceOffline: devices.some((d) => d.connection && d.connection.state !== 'CONNECTED'),
   };
 }
 
@@ -251,7 +264,7 @@ function mapClassicZone(zone, classicStates) {
     link: state.link ? state.link.state : null,
     manualOverride: Boolean(state.overlay),
     nextScheduleChange: extractScheduleChange(state.nextScheduleChange, 'celsius'),
-    ...deviceStatus(zone.devices),
+    ...deviceStatusClassic(zone.devices),
   };
 }
 
@@ -280,8 +293,19 @@ async function fetchHomeAndZones(env, accessToken) {
 
   let zoneList;
   if (isTadoX) {
-    // "tado X" Heizkörper: eigene API (hops.tado.com) mit "rooms" statt "zones".
-    const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
+    // "tado X" Heizkörper: eigene API (hops.tado.com) mit "rooms" statt
+    // "zones". Geräte-/Batteriestatus steckt dort nicht mit drin, sondern
+    // im separaten roomsAndDevices-Endpunkt (per Debug-Endpunkt ermittelt).
+    const [rooms, roomsAndDevices] = await Promise.all([
+      hopsFetch(env, accessToken, `/homes/${home.id}/rooms`),
+      hopsFetch(env, accessToken, `/homes/${home.id}/roomsAndDevices`).catch(() => null),
+    ]);
+    const devicesByRoom = {};
+    if (roomsAndDevices && Array.isArray(roomsAndDevices.rooms)) {
+      for (const r of roomsAndDevices.rooms) {
+        devicesByRoom[String(r.roomId)] = r.devices || [];
+      }
+    }
     zoneList = rooms.map((room) => {
       const setting = room.setting || {};
       const sensor = room.sensorDataPoints || {};
@@ -299,11 +323,7 @@ async function fetchHomeAndZones(env, accessToken) {
         link: room.connection ? room.connection.state : null,
         manualOverride: Boolean(room.manualControlTermination),
         nextScheduleChange: extractScheduleChange(room.nextScheduleChange, 'value'),
-        // Die rooms-API liefert (Stand jetzt, per /api/debug/rooms geprüft)
-        // kein "devices"-Feld - Batteriestatus kommt bei tado X offenbar
-        // über einen anderen Endpunkt (wird noch untersucht).
-        batteryLow: false,
-        deviceOffline: false,
+        ...deviceStatusRoomsAndDevices(devicesByRoom[String(room.id)]),
       };
     });
     // Zubehör wie Klimaanlage/Warmwasser läuft weiterhin klassisch dazunehmen.
@@ -512,32 +532,6 @@ async function handleResumeSchedule(request, env) {
   }
 }
 
-// Siehe Kommentar bei der Route: nur zum Debuggen der undokumentierten
-// tado-X-Datenstruktur, danach wieder entfernbar.
-async function handleDebugRooms(env) {
-  const accessToken = await getValidAccessToken(env);
-  if (!accessToken) {
-    return json(401, { error: 'Nicht eingeloggt.' }, env);
-  }
-  try {
-    const me = await tadoFetch(env, accessToken, '/me');
-    const home = (me.homes || [])[0];
-    if (!home) {
-      return json(404, { error: 'Kein Tado-Zuhause gefunden.' }, env);
-    }
-    // Drei Kandidaten parallel abfragen, um herauszufinden, wo bei tado X
-    // der Batterie-/Verbindungsstatus der Geräte tatsächlich steckt.
-    const [rooms, devicesClassic, roomsAndDevices] = await Promise.all([
-      hopsFetch(env, accessToken, `/homes/${home.id}/rooms`).catch((e) => ({ error: e.message })),
-      tadoFetch(env, accessToken, `/homes/${home.id}/devices`).catch((e) => ({ error: e.message })),
-      hopsFetch(env, accessToken, `/homes/${home.id}/roomsAndDevices`).catch((e) => ({ error: e.message })),
-    ]);
-    return json(200, { rooms, devicesClassic, roomsAndDevices }, env);
-  } catch (err) {
-    return json(502, { error: err.message }, env);
-  }
-}
-
 // Vom Cron-Trigger (siehe wrangler.toml, alle 15 Minuten) aufgerufen -
 // zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
 // Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
@@ -582,12 +576,6 @@ export default {
     }
     if (url.pathname === '/api/zones/resume' && request.method === 'POST') {
       return handleResumeSchedule(request, env);
-    }
-    // Temporärer Debug-Endpunkt: zeigt die rohen tado-X "rooms"-Daten, um
-    // undokumentierte Feldnamen (z.B. für Batterie-/Verbindungsstatus)
-    // herauszufinden. Kann nach dem Fix wieder entfernt werden.
-    if (url.pathname === '/api/debug/rooms' && request.method === 'GET') {
-      return handleDebugRooms(env);
     }
 
     return json(404, { error: 'Not found' }, env);
