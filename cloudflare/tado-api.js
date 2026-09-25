@@ -265,8 +265,17 @@ async function fetchHomeAndZones(env, accessToken) {
   return { home, homeDetails, isTadoX, zoneList };
 }
 
-// Hängt an jede Zone ihre letzten Messpunkte (Temperatur/Luftfeuchte) an,
-// die der Cron-Trigger alle 15 Minuten aufgezeichnet hat.
+// Heiz-/Kühlleistung als einheitlicher Prozentwert (0-100), unabhängig vom
+// Zonentyp - Basis für die Betriebsstunden-Schätzung im Frontend.
+function powerPercent(zone) {
+  if (zone.type === 'AC') {
+    return typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0);
+  }
+  return zone.heatingPower || 0;
+}
+
+// Hängt an jede Zone ihre letzten Messpunkte (Temperatur/Luftfeuchte/
+// Leistung) an, die der Cron-Trigger alle 15 Minuten aufgezeichnet hat.
 async function attachHistory(env, zoneList) {
   const raw = await env.TADO_KV.get(HISTORY_KV_KEY);
   const history = raw ? JSON.parse(raw) : {};
@@ -287,7 +296,7 @@ async function recordHistory(env, zoneList) {
     if (zone.currentTemp == null) continue;
     const key = String(zone.id);
     const points = history[key] || [];
-    points.push({ t, temp: zone.currentTemp, humidity: zone.humidity });
+    points.push({ t, temp: zone.currentTemp, humidity: zone.humidity, power: powerPercent(zone) });
     history[key] = points.slice(-HISTORY_MAX_POINTS);
   }
 

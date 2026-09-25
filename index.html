@@ -100,6 +100,7 @@
     background:#fdf1e4;border:1px solid var(--orange);color:#8a5417;
     font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
   }
+  .runtime-label{color:var(--text-dim);font-size:12px;margin-top:4px;}
 
   .history{margin:12px 0 2px;padding-top:11px;border-top:1px dashed var(--card-border);}
   .history-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
@@ -497,6 +498,35 @@ function isStagnant(zone) {
   return !improving;
 }
 
+// Schätzt aus dem Verlauf (Leistung je Messpunkt), wie viele Stunden eine
+// Zone im aufgezeichneten Zeitraum "voll aktiv" geheizt/gekühlt hätte -
+// keine echte kWh-Angabe (Tado liefert keine Wattzahlen), nur eine grobe
+// Laufzeit-Schätzung.
+function runtimeStats(history) {
+  if (!history || history.length < 2) return null;
+  let minutesActive = 0;
+  for (let i = 1; i < history.length; i++) {
+    const t0 = new Date(history[i - 1].t).getTime();
+    const t1 = new Date(history[i].t).getTime();
+    const deltaMin = Math.min((t1 - t0) / 60000, 30); // Lücken kappen
+    if (deltaMin <= 0) continue;
+    const p0 = history[i - 1].power || 0;
+    const p1 = history[i].power || 0;
+    minutesActive += deltaMin * ((p0 + p1) / 2 / 100);
+  }
+  const spanHours = (new Date(history[history.length - 1].t) - new Date(history[0].t)) / 3600000;
+  return { hours: minutesActive / 60, spanHours };
+}
+
+function runtimeHtml(history) {
+  const stats = runtimeStats(history);
+  if (!stats || stats.spanHours < 0.25) return '';
+  const period = stats.spanHours < 1
+    ? `${Math.round(stats.spanHours * 60)} Min.`
+    : `${stats.spanHours.toFixed(1)}h`;
+  return `<div class="runtime-label">🔥 ${stats.hours.toFixed(1)}h aktiv (letzte ${period})</div>`;
+}
+
 function renderZones(zones) {
   currentZones = zones;
   if (!zones.length) {
@@ -534,6 +564,7 @@ function zoneCardHtml(zone) {
         <div class="power-bar-track"><div class="power-bar-fill" style="width:${powerPct}%"></div></div>
         <div class="power-label">${Math.round(powerPct)}% Leistung</div>
       `}
+      ${runtimeHtml(zone.history)}
       ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
       ${historyHtml((zone.history || []).slice(-3))}
