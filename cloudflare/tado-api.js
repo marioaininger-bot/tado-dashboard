@@ -219,14 +219,16 @@ function deviceStatus(devices) {
 }
 
 // Nächste geplante Zeitplan-Änderung (nur relevant, wenn gerade keine
-// manuelle Übersteuerung aktiv ist - kommt direkt im zoneState mit).
-function nextScheduleChange(state) {
-  if (!state.nextScheduleChange) return null;
-  const setting = state.nextScheduleChange.setting || {};
+// manuelle Übersteuerung aktiv ist). Kommt sowohl im klassischen zoneState
+// als auch im tado-X-Room-Objekt direkt mit - nur der Temperatur-Schlüssel
+// unterscheidet sich (celsius vs. value).
+function extractScheduleChange(change, tempKey) {
+  if (!change) return null;
+  const setting = change.setting || {};
   return {
-    start: state.nextScheduleChange.start,
+    start: change.start,
     power: setting.power || null,
-    temperature: setting.temperature ? setting.temperature.celsius : null,
+    temperature: setting.temperature ? setting.temperature[tempKey] : null,
   };
 }
 
@@ -248,7 +250,7 @@ function mapClassicZone(zone, classicStates) {
     openWindow: Boolean(state.openWindow || state.openWindowDetected),
     link: state.link ? state.link.state : null,
     manualOverride: Boolean(state.overlay),
-    nextScheduleChange: nextScheduleChange(state),
+    nextScheduleChange: extractScheduleChange(state.nextScheduleChange, 'celsius'),
     ...deviceStatus(zone.devices),
   };
 }
@@ -295,12 +297,13 @@ async function fetchHomeAndZones(env, accessToken) {
         acPower: null,
         openWindow: Boolean(room.openWindow),
         link: room.connection ? room.connection.state : null,
-        // Best effort: die rooms-API (tado X) ist nicht offiziell dokumentiert,
-        // devices/manualControl/nextScheduleChange liegen hier ggf. anders oder
-        // gar nicht vor - dann bleiben die Felder einfach leer/false.
-        manualOverride: Boolean(room.manualControlTermination || room.overlay),
-        nextScheduleChange: null,
-        ...deviceStatus(room.devices),
+        manualOverride: Boolean(room.manualControlTermination),
+        nextScheduleChange: extractScheduleChange(room.nextScheduleChange, 'value'),
+        // Die rooms-API liefert (Stand jetzt, per /api/debug/rooms geprüft)
+        // kein "devices"-Feld - Batteriestatus kommt bei tado X offenbar
+        // über einen anderen Endpunkt (wird noch untersucht).
+        batteryLow: false,
+        deviceOffline: false,
       };
     });
     // Zubehör wie Klimaanlage/Warmwasser läuft weiterhin klassisch dazunehmen.
@@ -522,8 +525,14 @@ async function handleDebugRooms(env) {
     if (!home) {
       return json(404, { error: 'Kein Tado-Zuhause gefunden.' }, env);
     }
-    const rooms = await hopsFetch(env, accessToken, `/homes/${home.id}/rooms`);
-    return json(200, { rooms }, env);
+    // Drei Kandidaten parallel abfragen, um herauszufinden, wo bei tado X
+    // der Batterie-/Verbindungsstatus der Geräte tatsächlich steckt.
+    const [rooms, devicesClassic, roomsAndDevices] = await Promise.all([
+      hopsFetch(env, accessToken, `/homes/${home.id}/rooms`).catch((e) => ({ error: e.message })),
+      tadoFetch(env, accessToken, `/homes/${home.id}/devices`).catch((e) => ({ error: e.message })),
+      hopsFetch(env, accessToken, `/homes/${home.id}/roomsAndDevices`).catch((e) => ({ error: e.message })),
+    ]);
+    return json(200, { rooms, devicesClassic, roomsAndDevices }, env);
   } catch (err) {
     return json(502, { error: err.message }, env);
   }
