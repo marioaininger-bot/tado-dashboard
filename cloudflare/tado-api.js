@@ -206,6 +206,30 @@ async function handleAuthLogout(env) {
   return json(200, { status: 'ok' }, env);
 }
 
+// Batterie-/Verbindungsstatus aus der "devices"-Liste einer Zone (kommt bei
+// der klassischen API direkt im Zonen-Objekt mit, kein Extra-Request nötig).
+function deviceStatus(devices) {
+  if (!Array.isArray(devices) || !devices.length) {
+    return { batteryLow: false, deviceOffline: false };
+  }
+  return {
+    batteryLow: devices.some((d) => d.batteryState === 'LOW'),
+    deviceOffline: devices.some((d) => d.connectionState && d.connectionState.value === false),
+  };
+}
+
+// Nächste geplante Zeitplan-Änderung (nur relevant, wenn gerade keine
+// manuelle Übersteuerung aktiv ist - kommt direkt im zoneState mit).
+function nextScheduleChange(state) {
+  if (!state.nextScheduleChange) return null;
+  const setting = state.nextScheduleChange.setting || {};
+  return {
+    start: state.nextScheduleChange.start,
+    power: setting.power || null,
+    temperature: setting.temperature ? setting.temperature.celsius : null,
+  };
+}
+
 function mapClassicZone(zone, classicStates) {
   const state = classicStates[String(zone.id)] || {};
   const setting = state.setting || {};
@@ -223,6 +247,9 @@ function mapClassicZone(zone, classicStates) {
     acPower: activity.acPower ? activity.acPower.value : null,
     openWindow: Boolean(state.openWindow || state.openWindowDetected),
     link: state.link ? state.link.state : null,
+    manualOverride: Boolean(state.overlay),
+    nextScheduleChange: nextScheduleChange(state),
+    ...deviceStatus(zone.devices),
   };
 }
 
@@ -268,6 +295,12 @@ async function fetchHomeAndZones(env, accessToken) {
         acPower: null,
         openWindow: Boolean(room.openWindow),
         link: room.connection ? room.connection.state : null,
+        // Best effort: die rooms-API (tado X) ist nicht offiziell dokumentiert,
+        // devices/manualControl/nextScheduleChange liegen hier ggf. anders oder
+        // gar nicht vor - dann bleiben die Felder einfach leer/false.
+        manualOverride: Boolean(room.manualControlTermination || room.overlay),
+        nextScheduleChange: null,
+        ...deviceStatus(room.devices),
       };
     });
     // Zubehör wie Klimaanlage/Warmwasser läuft weiterhin klassisch dazunehmen.
@@ -353,6 +386,125 @@ async function handleDashboard(env) {
   }
 }
 
+// Setzt eine Zone manuell auf eine Zieltemperatur (oder AUS). Nur für
+// HEATING-Zonen unterstützt (Klimaanlage/Warmwasser bräuchten eine andere
+// Setting-Struktur - bewusst nicht implementiert, um dort nichts Falsches
+// zu senden). Klassische Zonen laufen über den offiziell dokumentierten
+// Overlay-Endpunkt; tado X (rooms-API) ist von Tado nicht dokumentiert und
+// hier nach bestem Wissen (Community-Quellen) umgesetzt - unbedingt nach
+// dem Deploy gegen echte Hardware verifizieren.
+async function handleSetZone(request, env) {
+  const accessToken = await getValidAccessToken(env);
+  if (!accessToken) {
+    return json(401, { error: 'Nicht eingeloggt.' }, env);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return json(400, { error: 'Ungültiger Request-Body.' }, env);
+  }
+  const { zoneId, temperature, power } = body;
+  if (zoneId == null) {
+    return json(400, { error: 'zoneId fehlt.' }, env);
+  }
+
+  try {
+    const { home, isTadoX, zoneList } = await fetchHomeAndZones(env, accessToken);
+    const zone = zoneList.find((z) => String(z.id) === String(zoneId));
+    if (!zone) {
+      return json(404, { error: 'Zone nicht gefunden.' }, env);
+    }
+    if (zone.type !== 'HEATING') {
+      return json(400, { error: 'Direktes Setzen wird aktuell nur für Heizkörper-Zonen unterstützt.' }, env);
+    }
+
+    if (isTadoX) {
+      const res = await fetch(`${HOPS_API_BASE}/homes/${home.id}/rooms/${zoneId}/manualControl`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          power === 'OFF'
+            ? { setting: { power: 'OFF' } }
+            : { setting: { power: 'ON', temperature: { value: temperature } } }
+        ),
+      });
+      if (!res.ok) {
+        throw new Error(`tado X Zone konnte nicht gesetzt werden (Status ${res.status})`);
+      }
+    } else {
+      const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          setting: power === 'OFF'
+            ? { type: 'HEATING', power: 'OFF' }
+            : { type: 'HEATING', power: 'ON', temperature: { celsius: temperature } },
+          termination: { type: 'MANUAL' },
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`Zone konnte nicht gesetzt werden (Status ${res.status})`);
+      }
+    }
+
+    return json(200, { status: 'ok' }, env);
+  } catch (err) {
+    return json(502, { error: err.message }, env);
+  }
+}
+
+// Hebt eine manuelle Übersteuerung wieder auf, Zone folgt danach wieder
+// ihrem hinterlegten Zeitplan.
+async function handleResumeSchedule(request, env) {
+  const accessToken = await getValidAccessToken(env);
+  if (!accessToken) {
+    return json(401, { error: 'Nicht eingeloggt.' }, env);
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch (e) {
+    return json(400, { error: 'Ungültiger Request-Body.' }, env);
+  }
+  const { zoneId } = body;
+  if (zoneId == null) {
+    return json(400, { error: 'zoneId fehlt.' }, env);
+  }
+
+  try {
+    const { home, isTadoX, zoneList } = await fetchHomeAndZones(env, accessToken);
+    const zone = zoneList.find((z) => String(z.id) === String(zoneId));
+    if (!zone) {
+      return json(404, { error: 'Zone nicht gefunden.' }, env);
+    }
+
+    if (isTadoX && zone.type === 'HEATING') {
+      const res = await fetch(`${HOPS_API_BASE}/homes/${home.id}/rooms/${zoneId}/resumeSchedule`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})`);
+      }
+    } else {
+      const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        throw new Error(`Zeitplan konnte nicht fortgesetzt werden (Status ${res.status})`);
+      }
+    }
+
+    return json(200, { status: 'ok' }, env);
+  } catch (err) {
+    return json(502, { error: err.message }, env);
+  }
+}
+
 // Vom Cron-Trigger (siehe wrangler.toml, alle 15 Minuten) aufgerufen -
 // zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
 // Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
@@ -391,6 +543,12 @@ export default {
     }
     if (url.pathname === '/api/dashboard' && request.method === 'GET') {
       return handleDashboard(env);
+    }
+    if (url.pathname === '/api/zones/set' && request.method === 'POST') {
+      return handleSetZone(request, env);
+    }
+    if (url.pathname === '/api/zones/resume' && request.method === 'POST') {
+      return handleResumeSchedule(request, env);
     }
 
     return json(404, { error: 'Not found' }, env);
