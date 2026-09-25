@@ -22,8 +22,10 @@ ALLOWED_ORIGIN = "https://tado.aininger.com"
 binding = "TADO_KV"
 id = "a564f39df932445aade6b98e9f121036"
 
-# Schreibt alle 15 Minuten einen Messpunkt (Temperatur/Luftfeuchte je Zone)
-# nach KV, unabhängig davon, ob das Dashboard gerade geöffnet ist. Basis für
-# den Verlauf in den Zonenkacheln.
+# Schreibt alle 5 Minuten einen Messpunkt (Temperatur/Luftfeuchte/Leistung
+# je Zone) nach KV, unabhängig davon, ob das Dashboard gerade geöffnet ist.
+# Basis für den Verlauf und die Betriebsstunden-Schätzung. Kürzeres Raster
+# (z.B. jede Minute) würde das Cloudflare-KV-Schreiblimit im Free-Plan
+# sprengen (1000 Writes/Tag - bei 5 Min. sind es ~288/Tag).
 [triggers]
-crons = ["*/15 * * * *"]
+crons = ["*/5 * * * *"]

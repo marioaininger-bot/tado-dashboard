@@ -3,7 +3,7 @@
 Persönliches Dashboard für Tado-Heizkörper (und später die Panasonic-Klimaanlage,
 sobald sie über Tados "Smart AC Control" eingebunden ist). Zeigt alle Zonen mit
 Ist-/Solltemperatur, Luftfeuchte, Heiz-/Kühlleistung, offenen Fenstern und
-Außentemperatur – inklusive Verlauf (alle 15 Minuten, 24h Historie) pro Zone.
+Außentemperatur – inklusive Verlauf (alle 5 Minuten, 24h Historie) pro Zone.
 Die Kachel zeigt die letzten 3 Messpunkte, ein Klick auf die Kachel öffnet
 einen Tages-Chart für Temperatur und Luftfeuchte. Zonen, die trotz aktivem
 Heizen/Kühlen seit ≥30 Minuten keine Bewegung Richtung Zieltemperatur zeigen,
@@ -39,11 +39,15 @@ wrangler kv namespace create TADO_KV
 wrangler deploy
 ```
 
-Der Worker legt dabei auch einen Cron-Trigger an (alle 15 Minuten, siehe
+Der Worker legt dabei auch einen Cron-Trigger an (alle 5 Minuten, siehe
 `[triggers]` in `wrangler.toml`), der unabhängig vom geöffneten Dashboard
-Temperatur und Luftfeuchte je Zone in derselben KV-Namespace aufzeichnet –
-Basis für den Verlauf in den Zonenkacheln. Direkt nach dem ersten Deploy
-dauert es bis zu ~30 Minuten, bis genug Messpunkte für den Verlauf vorliegen.
+Temperatur, Luftfeuchte und Leistung je Zone in derselben KV-Namespace
+aufzeichnet – Basis für Verlauf, Tages-Chart und Betriebsstunden-Schätzung.
+Direkt nach dem ersten Deploy dauert es bis zu ~10 Minuten, bis genug
+Messpunkte vorliegen. Kürzere Heiz-Tests (unter 5 Minuten) können trotzdem
+zwischen zwei Aufzeichnungen durchrutschen und in der Betriebsstunden-
+Schätzung fehlen - die aktuelle Heizleistung in der Kachel ist davon nicht
+betroffen, die kommt live bei jedem Laden.
 
 Nach dem Deploy ist der Worker unter
 `https://tado-dashboard-api.<deine-subdomain>.workers.dev` erreichbar.
