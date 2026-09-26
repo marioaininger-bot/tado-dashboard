@@ -495,9 +495,32 @@ function historyRows(history) {
 // Betriebsstunden-Schätzung nutzt weiterhin die volle 5-Minuten-Historie.
 function selectQuarterHourPoints(history, count) {
   if (!history || !history.length) return [];
-  const onQuarter = history.filter((p) => new Date(p.t).getUTCMinutes() % 15 === 0);
-  const source = onQuarter.length >= 2 ? onQuarter : history;
-  return source.slice(-count);
+  const QUARTER_MS = 15 * 60 * 1000;
+  // Toleranz statt exaktem Treffer: der Cron-Trigger läuft nicht exakt auf
+  // :00/:15/:30/:45, sondern leicht versetzt (z.B. :01/:06/:11/:16/...,
+  // abhängig davon, in welcher Minute der Worker zuletzt deployed wurde).
+  // Ohne Toleranz würde hier nie ein Punkt matchen und die Anzeige bliebe
+  // am letzten zufälligen Treffer hängen.
+  const TOLERANCE_MS = 7 * 60 * 1000;
+
+  const lastTime = new Date(history[history.length - 1].t).getTime();
+  const lastQuarter = Math.floor(lastTime / QUARTER_MS) * QUARTER_MS;
+
+  const picked = [];
+  for (let i = count - 1; i >= 0; i--) {
+    const target = lastQuarter - i * QUARTER_MS;
+    let best = null;
+    let bestDiff = Infinity;
+    for (const p of history) {
+      const diff = Math.abs(new Date(p.t).getTime() - target);
+      if (diff < bestDiff) {
+        best = p;
+        bestDiff = diff;
+      }
+    }
+    if (best && bestDiff <= TOLERANCE_MS) picked.push(best);
+  }
+  return picked.filter((p, idx) => idx === 0 || p.t !== picked[idx - 1].t);
 }
 
 function historyHtml(history) {
