@@ -29,7 +29,13 @@ const PENDING_KV_KEY = 'panasonic_login_pending';
 const PENDING_TTL_SECONDS = 600;
 
 // Panasonic-Zahlencodes (siehe python-panasonic-comfort-cloud/constants.py)
-const MODE_FROM_CODE = { 0: 'AUTO', 1: 'DRY', 2: 'COOL', 3: 'HEAT', 4: 'FAN' };
+const MODE_CODES = { AUTO: 0, DRY: 1, COOL: 2, HEAT: 3, FAN: 4 };
+const FAN_CODES = { AUTO: 0, LOW: 1, LOWMID: 2, MID: 3, HIGHMID: 4, HIGH: 5 };
+const ECO_CODES = { AUTO: 0, POWERFUL: 1, QUIET: 2 };
+const invert = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]));
+const MODE_FROM_CODE = invert(MODE_CODES);
+const FAN_FROM_CODE = invert(FAN_CODES);
+const ECO_FROM_CODE = invert(ECO_CODES);
 const MIN_TEMP = 16;
 const MAX_TEMP = 30;
 
@@ -727,7 +733,8 @@ function mapDevice(device, status) {
     acPower: on ? 'ON' : 'OFF',
     noPowerData: true,
     mode: MODE_FROM_CODE[p.operationMode] || null,
-    fanLevel: null,
+    fanLevel: FAN_FROM_CODE[p.fanSpeed] || null,
+    ecoMode: ECO_FROM_CODE[p.ecoMode] || null,
     openWindow: false,
     link: null,
     manualOverride: false,
@@ -763,9 +770,10 @@ export async function fetchPanasonicZones(env) {
   }
 }
 
-// Schaltet ein Gerät ein/aus oder setzt die Zieltemperatur. Modus und
-// Lüfterstufe bleiben unverändert (es werden nur die genannten Felder gesendet).
-export async function setPanasonicDevice(env, deviceId, { power, temperature }) {
+// Steuert ein Gerät. Gesendet werden nur die genannten Felder (Ein/Aus,
+// Zieltemperatur, Modus, Lüfterstufe, Eco-Modus) - alles andere bleibt
+// unverändert. Das Gerät wird dabei nie von selbst eingeschaltet.
+export async function setPanasonicDevice(env, deviceId, { power, temperature, mode, fanSpeed, eco }) {
   if (!isPanasonicConfigured(env)) {
     throw new Error('Panasonic ist nicht konfiguriert (Secrets PANASONIC_USER / PANASONIC_PASS fehlen).');
   }
@@ -784,6 +792,14 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature }) 
     if (Number.isNaN(t)) throw new Error('Ungültige Temperatur.');
     parameters.temperatureSet = t;
   }
+  const pick = (value, codes, label) => {
+    const code = codes[String(value).toUpperCase()];
+    if (code === undefined) throw new Error(`Ungültiger Wert für ${label}: ${value}`);
+    return code;
+  };
+  if (mode != null) parameters.operationMode = pick(mode, MODE_CODES, 'Modus');
+  if (fanSpeed != null) parameters.fanSpeed = pick(fanSpeed, FAN_CODES, 'Lüfterstufe');
+  if (eco != null) parameters.ecoMode = pick(eco, ECO_CODES, 'Eco-Modus');
   if (!Object.keys(parameters).length) throw new Error('Nichts zu setzen.');
 
   await accRequest(env, 'POST', '/deviceStatus/control', { deviceGuid: device.guid, parameters });

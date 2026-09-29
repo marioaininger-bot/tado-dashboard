@@ -105,7 +105,11 @@ von Panasonic angezeigt). Danach hält ein Refresh-Token die Verbindung, bis
 Panasonic sie widerruft - dann erscheint der Knopf wieder.
 
 Jedes Gerät erscheint als Kachel mit Ist-/Zieltemperatur und Modus, plus
-Temperatur ±1°, Ein/Aus. Panasonic liefert keine Verdichter-Leistung, daher
+Temperatur ±1°, Ein/Aus sowie Auswahlfeldern für Modus (Auto/Kühlen/Heizen/
+Entfeuchten/Lüften), Lüfterstufe und Eco (Auto/Leise/Turbo) - nur bei
+eingeschaltetem Gerät; das Dashboard schaltet nie von selbst ein. Tados
+Smart-AC-Zonen werden nicht mehr angezeigt (die Klimaanlagen laufen über
+Panasonic). Panasonic liefert keine Verdichter-Leistung, daher
 gibt es dort keinen Leistungsbalken und keine Betriebsstunden-Schätzung.
 Fehler stehen mit Panasonics Originalmeldung unter den Kacheln. Optional kann
 `PANASONIC_APP_VERSION` als Variable gesetzt werden, falls Panasonic eine

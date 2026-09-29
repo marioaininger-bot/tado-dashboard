@@ -372,6 +372,9 @@ async function fetchHomeAndZones(env, accessToken) {
     if (!result) return;
     homeInfos.push({ home, isTadoX: result.isTadoX, homeDetails: result.homeDetails });
     for (const zone of result.zoneList) {
+      // Klimaanlagen laufen über Panasonic (Modus/Lüfter/Eco), nicht mehr
+      // über Tados Smart AC Control - deshalb hier ausgeblendet.
+      if (zone.type === 'AC') continue;
       zoneList.push({
         ...zone,
         homeId: home.id,
@@ -480,14 +483,14 @@ async function handleSetZone(request, env) {
   } catch (e) {
     return json(400, { error: 'Ungültiger Request-Body.' }, env);
   }
-  const { zoneId, homeId, temperature, power } = body;
+  const { zoneId, homeId, temperature, power, mode, fanSpeed, eco } = body;
   if (zoneId == null) {
     return json(400, { error: 'zoneId fehlt.' }, env);
   }
 
   try {
     if (homeId === PANASONIC_HOME_ID) {
-      await setPanasonicDevice(env, zoneId, { power, temperature });
+      await setPanasonicDevice(env, zoneId, { power, temperature, mode, fanSpeed, eco });
       return json(200, { status: 'ok' }, env);
     }
     const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);
