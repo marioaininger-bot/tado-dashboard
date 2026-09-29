@@ -629,6 +629,13 @@ function nextChangeHtml(zone) {
   return `<span class="next-change-inline" title="Nächste geplante Änderung">🕒 ${formatTime(next.start)} → ${value}</span>`;
 }
 
+const AC_MODE_LABELS = { COOL: '❄️ Kühlen', HEAT: '🔥 Heizen', DRY: '💧 Entfeuchten', FAN: '🌀 Lüften', AUTO: '🔄 Auto' };
+
+function acModeHtml(zone) {
+  if (zone.type !== 'AC' || zone.power === 'OFF' || !zone.mode) return '';
+  return `<span>${AC_MODE_LABELS[zone.mode] || zone.mode}</span>`;
+}
+
 function batteryIconHtml(zone) {
   if (!zone.hasBatteryInfo) return '';
   return zone.batteryLow
@@ -637,16 +644,36 @@ function batteryIconHtml(zone) {
 }
 
 function controlsHtml(zone) {
+  if (zone.type === 'AC') return acControlsHtml(zone);
   if (zone.type !== 'HEATING') return '';
   const base = zone.targetTemp != null
     ? zone.targetTemp
     : (zone.currentTemp != null ? Math.round(zone.currentTemp * 2) / 2 : 20);
   return `
     <div class="zone-controls">
-      <button class="temp-btn" data-action="dec" data-zone-id="${zone.id}" data-temp="${base}" aria-label="Kälter">−</button>
+      <button class="temp-btn" data-action="dec" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Kälter">−</button>
       <span class="temp-display">${base.toFixed(1)}°</span>
-      <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-temp="${base}" aria-label="Wärmer">+</button>
-      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}">Zeitplan</button>` : ''}
+      <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Wärmer">+</button>
+      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}" data-home-id="${zone.homeId}">Zeitplan</button>` : ''}
+    </div>
+  `;
+}
+
+// Klimaanlage: 1°-Schritte, Ein/Aus, Zeitplan fortsetzen. In den Modi
+// Entfeuchten/Lüften gibt es keine Zieltemperatur, dort nur Ein/Aus.
+function acControlsHtml(zone) {
+  const ids = `data-zone-id="${zone.id}" data-home-id="${zone.homeId}"`;
+  const isOff = zone.power === 'OFF';
+  const hasTemp = !isOff && zone.mode !== 'DRY' && zone.mode !== 'FAN' && zone.targetTemp != null;
+  return `
+    <div class="zone-controls">
+      ${hasTemp ? `
+        <button class="temp-btn" data-action="dec" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Kälter">−</button>
+        <span class="temp-display">${zone.targetTemp.toFixed(0)}°</span>
+        <button class="temp-btn" data-action="inc" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Wärmer">+</button>
+      ` : ''}
+      <button class="resume-link" style="margin-left:${hasTemp ? '4px' : '0'};" data-action="${isOff ? 'on' : 'off'}" ${ids}>${isOff ? 'Einschalten' : 'Ausschalten'}</button>
+      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" ${ids}>Zeitplan</button>` : ''}
     </div>
   `;
 }
@@ -664,13 +691,14 @@ function zoneCardHtml(zone) {
   const hasChart = zone.history && zone.history.length >= 2;
 
   const metaItems = [
+    acModeHtml(zone),
     humidity ? `<span>${humidity}</span>` : '',
     nextChangeHtml(zone),
     batteryIconHtml(zone),
   ].filter(Boolean).join('');
 
   return `
-    <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${hasChart ? 'clickable' : ''}" data-zone-id="${zone.id}">
+    <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}">
       <span class="type-badge">${icon}</span>
       <h3>${zone.name}</h3>
       ${isOff ? `
@@ -752,13 +780,13 @@ function closeDayChart() {
 }
 
 /* ---------- Zonensteuerung (Temperatur setzen / Zeitplan fortsetzen) ---------- */
-async function setZoneTemp(zoneId, temperature, btn) {
+async function setZoneTemp(zoneId, homeId, temperature, btn, power) {
   if (btn) btn.disabled = true;
   try {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zoneId, temperature }),
+      body: JSON.stringify({ zoneId, homeId, temperature, power }),
     });
     if (res.error) throw new Error(res.error);
     await loadDashboard();
@@ -768,13 +796,13 @@ async function setZoneTemp(zoneId, temperature, btn) {
   }
 }
 
-async function resumeZoneSchedule(zoneId, btn) {
+async function resumeZoneSchedule(zoneId, homeId, btn) {
   if (btn) btn.disabled = true;
   try {
     const res = await api('/api/zones/resume', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zoneId }),
+      body: JSON.stringify({ zoneId, homeId }),
     });
     if (res.error) throw new Error(res.error);
     await loadDashboard();
@@ -788,20 +816,24 @@ zoneGrid.addEventListener('click', (e) => {
   const controlBtn = e.target.closest('[data-action]');
   if (controlBtn) {
     const zoneId = controlBtn.dataset.zoneId;
+    const homeId = controlBtn.dataset.homeId;
     const action = controlBtn.dataset.action;
     if (action === 'resume') {
-      resumeZoneSchedule(zoneId, controlBtn);
+      resumeZoneSchedule(zoneId, homeId, controlBtn);
+    } else if (action === 'on' || action === 'off') {
+      setZoneTemp(zoneId, homeId, undefined, controlBtn, action === 'off' ? 'OFF' : 'ON');
     } else {
       const current = parseFloat(controlBtn.dataset.temp);
-      const next = Math.round((action === 'inc' ? current + 0.5 : current - 0.5) * 2) / 2;
-      setZoneTemp(zoneId, next, controlBtn);
+      const step = parseFloat(controlBtn.dataset.step) || 0.5;
+      const next = Math.round((action === 'inc' ? current + step : current - step) / step) * step;
+      setZoneTemp(zoneId, homeId, next, controlBtn);
     }
     return;
   }
 
   const card = e.target.closest('.zone-card');
   if (!card) return;
-  const zone = currentZones.find((z) => String(z.id) === card.dataset.zoneId);
+  const zone = currentZones.find((z) => z.key === card.dataset.zoneKey);
   if (zone && zone.history && zone.history.length >= 2) openDayChart(zone);
 });
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);

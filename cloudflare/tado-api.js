@@ -256,7 +256,11 @@ function mapClassicZone(zone, classicStates) {
   return {
     id: zone.id,
     name: zone.name,
-    type: zone.type, // HEATING | AC | HOT_WATER
+    // Klassische API nennt Klimaanlagen AIR_CONDITIONING, das Frontend
+    // arbeitet durchgängig mit 'AC'.
+    type: zone.type === 'AIR_CONDITIONING' ? 'AC' : zone.type, // HEATING | AC | HOT_WATER
+    mode: setting.mode || null, // nur AC: COOL | HEAT | DRY | FAN | AUTO
+    fanLevel: setting.fanLevel || setting.fanSpeed || null, // nur AC, wird beim Setzen übernommen
     power: setting.power || null,
     targetTemp: setting.temperature ? setting.temperature.celsius : null,
     currentTemp: sensor.insideTemperature ? sensor.insideTemperature.celsius : null,
@@ -271,16 +275,8 @@ function mapClassicZone(zone, classicStates) {
   };
 }
 
-// Lädt Home + alle Zonen (klassisch + tado X). Wird sowohl vom
-// Dashboard-Endpunkt als auch vom Cron-Trigger (Verlaufs-Aufzeichnung)
-// genutzt.
-async function fetchHomeAndZones(env, accessToken) {
-  const me = await tadoFetch(env, accessToken, '/me');
-  const home = (me.homes || [])[0];
-  if (!home) {
-    throw new Error('Kein Tado-Zuhause gefunden.');
-  }
-
+// Lädt die Zonen eines einzelnen Homes (klassisch + tado X).
+async function fetchZonesForHome(env, accessToken, home) {
   const homeDetails = await tadoFetch(env, accessToken, `/homes/${home.id}`).catch(() => null);
   const isTadoX = homeDetails && homeDetails.generation === 'LINE_X';
 
@@ -338,7 +334,50 @@ async function fetchHomeAndZones(env, accessToken) {
     zoneList = classicZones.map((zone) => mapClassicZone(zone, classicStates));
   }
 
-  return { home, homeDetails, isTadoX, zoneList };
+  return { homeDetails, isTadoX, zoneList };
+}
+
+// Lädt alle Homes des Accounts + deren Zonen. Die Klimaanlage (Smart AC
+// Control) ist in Tado ein eigenes "Zuhause" neben dem Heizkörper-Zuhause
+// (tado X und klassische Geräte lassen sich nicht mischen) - deshalb reicht
+// me.homes[0] nicht. Jede Zone bekommt homeId/homeName und einen
+// eindeutigen "key" (Zonen-IDs sind nur innerhalb eines Homes eindeutig).
+// Für das erste Home bleibt der key die reine Zonen-ID, damit die bereits
+// aufgezeichnete Historie weiter passt. Wird sowohl vom Dashboard-Endpunkt
+// als auch vom Cron-Trigger (Verlaufs-Aufzeichnung) genutzt.
+async function fetchHomeAndZones(env, accessToken) {
+  const me = await tadoFetch(env, accessToken, '/me');
+  const homes = me.homes || [];
+  if (!homes.length) {
+    throw new Error('Kein Tado-Zuhause gefunden.');
+  }
+
+  const results = await Promise.all(homes.map((home, index) =>
+    fetchZonesForHome(env, accessToken, home).catch((err) => {
+      // Das erste Home ist Pflicht, weitere sind best effort.
+      if (index === 0) throw err;
+      return null;
+    })
+  ));
+
+  const homeInfos = [];
+  const zoneList = [];
+  homes.forEach((home, index) => {
+    const result = results[index];
+    if (!result) return;
+    homeInfos.push({ home, isTadoX: result.isTadoX, homeDetails: result.homeDetails });
+    for (const zone of result.zoneList) {
+      zoneList.push({
+        ...zone,
+        homeId: home.id,
+        homeName: home.name,
+        key: index === 0 ? String(zone.id) : `${home.id}:${zone.id}`,
+      });
+    }
+  });
+
+  const primary = homeInfos[0];
+  return { home: primary.home, homeDetails: primary.homeDetails, homeInfos, zoneList };
 }
 
 // Heiz-/Kühlleistung als einheitlicher Prozentwert (0-100), unabhängig vom
@@ -357,7 +396,7 @@ async function attachHistory(env, zoneList) {
   const history = raw ? JSON.parse(raw) : {};
   return zoneList.map((zone) => ({
     ...zone,
-    history: history[String(zone.id)] || [],
+    history: history[zone.key] || [],
   }));
 }
 
@@ -370,7 +409,7 @@ async function recordHistory(env, zoneList) {
 
   for (const zone of zoneList) {
     if (zone.currentTemp == null) continue;
-    const key = String(zone.id);
+    const key = zone.key;
     const points = history[key] || [];
     points.push({ t, temp: zone.currentTemp, humidity: zone.humidity, power: powerPercent(zone) });
     history[key] = points.slice(-HISTORY_MAX_POINTS);
@@ -431,19 +470,47 @@ async function handleSetZone(request, env) {
   } catch (e) {
     return json(400, { error: 'Ungültiger Request-Body.' }, env);
   }
-  const { zoneId, temperature, power } = body;
+  const { zoneId, homeId, temperature, power } = body;
   if (zoneId == null) {
     return json(400, { error: 'zoneId fehlt.' }, env);
   }
 
   try {
-    const { home, isTadoX, zoneList } = await fetchHomeAndZones(env, accessToken);
-    const zone = zoneList.find((z) => String(z.id) === String(zoneId));
+    const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);
+    const zone = zoneList.find((z) => String(z.id) === String(zoneId)
+      && (homeId == null || String(z.homeId) === String(homeId)));
     if (!zone) {
       return json(404, { error: 'Zone nicht gefunden.' }, env);
     }
-    if (zone.type !== 'HEATING') {
-      return json(400, { error: 'Direktes Setzen wird aktuell nur für Heizkörper-Zonen unterstützt.' }, env);
+    const home = { id: zone.homeId };
+    const isTadoX = homeInfos.find((h) => h.home.id === zone.homeId).isTadoX;
+    if (zone.type !== 'HEATING' && zone.type !== 'AC') {
+      return json(400, { error: 'Direktes Setzen wird nur für Heizkörper- und Klimaanlagen-Zonen unterstützt.' }, env);
+    }
+
+    if (zone.type === 'AC') {
+      // Klassischer Overlay-Endpunkt mit AC-Setting. Modus und Lüfterstufe
+      // der aktuellen Zone bleiben erhalten; beim Einschalten aus dem
+      // AUS-Zustand ohne bekannten Modus wird auf Kühlen gestellt.
+      const mode = zone.mode || 'COOL';
+      const setting = { type: 'AIR_CONDITIONING', power: power === 'OFF' ? 'OFF' : 'ON' };
+      if (power !== 'OFF') {
+        setting.mode = mode;
+        if (mode !== 'DRY' && mode !== 'FAN') {
+          setting.temperature = { celsius: temperature != null ? temperature : (zone.targetTemp != null ? zone.targetTemp : 24) };
+        }
+        if (zone.fanLevel) setting.fanLevel = zone.fanLevel;
+      }
+      const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setting, termination: { type: 'MANUAL' } }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Klimaanlage konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
+      }
+      return json(200, { status: 'ok' }, env);
     }
 
     if (isTadoX) {
@@ -497,17 +564,20 @@ async function handleResumeSchedule(request, env) {
   } catch (e) {
     return json(400, { error: 'Ungültiger Request-Body.' }, env);
   }
-  const { zoneId } = body;
+  const { zoneId, homeId } = body;
   if (zoneId == null) {
     return json(400, { error: 'zoneId fehlt.' }, env);
   }
 
   try {
-    const { home, isTadoX, zoneList } = await fetchHomeAndZones(env, accessToken);
-    const zone = zoneList.find((z) => String(z.id) === String(zoneId));
+    const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);
+    const zone = zoneList.find((z) => String(z.id) === String(zoneId)
+      && (homeId == null || String(z.homeId) === String(homeId)));
     if (!zone) {
       return json(404, { error: 'Zone nicht gefunden.' }, env);
     }
+    const home = { id: zone.homeId };
+    const isTadoX = homeInfos.find((h) => h.home.id === zone.homeId).isTadoX;
 
     if (isTadoX && zone.type === 'HEATING') {
       const res = await fetch(`${HOPS_API_BASE}/homes/${home.id}/rooms/${zoneId}/resumeSchedule`, {

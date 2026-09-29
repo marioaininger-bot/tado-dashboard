@@ -73,6 +73,11 @@ du dich aktiv abmeldest.
 
 ## Klimaanlage (Panasonic via Tado Smart AC Control)
 
-Sobald die Klimaanlage in der Tado-App als Zone eingerichtet ist, taucht sie
-automatisch im Dashboard auf (Zonen-Typ `AC`) – keine zusätzliche Integration
-nötig.
+Die Klimaanlage ist in Tado ein eigenes „Zuhause“ (neben dem tado-X-Zuhause
+mit den Heizkörpern). Der Worker liest deshalb alle Homes des Accounts
+(`/me` → `homes`) und zeigt die Zonen der weiteren Homes (Zonen-Typ
+`AIR_CONDITIONING`, im Frontend `AC`) als Kacheln neben den Räumen an –
+inklusive Modus (Kühlen/Heizen/…), Verlauf und Betriebsstunden. Direktes
+Die Kachel bietet Temperatur ±1°, Ein/Aus und „Zeitplan“ (Modus und
+Lüfterstufe bleiben erhalten; per Overlay-Endpunkt, bitte am echten Gerät
+verifizieren).
