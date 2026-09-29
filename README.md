@@ -110,7 +110,7 @@ Entfeuchten/Lüften), Lüfterstufe, Eco (Auto/Leise/Turbo) und - sofern das Ger�
 Luftrichtung senkrecht/waagrecht - nur bei
 eingeschaltetem Gerät; das Dashboard schaltet nie von selbst ein. „Einschalten“ startet im Modus
 Kühlen mit der Zieltemperatur aus `PANASONIC_DEFAULT_TEMP` (`wrangler.toml`,
-Standard 24). Tados
+Standard 20). Tados
 Smart-AC-Zonen werden nicht mehr angezeigt (die Klimaanlagen laufen über
 Panasonic). Panasonic liefert keine Verdichter-Leistung, daher
 gibt es dort keinen Leistungsbalken und keine Betriebsstunden-Schätzung.

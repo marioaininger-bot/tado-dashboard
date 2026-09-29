@@ -38,7 +38,7 @@ const ECO_CODES = { AUTO: 0, POWERFUL: 1, QUIET: 2 };
 const SWING_UD_CODES = { UP: 0, DOWN: 1, MID: 2, UPMID: 3, DOWNMID: 4, SWING: 5 };
 const SWING_LR_CODES = { RIGHT: 0, LEFT: 1, MID: 2, RIGHTMID: 4, LEFTMID: 5 };
 const LR_UNAVAILABLE = 6;
-const DEFAULT_ON_TEMP = 24;
+const DEFAULT_ON_TEMP = 20;
 const invert = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]));
 const MODE_FROM_CODE = invert(MODE_CODES);
 const FAN_FROM_CODE = invert(FAN_CODES);
@@ -820,7 +820,7 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature, mo
     // Beim Einschalten immer Kühlen (nicht der zuletzt benutzte Modus,
     // z. B. Entfeuchten) - außer es wird ausdrücklich ein Modus mitgegeben.
     if (mode == null) parameters.operationMode = MODE_CODES.COOL;
-    // ... und mit Standard-Zieltemperatur (PANASONIC_DEFAULT_TEMP, sonst 24),
+    // ... und mit Standard-Zieltemperatur (PANASONIC_DEFAULT_TEMP, sonst 20),
     // außer eine Temperatur wird mitgegeben oder der Modus hat keine.
     const targetMode = mode == null ? 'COOL' : String(mode).toUpperCase();
     if (temperature == null && targetMode !== 'DRY' && targetMode !== 'FAN') {
