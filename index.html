@@ -255,6 +255,7 @@
 
   <div id="dashboard" style="display:none;">
     <div id="zoneGrid" class="zone-grid"></div>
+    <div id="panasonicNotice" class="status-line" style="display:none;margin-top:14px;"></div>
   </div>
 
   <div id="loadingState" class="empty-state" style="display:none;">
@@ -407,6 +408,9 @@ async function loadDashboard() {
 
     renderWeather(data.weather);
     renderZones(data.zones || []);
+    const notice = document.getElementById('panasonicNotice');
+    notice.textContent = data.panasonicError ? '⚠️ Panasonic: ' + data.panasonicError : '';
+    show(notice, Boolean(data.panasonicError), 'block');
 
     show(loadingState, false);
     show(dashboard, true, 'block');
@@ -552,7 +556,7 @@ const STAGNATION_WINDOW_MINUTES = 30;
 
 function isStagnant(zone) {
   if (!zone.history || zone.history.length < 2) return false;
-  if (zone.power === 'OFF' || zone.openWindow) return false;
+  if (zone.power === 'OFF' || zone.openWindow || zone.noPowerData) return false;
   if (zone.currentTemp == null || zone.targetTemp == null) return false;
 
   const powerPct = zone.type === 'AC'
@@ -669,7 +673,7 @@ function acControlsHtml(zone) {
     <div class="zone-controls">
       ${hasTemp ? `
         <button class="temp-btn" data-action="dec" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Kälter">−</button>
-        <span class="temp-display">${zone.targetTemp.toFixed(0)}°</span>
+        <span class="temp-display">${zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0)}°</span>
         <button class="temp-btn" data-action="inc" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Wärmer">+</button>
       ` : ''}
       <button class="resume-link" style="margin-left:${hasTemp ? '4px' : '0'};" data-action="${isOff ? 'on' : 'off'}" ${ids}>${isOff ? 'Einschalten' : 'Ausschalten'}</button>
@@ -711,11 +715,11 @@ function zoneCardHtml(zone) {
         </div>
       `}
       ${metaItems ? `<div class="meta-row">${metaItems}</div>` : ''}
-      ${!isOff ? `
+      ${!isOff && !zone.noPowerData ? `
         <div class="power-bar-track"><div class="power-bar-fill" style="width:${powerPct}%"></div></div>
         <div class="power-label">${Math.round(powerPct)}% Leistung</div>
       ` : ''}
-      ${runtimeHtml(zone.history)}
+      ${zone.noPowerData ? '' : runtimeHtml(zone.history)}
       ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
       ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}

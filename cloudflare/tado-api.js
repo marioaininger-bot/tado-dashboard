@@ -9,6 +9,8 @@
 // Setze ALLOWED_ORIGIN in wrangler.toml auf deine GitHub-Pages-URL,
 // damit nur dein Dashboard die Endpunkte aufrufen darf.
 
+import { PANASONIC_HOME_ID, fetchPanasonicZones, setPanasonicDevice } from './panasonic.js';
+
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
 const API_BASE = 'https://my.tado.com/api/v2';
@@ -383,6 +385,7 @@ async function fetchHomeAndZones(env, accessToken) {
 // Heiz-/Kühlleistung als einheitlicher Prozentwert (0-100), unabhängig vom
 // Zonentyp - Basis für die Betriebsstunden-Schätzung im Frontend.
 function powerPercent(zone) {
+  if (zone.noPowerData) return 0; // Panasonic: keine echte Leistung bekannt
   if (zone.type === 'AC') {
     return typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0);
   }
@@ -426,7 +429,8 @@ async function handleDashboard(env) {
 
   try {
     const { home, homeDetails, zoneList } = await fetchHomeAndZones(env, accessToken);
-    const zonesWithHistory = await attachHistory(env, zoneList);
+    const panasonic = await fetchPanasonicZones(env);
+    const zonesWithHistory = await attachHistory(env, zoneList.concat(panasonic.zones));
 
     const weather = await tadoFetch(env, accessToken, `/homes/${home.id}/weather`).catch(() => null);
     const geo = homeDetails && homeDetails.geolocation;
@@ -437,6 +441,7 @@ async function handleDashboard(env) {
     return json(200, {
       homeName: home.name,
       zones: zonesWithHistory,
+      panasonicError: panasonic.error,
       weather: (weather || extraWeather) ? {
         outsideTemp: weather && weather.outsideTemperature ? weather.outsideTemperature.celsius : null,
         solarIntensity: weather && weather.solarIntensity ? weather.solarIntensity.percentage : null,
@@ -476,6 +481,10 @@ async function handleSetZone(request, env) {
   }
 
   try {
+    if (homeId === PANASONIC_HOME_ID) {
+      await setPanasonicDevice(env, zoneId, { power, temperature });
+      return json(200, { status: 'ok' }, env);
+    }
     const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);
     const zone = zoneList.find((z) => String(z.id) === String(zoneId)
       && (homeId == null || String(z.homeId) === String(homeId)));
@@ -570,6 +579,9 @@ async function handleResumeSchedule(request, env) {
   }
 
   try {
+    if (homeId === PANASONIC_HOME_ID) {
+      return json(400, { error: 'Panasonic-Geräte haben keinen Tado-Zeitplan.' }, env);
+    }
     const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);
     const zone = zoneList.find((z) => String(z.id) === String(zoneId)
       && (homeId == null || String(z.homeId) === String(homeId)));
@@ -615,7 +627,8 @@ async function handleScheduled(env) {
 
   try {
     const { zoneList } = await fetchHomeAndZones(env, accessToken);
-    await recordHistory(env, zoneList);
+    const panasonic = await fetchPanasonicZones(env);
+    await recordHistory(env, zoneList.concat(panasonic.zones));
   } catch (err) {
     // best effort
   }
