@@ -81,3 +81,26 @@ inklusive Modus (Kühlen/Heizen/…), Verlauf und Betriebsstunden. Direktes
 Die Kachel bietet Temperatur ±1°, Ein/Aus und „Zeitplan“ (Modus und
 Lüfterstufe bleiben erhalten; per Overlay-Endpunkt, bitte am echten Gerät
 verifizieren).
+
+## Weitere Klimaanlagen (Panasonic Comfort Cloud)
+
+Panasonic-Geräte, die in der App „Panasonic Comfort Cloud“ eingerichtet sind,
+lassen sich direkt einbinden – ohne Tado-Modul. Der Worker meldet sich dafür
+mit deinem Comfort-Cloud-Login an (inoffizielle API, Ablauf wie in der App /
+der Bibliothek `python-panasonic-comfort-cloud`). Die Zugangsdaten liegen nur
+als Worker-Secrets, nie im Repo:
+
+```bash
+cd cloudflare
+wrangler secret put PANASONIC_USER   # E-Mail der Comfort-Cloud-App
+wrangler secret put PANASONIC_PASS
+wrangler deploy
+```
+
+Jedes Gerät erscheint als Kachel mit Ist-/Zieltemperatur und Modus, plus
+Temperatur ±1°, Ein/Aus. Panasonic liefert keine Verdichter-Leistung, daher
+gibt es dort keinen Leistungsbalken und keine Betriebsstunden-Schätzung.
+Schlägt der Login fehl (z. B. falsches Passwort), pausiert der Worker 30
+Minuten, damit dein Panasonic-Konto nicht gesperrt wird; die Meldung steht
+unter den Kacheln. Optional kann `PANASONIC_APP_VERSION` als Variable gesetzt
+werden, falls Panasonic eine neuere App-Version verlangt.
