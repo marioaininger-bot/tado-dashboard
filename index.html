@@ -134,6 +134,16 @@
     text-decoration:underline;cursor:pointer;font-family:inherit;padding:0;
   }
   .resume-link:disabled{opacity:.5;cursor:not-allowed;}
+  .ac-options{
+    display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;
+    margin-top:10px;padding-top:10px;border-top:1px dashed var(--card-border);
+    color:var(--text-dim);font-size:12px;
+  }
+  .ac-options select{
+    font-family:inherit;font-size:13px;color:var(--text);background:var(--card);
+    border:1px solid var(--card-border);border-radius:8px;padding:5px 8px;min-width:0;
+  }
+  .ac-options select:disabled{opacity:.5;}
 
   .history{margin:12px 0 2px;padding-top:11px;border-top:1px dashed var(--card-border);}
   .history-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
@@ -690,6 +700,8 @@ function runtimeHtml(history) {
 
 function renderZones(zones) {
   currentZones = zones;
+  // Ein gerade geöffnetes Auswahlfeld nicht durch den 60-s-Refresh schließen.
+  if (document.activeElement && document.activeElement.tagName === 'SELECT' && zoneGrid.contains(document.activeElement)) return;
   if (!zones.length) {
     zoneGrid.innerHTML = '<div class="empty-state">Keine Zonen gefunden.</div>';
     return;
@@ -742,6 +754,18 @@ function controlsHtml(zone) {
   `;
 }
 
+const AC_MODE_OPTIONS = [['AUTO', 'Auto'], ['COOL', 'Kühlen'], ['HEAT', 'Heizen'], ['DRY', 'Entfeuchten'], ['FAN', 'Lüften']];
+const AC_FAN_OPTIONS = [['AUTO', 'Auto'], ['LOW', 'Stufe 1'], ['LOWMID', 'Stufe 2'], ['MID', 'Stufe 3'], ['HIGHMID', 'Stufe 4'], ['HIGH', 'Stufe 5']];
+const AC_ECO_OPTIONS = [['AUTO', 'Auto'], ['QUIET', 'Leise'], ['POWERFUL', 'Turbo']];
+
+function acSelectHtml(label, prop, options, current, ids) {
+  return `<label>${label}</label>
+    <select data-prop="${prop}" ${ids}>
+      ${current ? '' : '<option value="" selected disabled>–</option>'}
+      ${options.map(([value, text]) => `<option value="${value}" ${value === current ? 'selected' : ''}>${text}</option>`).join('')}
+    </select>`;
+}
+
 // Klimaanlage: 1°-Schritte, Ein/Aus, Zeitplan fortsetzen. In den Modi
 // Entfeuchten/Lüften gibt es keine Zieltemperatur, dort nur Ein/Aus.
 function acControlsHtml(zone) {
@@ -758,6 +782,13 @@ function acControlsHtml(zone) {
       <button class="resume-link" style="margin-left:${hasTemp ? '4px' : '0'};" data-action="${isOff ? 'on' : 'off'}" ${ids}>${isOff ? 'Einschalten' : 'Ausschalten'}</button>
       ${zone.manualOverride ? `<button class="resume-link" data-action="resume" ${ids}>Zeitplan</button>` : ''}
     </div>
+    ${zone.homeId === 'panasonic' && !isOff ? `
+      <div class="ac-options">
+        ${acSelectHtml('Modus', 'mode', AC_MODE_OPTIONS, zone.mode, ids)}
+        ${acSelectHtml('Lüfter', 'fanSpeed', AC_FAN_OPTIONS, zone.fanLevel, ids)}
+        ${acSelectHtml('Eco', 'eco', AC_ECO_OPTIONS, zone.ecoMode, ids)}
+      </div>
+    ` : ''}
   `;
 }
 
@@ -863,20 +894,25 @@ function closeDayChart() {
 }
 
 /* ---------- Zonensteuerung (Temperatur setzen / Zeitplan fortsetzen) ---------- */
-async function setZoneTemp(zoneId, homeId, temperature, btn, power) {
-  if (btn) btn.disabled = true;
+async function postZoneSet(body, el, errorLabel) {
+  if (el) el.disabled = true;
   try {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zoneId, homeId, temperature, power }),
+      body: JSON.stringify(body),
     });
     if (res.error) throw new Error(res.error);
     await loadDashboard();
   } catch (e) {
-    alert('Konnte Temperatur nicht setzen: ' + e.message);
-    if (btn) btn.disabled = false;
+    alert(errorLabel + e.message);
+    if (el) el.disabled = false;
+    await loadDashboard();
   }
+}
+
+function setZoneTemp(zoneId, homeId, temperature, btn, power) {
+  return postZoneSet({ zoneId, homeId, temperature, power }, btn, 'Konnte Temperatur nicht setzen: ');
 }
 
 async function resumeZoneSchedule(zoneId, homeId, btn) {
@@ -896,6 +932,7 @@ async function resumeZoneSchedule(zoneId, homeId, btn) {
 }
 
 zoneGrid.addEventListener('click', (e) => {
+  if (e.target.closest('.ac-options')) return; // Auswahlfelder öffnen keinen Chart
   const controlBtn = e.target.closest('[data-action]');
   if (controlBtn) {
     const zoneId = controlBtn.dataset.zoneId;
@@ -918,6 +955,15 @@ zoneGrid.addEventListener('click', (e) => {
   if (!card) return;
   const zone = currentZones.find((z) => z.key === card.dataset.zoneKey);
   if (zone && zone.history && zone.history.length >= 2) openDayChart(zone);
+});
+zoneGrid.addEventListener('change', (e) => {
+  const select = e.target.closest('select[data-prop]');
+  if (!select || !select.value) return;
+  postZoneSet(
+    { zoneId: select.dataset.zoneId, homeId: select.dataset.homeId, [select.dataset.prop]: select.value },
+    select,
+    'Konnte Klimaanlage nicht einstellen: ',
+  );
 });
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);
 dayChartModal.addEventListener('click', (e) => {
