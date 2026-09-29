@@ -16,6 +16,8 @@ compatibility_date = "2024-09-01"
 #   wrangler deploy
 
 [vars]
+# Zieltemperatur, mit der Panasonic-Klimaanlagen beim Einschalten starten.
+PANASONIC_DEFAULT_TEMP = "24"
 ALLOWED_ORIGIN = "https://tado.aininger.com"
 
 [[kv_namespaces]]

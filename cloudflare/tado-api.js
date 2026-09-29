@@ -483,14 +483,14 @@ async function handleSetZone(request, env) {
   } catch (e) {
     return json(400, { error: 'Ungültiger Request-Body.' }, env);
   }
-  const { zoneId, homeId, temperature, power, mode, fanSpeed, eco } = body;
+  const { zoneId, homeId, temperature, power, mode, fanSpeed, eco, swingUD, swingLR } = body;
   if (zoneId == null) {
     return json(400, { error: 'zoneId fehlt.' }, env);
   }
 
   try {
     if (homeId === PANASONIC_HOME_ID) {
-      await setPanasonicDevice(env, zoneId, { power, temperature, mode, fanSpeed, eco });
+      await setPanasonicDevice(env, zoneId, { power, temperature, mode, fanSpeed, eco, swingUD, swingLR });
       return json(200, { status: 'ok' }, env);
     }
     const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);

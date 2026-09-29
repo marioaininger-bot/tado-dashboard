@@ -106,8 +106,11 @@ Panasonic sie widerruft - dann erscheint der Knopf wieder.
 
 Jedes Gerät erscheint als Kachel mit Ist-/Zieltemperatur und Modus, plus
 Temperatur ±1°, Ein/Aus sowie Auswahlfeldern für Modus (Auto/Kühlen/Heizen/
-Entfeuchten/Lüften), Lüfterstufe und Eco (Auto/Leise/Turbo) - nur bei
-eingeschaltetem Gerät; das Dashboard schaltet nie von selbst ein. Tados
+Entfeuchten/Lüften), Lüfterstufe, Eco (Auto/Leise/Turbo) und - sofern das Gerät sie meldet -
+Luftrichtung senkrecht/waagrecht - nur bei
+eingeschaltetem Gerät; das Dashboard schaltet nie von selbst ein. „Einschalten“ startet im Modus
+Kühlen mit der Zieltemperatur aus `PANASONIC_DEFAULT_TEMP` (`wrangler.toml`,
+Standard 24). Tados
 Smart-AC-Zonen werden nicht mehr angezeigt (die Klimaanlagen laufen über
 Panasonic). Panasonic liefert keine Verdichter-Leistung, daher
 gibt es dort keinen Leistungsbalken und keine Betriebsstunden-Schätzung.

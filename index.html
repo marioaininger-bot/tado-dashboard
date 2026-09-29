@@ -756,6 +756,8 @@ function controlsHtml(zone) {
 
 const AC_MODE_OPTIONS = [['AUTO', 'Auto'], ['COOL', 'Kühlen'], ['HEAT', 'Heizen'], ['DRY', 'Entfeuchten'], ['FAN', 'Lüften']];
 const AC_FAN_OPTIONS = [['AUTO', 'Auto'], ['LOW', 'Stufe 1'], ['LOWMID', 'Stufe 2'], ['MID', 'Stufe 3'], ['HIGHMID', 'Stufe 4'], ['HIGH', 'Stufe 5']];
+const AC_SWING_UD_OPTIONS = [['AUTO', 'Auto'], ['UP', 'Oben'], ['UPMID', 'Oben-Mitte'], ['MID', 'Mitte'], ['DOWNMID', 'Unten-Mitte'], ['DOWN', 'Unten'], ['SWING', 'Pendeln']];
+const AC_SWING_LR_OPTIONS = [['AUTO', 'Auto'], ['LEFT', 'Links'], ['LEFTMID', 'Links-Mitte'], ['MID', 'Mitte'], ['RIGHTMID', 'Rechts-Mitte'], ['RIGHT', 'Rechts']];
 const AC_ECO_OPTIONS = [['AUTO', 'Auto'], ['QUIET', 'Leise'], ['POWERFUL', 'Turbo']];
 
 function acSelectHtml(label, prop, options, current, ids) {
@@ -787,6 +789,8 @@ function acControlsHtml(zone) {
         ${acSelectHtml('Modus', 'mode', AC_MODE_OPTIONS, zone.mode, ids)}
         ${acSelectHtml('Lüfter', 'fanSpeed', AC_FAN_OPTIONS, zone.fanLevel, ids)}
         ${acSelectHtml('Eco', 'eco', AC_ECO_OPTIONS, zone.ecoMode, ids)}
+        ${zone.swingUD != null ? acSelectHtml('Richtung ↕', 'swingUD', AC_SWING_UD_OPTIONS, zone.swingUD, ids) : ''}
+        ${zone.swingLR != null ? acSelectHtml('Richtung ↔', 'swingLR', AC_SWING_LR_OPTIONS, zone.swingLR, ids) : ''}
       </div>
     ` : ''}
   `;
