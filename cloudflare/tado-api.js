@@ -9,7 +9,10 @@
 // Setze ALLOWED_ORIGIN in wrangler.toml auf deine GitHub-Pages-URL,
 // damit nur dein Dashboard die Endpunkte aufrufen darf.
 
-import { PANASONIC_HOME_ID, fetchPanasonicZones, setPanasonicDevice } from './panasonic.js';
+import {
+  PANASONIC_HOME_ID, fetchPanasonicZones, setPanasonicDevice,
+  startPanasonicLogin, verifyPanasonicMfa,
+} from './panasonic.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
@@ -442,6 +445,8 @@ async function handleDashboard(env) {
       homeName: home.name,
       zones: zonesWithHistory,
       panasonicError: panasonic.error,
+      panasonicLoginRequired: panasonic.loginRequired,
+      panasonicMfaPending: panasonic.mfaPending,
       weather: (weather || extraWeather) ? {
         outsideTemp: weather && weather.outsideTemperature ? weather.outsideTemperature.celsius : null,
         solarIntensity: weather && weather.solarIntensity ? weather.solarIntensity.percentage : null,
@@ -617,6 +622,30 @@ async function handleResumeSchedule(request, env) {
   }
 }
 
+// Panasonic-Anmeldung (Knopf im Dashboard): Schritt 1 startet den Login mit
+// den Worker-Secrets, Schritt 2 löst den Bestätigungscode (MFA) ein. Nur für
+// eingeloggte Dashboard-Nutzer (Tado-Token vorhanden).
+async function handlePanasonicLogin(request, env, step) {
+  const accessToken = await getValidAccessToken(env);
+  if (!accessToken) {
+    return json(401, { error: 'Nicht eingeloggt.' }, env);
+  }
+  try {
+    if (step === 'start') {
+      return json(200, await startPanasonicLogin(env), env);
+    }
+    let body;
+    try {
+      body = await request.json();
+    } catch (e) {
+      return json(400, { error: 'Ungültiger Request-Body.' }, env);
+    }
+    return json(200, await verifyPanasonicMfa(env, body.code), env);
+  } catch (err) {
+    return json(502, { error: err.message }, env);
+  }
+}
+
 // Vom Cron-Trigger (siehe wrangler.toml, alle 5 Minuten) aufgerufen -
 // zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
 // Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
@@ -662,6 +691,13 @@ export default {
     }
     if (url.pathname === '/api/zones/resume' && request.method === 'POST') {
       return handleResumeSchedule(request, env);
+    }
+
+    if (url.pathname === '/api/panasonic/login/start' && request.method === 'POST') {
+      return handlePanasonicLogin(request, env, 'start');
+    }
+    if (url.pathname === '/api/panasonic/login/verify' && request.method === 'POST') {
+      return handlePanasonicLogin(request, env, 'verify');
     }
 
     return json(404, { error: 'Not found' }, env);

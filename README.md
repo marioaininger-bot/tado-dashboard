@@ -97,10 +97,16 @@ wrangler secret put PANASONIC_PASS
 wrangler deploy
 ```
 
+Panasonic verlangt beim Login einen Bestätigungscode (Zwei-Faktor). Der
+Worker meldet sich deshalb nie von selbst an: Im Dashboard erscheint unter den
+Kacheln „Bei Panasonic anmelden“. Ein Klick startet den Login mit den Secrets,
+danach gibst du einmal den Bestätigungscode ein (Authenticator-App bzw. wie
+von Panasonic angezeigt). Danach hält ein Refresh-Token die Verbindung, bis
+Panasonic sie widerruft - dann erscheint der Knopf wieder.
+
 Jedes Gerät erscheint als Kachel mit Ist-/Zieltemperatur und Modus, plus
 Temperatur ±1°, Ein/Aus. Panasonic liefert keine Verdichter-Leistung, daher
 gibt es dort keinen Leistungsbalken und keine Betriebsstunden-Schätzung.
-Schlägt der Login fehl (z. B. falsches Passwort), pausiert der Worker 30
-Minuten, damit dein Panasonic-Konto nicht gesperrt wird; die Meldung steht
-unter den Kacheln. Optional kann `PANASONIC_APP_VERSION` als Variable gesetzt
-werden, falls Panasonic eine neuere App-Version verlangt.
+Fehler stehen mit Panasonics Originalmeldung unter den Kacheln. Optional kann
+`PANASONIC_APP_VERSION` als Variable gesetzt werden, falls Panasonic eine
+neuere App-Version verlangt.

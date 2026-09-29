@@ -408,9 +408,7 @@ async function loadDashboard() {
 
     renderWeather(data.weather);
     renderZones(data.zones || []);
-    const notice = document.getElementById('panasonicNotice');
-    notice.textContent = data.panasonicError ? '⚠️ Panasonic: ' + data.panasonicError : '';
-    show(notice, Boolean(data.panasonicError), 'block');
+    renderPanasonicNotice(data);
 
     show(loadingState, false);
     show(dashboard, true, 'block');
@@ -420,6 +418,72 @@ async function loadDashboard() {
     show(dashboard, false);
   }
 }
+
+/* ---------- Panasonic-Anmeldung (Bestätigungscode) ---------- */
+const panasonicNotice = document.getElementById('panasonicNotice');
+let panasonicMfaOpen = false; // hält das Code-Feld beim 60-s-Refresh offen
+
+function renderPanasonicNotice(data) {
+  // Solange jemand im Code-Feld tippt, nicht neu zeichnen.
+  if (panasonicNotice.contains(document.activeElement) && document.activeElement.tagName === 'INPUT') return;
+
+  if (data.panasonicLoginRequired) {
+    if (data.panasonicMfaPending || panasonicMfaOpen) {
+      panasonicMfaOpen = true;
+      panasonicNotice.innerHTML = `
+        Panasonic hat einen Bestätigungscode angefordert. Code eingeben:
+        <input id="panasonicCode" inputmode="numeric" autocomplete="one-time-code" style="width:9em;padding:6px 8px;border:1px solid var(--card-border);border-radius:8px;font:inherit;">
+        <button class="btn-link" id="panasonicVerifyBtn">Bestätigen</button>
+        <span id="panasonicMsg"></span>`;
+    } else {
+      panasonicNotice.innerHTML = `⚠️ Panasonic: nicht angemeldet.
+        <button class="btn-link" id="panasonicStartBtn">Bei Panasonic anmelden</button>
+        <span id="panasonicMsg"></span>`;
+    }
+    show(panasonicNotice, true, 'block');
+  } else if (data.panasonicError) {
+    panasonicMfaOpen = false;
+    panasonicNotice.textContent = '⚠️ Panasonic: ' + data.panasonicError;
+    show(panasonicNotice, true, 'block');
+  } else {
+    panasonicMfaOpen = false;
+    panasonicNotice.textContent = '';
+    show(panasonicNotice, false);
+  }
+}
+
+async function panasonicLoginStep(path, body, btn) {
+  const msg = document.getElementById('panasonicMsg');
+  if (btn) btn.disabled = true;
+  if (msg) msg.textContent = ' …';
+  try {
+    const res = await api(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    if (res.error) throw new Error(res.error);
+    if (res.status === 'mfa') {
+      panasonicMfaOpen = true;
+      renderPanasonicNotice({ panasonicLoginRequired: true, panasonicMfaPending: true });
+      return;
+    }
+    panasonicMfaOpen = false;
+    await loadDashboard();
+  } catch (e) {
+    if (msg) msg.textContent = ' ⚠️ ' + e.message;
+    if (btn) btn.disabled = false;
+  }
+}
+
+panasonicNotice.addEventListener('click', (e) => {
+  if (e.target.id === 'panasonicStartBtn') {
+    panasonicLoginStep('/api/panasonic/login/start', {}, e.target);
+  } else if (e.target.id === 'panasonicVerifyBtn') {
+    const code = document.getElementById('panasonicCode').value;
+    panasonicLoginStep('/api/panasonic/login/verify', { code }, e.target);
+  }
+});
 
 function renderWeather(weather) {
   if (!weather) { show(weatherStrip, false); show(forecastRow, false); return; }
