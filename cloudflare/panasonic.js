@@ -8,9 +8,10 @@
 // verschluckt, sondern bis ins Dashboard durchgereicht.
 //
 // Zugangsdaten liegen NUR als Worker-Secrets (PANASONIC_USER / PANASONIC_PASS),
-// Tokens in Workers KV (TADO_KV). Nach einem fehlgeschlagenen Login pausiert
-// der Worker 30 Minuten, damit ein falsches Passwort den Panasonic-Account
-// nicht durch den 5-Minuten-Cron sperrt.
+// Tokens in Workers KV (TADO_KV). Panasonic verlangt beim Login einen
+// Bestätigungscode (MFA): der Login läuft deshalb NIE automatisch, sondern
+// nur auf Knopfdruck im Dashboard (/api/panasonic/login/start und
+// /verify). Danach hält der Refresh-Token die Verbindung.
 
 const BASE_AUTH = 'https://authglb.digital.panasonic.com';
 const BASE_ACC = 'https://accsmart.panasonic.com';
@@ -23,12 +24,9 @@ const SCOPE = 'openid offline_access comfortcloud.control a2w.control';
 const AUDIENCE = `https://digital.panasonic.com/${APP_CLIENT_ID}/api/v1/`;
 
 const SESSION_KV_KEY = 'panasonic_session';
-const BLOCK_KV_KEY = 'panasonic_login_block';
-const LOGIN_BLOCK_MS = 30 * 60 * 1000;
-// Wird in den Block-Fingerabdruck einbezogen: ein neuer Login-Ablauf im Code
-// hebt eine alte Pause auf.
-const LOGIN_FLOW_VERSION = 2;
-const APP_VERSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// Zwischenstand eines Logins, der auf den Bestätigungscode wartet.
+const PENDING_KV_KEY = 'panasonic_login_pending';
+const PENDING_TTL_SECONDS = 600;
 
 // Panasonic-Zahlencodes (siehe python-panasonic-comfort-cloud/constants.py)
 const MODE_FROM_CODE = { 0: 'AUTO', 1: 'DRY', 2: 'COOL', 3: 'HEAT', 4: 'FAN' };
@@ -120,10 +118,13 @@ function parseHiddenInputs(html) {
 }
 
 // Minimaler Cookie-Speicher für den Auth0-Login (Workers haben keinen).
-function makeJar() {
-  const cookies = {};
+// Lässt sich in KV ablegen, damit der Login nach dem Bestätigungscode auf
+// derselben Auth0-Sitzung weiterläuft.
+function makeJar(initial = {}) {
+  const cookies = { ...initial };
   return {
     get(name) { return cookies[name]; },
+    dump() { return { ...cookies }; },
     header() { return Object.entries(cookies).map(([k, v]) => `${k}=${v}`).join('; '); },
     add(res) {
       const lines = typeof res.headers.getSetCookie === 'function' ? res.headers.getSetCookie() : [];
@@ -186,7 +187,120 @@ async function detectAppVersion(env) {
 
 /* ---------- Login / Session ---------- */
 
-async function login(env) {
+function loginRequiredError(message) {
+  const err = new Error(message || 'Panasonic ist nicht angemeldet.');
+  err.loginRequired = true;
+  return err;
+}
+
+// Auth0-Guardian-Widget ("MFA Standard"): Konfiguration steckt als JS-Objekt
+// (window.__g_config) im HTML und ist kein gültiges JSON.
+function extractGuardianConfig(html) {
+  if (!html.includes('__g_config')) return null;
+  const config = {};
+  for (const key of ['postActionURL', 'serviceUrl', 'requestToken', 'stateCheckingMechanism']) {
+    const match = new RegExp(`${key}\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`).exec(html);
+    if (match) config[key] = match[1];
+  }
+  if (!config.requestToken || !config.serviceUrl || !config.postActionURL) return null;
+  return config;
+}
+
+// Erkennt, ob eine Seite ein MFA-Challenge ist, und liefert dafür den
+// Zwischenstand (oder null).
+function detectChallenge(html) {
+  const hidden = parseHiddenInputs(html);
+  if (hidden.mfa_token) return { kind: 'otp', mfaToken: hidden.mfa_token };
+  const guardian = extractGuardianConfig(html);
+  if (guardian) return { kind: 'guardian', guardian };
+  return null;
+}
+
+// Für Fehlermeldungen bei unbekannten Seiten: Titel, Feldnamen, Textanfang.
+function describePage(html, url) {
+  const title = (/<title[^>]*>([^<]*)/i.exec(html) || [])[1];
+  const text = html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160);
+  const names = Object.keys(parseHiddenInputs(html)).join(',');
+  return `${describeUrl(url)} | Titel: ${title ? title.trim() : '-'} | Felder: ${names || '-'} | Text: ${text || '-'}`;
+}
+
+async function fetchAccClientId(session) {
+  const res = await fetch(`${BASE_ACC}/auth/v2/login`, {
+    method: 'POST',
+    headers: await apiHeaders(session, false),
+    body: JSON.stringify({ language: 0 }),
+  });
+  await expectStatus(res, 200, 'get_acc_client_id');
+  const clientId = (await res.json()).clientId;
+  if (!clientId) throw new Error('Panasonic get_acc_client_id: keine clientId in der Antwort');
+  return clientId;
+}
+
+// Token-Antwort -> gespeicherte Sitzung (inkl. Comfort-Cloud-Client-ID).
+async function buildSession(env, tokens, appVersion) {
+  const session = {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in - 60) * 1000,
+    scope: tokens.scope || SCOPE,
+    app_version: appVersion,
+    acc_client_id: null,
+  };
+  session.acc_client_id = await fetchAccClientId(session);
+  await env.TADO_KV.put(SESSION_KV_KEY, JSON.stringify(session));
+  await env.TADO_KV.delete(PENDING_KV_KEY);
+  return session;
+}
+
+async function exchangeCode(code, codeVerifier) {
+  const res = await fetch(`${BASE_AUTH}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Auth0-Client': AUTH0_CLIENT, 'User-Agent': 'okhttp/4.10.0' },
+    body: JSON.stringify({
+      scope: 'openid',
+      client_id: APP_CLIENT_ID,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: codeVerifier,
+    }),
+    redirect: 'manual',
+  });
+  await expectStatus(res, 200, 'get_token');
+  return res.json();
+}
+
+// Folgt Weiterleitungen, bis "code"/"error" in der Ziel-URL steht oder eine
+// Seite (Status 200, z. B. die MFA-Abfrage) ausgeliefert wird.
+async function followToCode(jar, startUrl) {
+  let target = startUrl;
+  for (let hop = 0; hop < 8; hop++) {
+    if (target.searchParams.get('code') || target.searchParams.get('error')) {
+      return { code: target.searchParams.get('code'), url: target };
+    }
+    const res = await jarFetch(jar, target.toString());
+    const next = res.headers.get('Location');
+    if (res.status >= 300 && res.status < 400 && next) {
+      target = new URL(next, BASE_AUTH + '/');
+      continue;
+    }
+    if (res.status === 200) return { page: await res.text(), url: target };
+    throw new Error(`Panasonic login_redirect: Status ${res.status} bei ${describeUrl(target)}`);
+  }
+  throw new Error('Panasonic login_redirect: zu viele Weiterleitungen');
+}
+
+// Schritt 1 (Knopf "Anmelden"): Login mit den Secrets. Liefert entweder eine
+// fertige Sitzung oder den Hinweis, dass ein Bestätigungscode nötig ist.
+export async function startPanasonicLogin(env) {
+  if (!isPanasonicConfigured(env)) {
+    throw new Error('Panasonic ist nicht konfiguriert (Secrets PANASONIC_USER / PANASONIC_PASS fehlen).');
+  }
   const jar = makeJar();
   const state = randomString(20);
   const codeVerifier = randomString(43);
@@ -240,80 +354,150 @@ async function login(env) {
     }),
   });
   if (res.status === 400 || res.status === 401 || res.status === 403) {
-    // Auth0 liefert den Grund im Body (z. B. invalid_user_password). 400 kann
-    // auch ein Ablauf-Problem sein und nicht zwingend falsche Zugangsdaten.
+    // Auth0 liefert den Grund im Body (z. B. invalid_user_password).
     const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
-    const err = new Error(`Panasonic-Login abgelehnt (Status ${res.status})${detail ? ' - ' + detail : ''}`);
-    err.credentials = res.status !== 400;
-    throw err;
+    throw new Error(`Panasonic-Login abgelehnt (Status ${res.status})${detail ? ' - ' + detail : ''}`);
   }
   await expectStatus(res, 200, 'login');
-  const hidden = parseHiddenInputs(await res.text());
-  if (!hidden.wresult) throw new Error('Panasonic login: Antwort enthielt kein wresult (Login-Ablauf geändert?)');
+  const loginHtml = await res.text();
 
-  // 3. Callback + Redirects bis zum Authorization-Code
-  res = await jarFetch(jar, `${BASE_AUTH}/login/callback`, {
+  const pendingBase = { cookies: jar.dump(), codeVerifier, appVersion };
+  let challenge = detectChallenge(loginHtml);
+
+  if (!challenge) {
+    const hidden = parseHiddenInputs(loginHtml);
+    if (!hidden.wresult) throw new Error('Panasonic login: Antwort enthielt weder wresult noch eine MFA-Abfrage (Login-Ablauf geändert?)');
+
+    // 3. Callback + Redirects bis zum Authorization-Code (oder zur MFA-Seite)
+    res = await jarFetch(jar, `${BASE_AUTH}/login/callback`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Mobile Safari/537.36',
+      },
+      body: new URLSearchParams(hidden).toString(),
+    });
+    await expectStatus(res, 302, 'login_callback');
+    const result = await followToCode(jar, new URL(res.headers.get('Location'), BASE_AUTH + '/'));
+
+    if (result.code) {
+      const tokens = await exchangeCode(result.code, codeVerifier);
+      await buildSession(env, tokens, appVersion);
+      return { status: 'ok' };
+    }
+    if (!result.page) {
+      throw new Error(`Panasonic login_redirect: kein Authorization-Code erhalten (${describeUrl(result.url)})`);
+    }
+    challenge = detectChallenge(result.page);
+    if (!challenge) {
+      throw new Error(`Panasonic: unbekannte Seite nach dem Login - ${describePage(result.page, result.url)}`);
+    }
+  }
+
+  await env.TADO_KV.put(PENDING_KV_KEY, JSON.stringify({
+    ...pendingBase,
+    cookies: jar.dump(),
+    challenge,
+    createdAt: Date.now(),
+  }), { expirationTtl: PENDING_TTL_SECONDS });
+  return { status: 'mfa', kind: challenge.kind };
+}
+
+// Schritt 2: Bestätigungscode einlösen und Sitzung speichern.
+export async function verifyPanasonicMfa(env, rawCode) {
+  const otp = String(rawCode || '').replace(/\s+/g, '');
+  if (!otp) throw new Error('Bitte den Bestätigungscode eingeben.');
+  const raw = await env.TADO_KV.get(PENDING_KV_KEY);
+  if (!raw) throw new Error('Keine offene Panasonic-Anmeldung (abgelaufen?) - bitte erneut auf "Anmelden" klicken.');
+  const pending = JSON.parse(raw);
+  const { challenge } = pending;
+
+  if (challenge.kind === 'otp') {
+    // Best effort, Fehler hier sind nicht fatal (Authenticator-Apps brauchen es meist nicht).
+    await fetch(`${BASE_AUTH}/mfa/challenge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Auth0-Client': AUTH0_CLIENT, 'User-Agent': 'okhttp/4.10.0' },
+      body: JSON.stringify({ mfa_token: challenge.mfaToken, client_id: APP_CLIENT_ID, challenge_type: 'otp' }),
+    }).catch(() => null);
+
+    const res = await fetch(`${BASE_AUTH}/oauth/token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Auth0-Client': AUTH0_CLIENT, 'User-Agent': 'okhttp/4.10.0' },
+      body: JSON.stringify({
+        grant_type: 'http://auth0.com/oauth/grant-type/mfa-otp',
+        client_id: APP_CLIENT_ID,
+        mfa_token: challenge.mfaToken,
+        otp,
+      }),
+      redirect: 'manual',
+    });
+    if (res.status === 400 || res.status === 401 || res.status === 403) {
+      const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      throw new Error(`Bestätigungscode abgelehnt (Status ${res.status})${detail ? ' - ' + detail : ''}`);
+    }
+    await expectStatus(res, 200, 'verify_mfa');
+    await buildSession(env, await res.json(), pending.appVersion);
+    return { status: 'ok' };
+  }
+
+  // Guardian-Widget
+  const g = challenge.guardian;
+  const bearer = (token) => ({
+    Authorization: `Bearer ${token}`,
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  });
+
+  let res = await fetch(`${g.serviceUrl}/api/start-flow`, {
+    method: 'POST',
+    headers: bearer(g.requestToken),
+    body: JSON.stringify({ state_transport: 'polling' }),
+  });
+  if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_start_flow');
+  const start = await res.json().catch(() => ({}));
+  const transactionToken = start.transactionToken || start.transaction_token;
+  if (!transactionToken) throw new Error('Panasonic guardian_start_flow: kein transactionToken erhalten');
+
+  res = await fetch(`${g.serviceUrl}/api/verify-otp`, {
+    method: 'POST',
+    headers: bearer(transactionToken),
+    body: JSON.stringify({ type: 'manual_input', code: otp }),
+  });
+  if (res.status === 403) throw new Error('Bestätigungscode abgelehnt (falscher oder abgelaufener Code).');
+  if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_verify_otp');
+
+  let signature = null;
+  for (let i = 0; i < 10 && !signature; i++) {
+    res = await fetch(`${g.serviceUrl}/api/transaction-state`, { method: 'POST', headers: bearer(transactionToken) });
+    if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_transaction_state');
+    const body = await res.json().catch(() => ({}));
+    if (body.state === 'accepted') signature = body.token;
+    else if (body.state === 'rejected') throw new Error('Panasonic: Bestätigung wurde abgelehnt.');
+    else await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  if (!signature) throw new Error('Panasonic: Zeitüberschreitung bei der Bestätigung.');
+
+  const jar = makeJar(pending.cookies);
+  res = await jarFetch(jar, g.postActionURL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Mobile Safari/537.36',
     },
-    body: new URLSearchParams(hidden).toString(),
+    body: new URLSearchParams({ accepted: 'true', signature }).toString(),
   });
-  await expectStatus(res, 302, 'login_callback');
-
-  // Redirects manuell verfolgen, bis der Authorization-Code (oder ein Fehler)
-  // in der Ziel-URL steht - die Zahl der Zwischenschritte kann variieren.
-  let target = new URL(res.headers.get('Location'), BASE_AUTH + '/');
-  for (let hop = 0; hop < 6; hop++) {
-    if (target.searchParams.get('code') || target.searchParams.get('error')) break;
-    res = await jarFetch(jar, target.toString());
-    const next = res.headers.get('Location');
-    if (res.status < 300 || res.status >= 400 || !next) {
-      throw new Error(`Panasonic login_redirect: Status ${res.status} ohne Weiterleitung bei ${describeUrl(target)}`);
-    }
-    target = new URL(next, BASE_AUTH + '/');
+  await expectStatus(res, 302, 'guardian_post_action');
+  const result = await followToCode(jar, new URL(res.headers.get('Location'), BASE_AUTH + '/'));
+  if (!result.code) {
+    throw new Error(`Panasonic guardian: kein Authorization-Code erhalten (${describeUrl(result.url)})`);
   }
-  const code = target.searchParams.get('code');
-  if (!code) {
-    throw new Error(`Panasonic login_redirect: kein Authorization-Code erhalten (${describeUrl(target)})`);
-  }
+  const tokens = await exchangeCode(result.code, pending.codeVerifier);
+  await buildSession(env, tokens, pending.appVersion);
+  return { status: 'ok' };
+}
 
-  // 4. Code gegen Token tauschen
-  res = await fetch(`${BASE_AUTH}/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Auth0-Client': AUTH0_CLIENT, 'User-Agent': 'okhttp/4.10.0' },
-    body: JSON.stringify({
-      scope: 'openid',
-      client_id: APP_CLIENT_ID,
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: codeVerifier,
-    }),
-    redirect: 'manual',
-  });
-  await expectStatus(res, 200, 'get_token');
-  const tokens = await res.json();
-
-  // 5. Comfort-Cloud-Client-ID holen
-  const session = {
-    access_token: tokens.access_token,
-    refresh_token: tokens.refresh_token,
-    expires_at: Date.now() + (tokens.expires_in - 60) * 1000,
-    scope: tokens.scope,
-    app_version: appVersion,
-    acc_client_id: null,
-  };
-  res = await fetch(`${BASE_ACC}/auth/v2/login`, {
-    method: 'POST',
-    headers: await apiHeaders(session, false),
-    body: JSON.stringify({ language: 0 }),
-  });
-  await expectStatus(res, 200, 'get_acc_client_id');
-  session.acc_client_id = (await res.json()).clientId;
-  if (!session.acc_client_id) throw new Error('Panasonic get_acc_client_id: keine clientId in der Antwort');
-  return session;
+export async function panasonicMfaPending(env) {
+  return Boolean(await env.TADO_KV.get(PENDING_KV_KEY));
 }
 
 async function refresh(session) {
@@ -339,45 +523,21 @@ async function refresh(session) {
   };
 }
 
-async function getSession(env, forceRelogin = false) {
-  let session = null;
-  if (!forceRelogin) {
-    const raw = await env.TADO_KV.get(SESSION_KV_KEY);
-    session = raw ? JSON.parse(raw) : null;
-    if (session && Date.now() < session.expires_at) return session;
-    if (session) {
-      const refreshed = await refresh(session);
-      if (refreshed) {
-        await env.TADO_KV.put(SESSION_KV_KEY, JSON.stringify(refreshed));
-        return refreshed;
-      }
-    }
-  }
+// Liefert eine gültige Sitzung aus KV (bei Bedarf per Refresh-Token
+// erneuert). Startet NIE einen Login - dafür braucht es den Bestätigungscode.
+async function getSession(env, forceRefresh = false) {
+  const raw = await env.TADO_KV.get(SESSION_KV_KEY);
+  const session = raw ? JSON.parse(raw) : null;
+  if (!session) throw loginRequiredError();
+  if (!forceRefresh && Date.now() < session.expires_at) return session;
 
-  // Die Pause gilt nur für dieselben Zugangsdaten und denselben Login-Code:
-  // wer die Secrets korrigiert oder neu deployt, muss nicht warten.
-  const fingerprint = await sha256Hex(`${LOGIN_FLOW_VERSION}|${env.PANASONIC_USER}|${env.PANASONIC_PASS}`);
-  const blockRaw = await env.TADO_KV.get(BLOCK_KV_KEY);
-  if (blockRaw) {
-    const block = JSON.parse(blockRaw);
-    if (block.fingerprint === fingerprint && Date.now() < block.until) {
-      throw new Error(`Panasonic-Login pausiert (${block.reason}) - nächster Versuch gegen ${new Date(block.until).toISOString().slice(11, 16)} UTC.`);
-    }
+  const refreshed = await refresh(session);
+  if (!refreshed) {
+    await env.TADO_KV.delete(SESSION_KV_KEY);
+    throw loginRequiredError('Panasonic-Sitzung abgelaufen - bitte neu anmelden.');
   }
-
-  try {
-    session = await login(env);
-  } catch (err) {
-    await env.TADO_KV.put(BLOCK_KV_KEY, JSON.stringify({
-      until: Date.now() + LOGIN_BLOCK_MS,
-      fingerprint,
-      reason: err.message.slice(0, 300),
-    }), { expirationTtl: 3600 });
-    throw err;
-  }
-  await env.TADO_KV.delete(BLOCK_KV_KEY);
-  await env.TADO_KV.put(SESSION_KV_KEY, JSON.stringify(session));
-  return session;
+  await env.TADO_KV.put(SESSION_KV_KEY, JSON.stringify(refreshed));
+  return refreshed;
 }
 
 /* ---------- API-Aufrufe ---------- */
@@ -390,7 +550,7 @@ async function accRequest(env, method, path, body) {
       headers: await apiHeaders(session),
       body: body ? JSON.stringify(body) : undefined,
     });
-    // Token serverseitig ungültig geworden -> einmal komplett neu einloggen
+    // Token serverseitig ungültig geworden -> einmal per Refresh-Token erneuern
     if ((res.status === 401 || res.status === 403) && attempt === 0) {
       session = await getSession(env, true);
       continue;
@@ -401,7 +561,7 @@ async function accRequest(env, method, path, body) {
     }
     return res.json();
   }
-  throw new Error('Panasonic: Anfrage nach erneutem Login weiterhin abgelehnt.');
+  throw new Error('Panasonic: Anfrage nach erneuter Token-Erneuerung weiterhin abgelehnt.');
 }
 
 // Replik von Pythons quote_plus (+ der Eigenheit der Bibliothek, "%2f" -> "f").
@@ -463,18 +623,25 @@ function mapDevice(device, status) {
   };
 }
 
-// Liefert { zones, error } - Fehler blockieren nie das restliche Dashboard.
+// Liefert { zones, error, loginRequired, mfaPending } - Fehler blockieren nie
+// das restliche Dashboard.
 export async function fetchPanasonicZones(env) {
-  if (!isPanasonicConfigured(env)) return { zones: [], error: null };
+  if (!isPanasonicConfigured(env)) return { zones: [], error: null, loginRequired: false, mfaPending: false };
   try {
     const devices = await listDevices(env);
     const zones = await Promise.all(devices.map(async (device) => {
       const status = await accRequest(env, 'GET', `/deviceStatus/${guidPath(device.guid)}`);
       return mapDevice(device, status);
     }));
-    return { zones, error: null };
+    return { zones, error: null, loginRequired: false, mfaPending: false };
   } catch (err) {
-    return { zones: [], error: err.message };
+    const loginRequired = Boolean(err.loginRequired);
+    return {
+      zones: [],
+      error: err.message,
+      loginRequired,
+      mfaPending: loginRequired ? await panasonicMfaPending(env) : false,
+    };
   }
 }
 
