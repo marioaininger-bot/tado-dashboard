@@ -154,6 +154,17 @@ async function expectStatus(res, expected, step) {
   throw err;
 }
 
+// Für Fehlermeldungen: Ziel ohne Parameterwerte (Codes/States bleiben
+// geheim), nur error/error_description im Klartext.
+function describeUrl(url) {
+  const names = Array.from(url.searchParams.keys()).join(',');
+  const err = ['error', 'error_description']
+    .filter((k) => url.searchParams.get(k))
+    .map((k) => `${k}=${url.searchParams.get(k)}`)
+    .join('; ');
+  return `${url.protocol}//${url.host}${url.pathname} [Parameter: ${names || '-'}]${err ? ' ' + err : ''}`;
+}
+
 function queryParam(location, name) {
   return new URL(location, BASE_AUTH).searchParams.get(name);
 }
@@ -250,10 +261,23 @@ async function login(env) {
     body: new URLSearchParams(hidden).toString(),
   });
   await expectStatus(res, 302, 'login_callback');
-  res = await jarFetch(jar, new URL(res.headers.get('Location'), BASE_AUTH + '/').toString());
-  await expectStatus(res, 302, 'login_redirect');
-  const code = queryParam(res.headers.get('Location'), 'code');
-  if (!code) throw new Error('Panasonic login_redirect: kein Authorization-Code erhalten');
+
+  // Redirects manuell verfolgen, bis der Authorization-Code (oder ein Fehler)
+  // in der Ziel-URL steht - die Zahl der Zwischenschritte kann variieren.
+  let target = new URL(res.headers.get('Location'), BASE_AUTH + '/');
+  for (let hop = 0; hop < 6; hop++) {
+    if (target.searchParams.get('code') || target.searchParams.get('error')) break;
+    res = await jarFetch(jar, target.toString());
+    const next = res.headers.get('Location');
+    if (res.status < 300 || res.status >= 400 || !next) {
+      throw new Error(`Panasonic login_redirect: Status ${res.status} ohne Weiterleitung bei ${describeUrl(target)}`);
+    }
+    target = new URL(next, BASE_AUTH + '/');
+  }
+  const code = target.searchParams.get('code');
+  if (!code) {
+    throw new Error(`Panasonic login_redirect: kein Authorization-Code erhalten (${describeUrl(target)})`);
+  }
 
   // 4. Code gegen Token tauschen
   res = await fetch(`${BASE_AUTH}/oauth/token`, {
