@@ -78,4 +78,6 @@ mit den Heizkörpern). Der Worker liest deshalb alle Homes des Accounts
 (`/me` → `homes`) und zeigt die Zonen der weiteren Homes (Zonen-Typ
 `AIR_CONDITIONING`, im Frontend `AC`) als Kacheln neben den Räumen an –
 inklusive Modus (Kühlen/Heizen/…), Verlauf und Betriebsstunden. Direktes
-Setzen der Temperatur ist für die Klimaanlage bewusst noch nicht möglich.
+Die Kachel bietet Temperatur ±1°, Ein/Aus und „Zeitplan“ (Modus und
+Lüfterstufe bleiben erhalten; per Overlay-Endpunkt, bitte am echten Gerät
+verifizieren).

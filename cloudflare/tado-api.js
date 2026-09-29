@@ -260,6 +260,7 @@ function mapClassicZone(zone, classicStates) {
     // arbeitet durchgängig mit 'AC'.
     type: zone.type === 'AIR_CONDITIONING' ? 'AC' : zone.type, // HEATING | AC | HOT_WATER
     mode: setting.mode || null, // nur AC: COOL | HEAT | DRY | FAN | AUTO
+    fanLevel: setting.fanLevel || setting.fanSpeed || null, // nur AC, wird beim Setzen übernommen
     power: setting.power || null,
     targetTemp: setting.temperature ? setting.temperature.celsius : null,
     currentTemp: sensor.insideTemperature ? sensor.insideTemperature.celsius : null,
@@ -483,8 +484,33 @@ async function handleSetZone(request, env) {
     }
     const home = { id: zone.homeId };
     const isTadoX = homeInfos.find((h) => h.home.id === zone.homeId).isTadoX;
-    if (zone.type !== 'HEATING') {
-      return json(400, { error: 'Direktes Setzen wird aktuell nur für Heizkörper-Zonen unterstützt.' }, env);
+    if (zone.type !== 'HEATING' && zone.type !== 'AC') {
+      return json(400, { error: 'Direktes Setzen wird nur für Heizkörper- und Klimaanlagen-Zonen unterstützt.' }, env);
+    }
+
+    if (zone.type === 'AC') {
+      // Klassischer Overlay-Endpunkt mit AC-Setting. Modus und Lüfterstufe
+      // der aktuellen Zone bleiben erhalten; beim Einschalten aus dem
+      // AUS-Zustand ohne bekannten Modus wird auf Kühlen gestellt.
+      const mode = zone.mode || 'COOL';
+      const setting = { type: 'AIR_CONDITIONING', power: power === 'OFF' ? 'OFF' : 'ON' };
+      if (power !== 'OFF') {
+        setting.mode = mode;
+        if (mode !== 'DRY' && mode !== 'FAN') {
+          setting.temperature = { celsius: temperature != null ? temperature : (zone.targetTemp != null ? zone.targetTemp : 24) };
+        }
+        if (zone.fanLevel) setting.fanLevel = zone.fanLevel;
+      }
+      const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setting, termination: { type: 'MANUAL' } }),
+      });
+      if (!res.ok) {
+        const detail = await res.text().catch(() => '');
+        throw new Error(`Klimaanlage konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
+      }
+      return json(200, { status: 'ok' }, env);
     }
 
     if (isTadoX) {

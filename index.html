@@ -644,6 +644,7 @@ function batteryIconHtml(zone) {
 }
 
 function controlsHtml(zone) {
+  if (zone.type === 'AC') return acControlsHtml(zone);
   if (zone.type !== 'HEATING') return '';
   const base = zone.targetTemp != null
     ? zone.targetTemp
@@ -654,6 +655,25 @@ function controlsHtml(zone) {
       <span class="temp-display">${base.toFixed(1)}°</span>
       <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Wärmer">+</button>
       ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}" data-home-id="${zone.homeId}">Zeitplan</button>` : ''}
+    </div>
+  `;
+}
+
+// Klimaanlage: 1°-Schritte, Ein/Aus, Zeitplan fortsetzen. In den Modi
+// Entfeuchten/Lüften gibt es keine Zieltemperatur, dort nur Ein/Aus.
+function acControlsHtml(zone) {
+  const ids = `data-zone-id="${zone.id}" data-home-id="${zone.homeId}"`;
+  const isOff = zone.power === 'OFF';
+  const hasTemp = !isOff && zone.mode !== 'DRY' && zone.mode !== 'FAN' && zone.targetTemp != null;
+  return `
+    <div class="zone-controls">
+      ${hasTemp ? `
+        <button class="temp-btn" data-action="dec" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Kälter">−</button>
+        <span class="temp-display">${zone.targetTemp.toFixed(0)}°</span>
+        <button class="temp-btn" data-action="inc" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Wärmer">+</button>
+      ` : ''}
+      <button class="resume-link" style="margin-left:${hasTemp ? '4px' : '0'};" data-action="${isOff ? 'on' : 'off'}" ${ids}>${isOff ? 'Einschalten' : 'Ausschalten'}</button>
+      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" ${ids}>Zeitplan</button>` : ''}
     </div>
   `;
 }
@@ -760,13 +780,13 @@ function closeDayChart() {
 }
 
 /* ---------- Zonensteuerung (Temperatur setzen / Zeitplan fortsetzen) ---------- */
-async function setZoneTemp(zoneId, homeId, temperature, btn) {
+async function setZoneTemp(zoneId, homeId, temperature, btn, power) {
   if (btn) btn.disabled = true;
   try {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zoneId, homeId, temperature }),
+      body: JSON.stringify({ zoneId, homeId, temperature, power }),
     });
     if (res.error) throw new Error(res.error);
     await loadDashboard();
@@ -800,9 +820,12 @@ zoneGrid.addEventListener('click', (e) => {
     const action = controlBtn.dataset.action;
     if (action === 'resume') {
       resumeZoneSchedule(zoneId, homeId, controlBtn);
+    } else if (action === 'on' || action === 'off') {
+      setZoneTemp(zoneId, homeId, undefined, controlBtn, action === 'off' ? 'OFF' : 'ON');
     } else {
       const current = parseFloat(controlBtn.dataset.temp);
-      const next = Math.round((action === 'inc' ? current + 0.5 : current - 0.5) * 2) / 2;
+      const step = parseFloat(controlBtn.dataset.step) || 0.5;
+      const next = Math.round((action === 'inc' ? current + step : current - step) / step) * step;
       setZoneTemp(zoneId, homeId, next, controlBtn);
     }
     return;
