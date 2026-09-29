@@ -206,6 +206,36 @@ function extractGuardianConfig(html) {
   return config;
 }
 
+const guardianHeaders = (token) => ({
+  Authorization: `Bearer ${token}`,
+  Accept: 'application/json',
+  'Content-Type': 'application/json',
+});
+
+// Wie das Guardian-Widget beim Öffnen der Seite: start-flow. Das stößt bei
+// Panasonic den Versand von Code bzw. Push-Freigabe an. Liefert
+// { transactionToken, info } - info sind die (ungefährlichen) Felder der
+// Antwort für den Hinweistext.
+async function guardianStartFlow(g) {
+  const res = await fetch(`${g.serviceUrl}/api/start-flow`, {
+    method: 'POST',
+    headers: guardianHeaders(g.requestToken),
+    body: JSON.stringify({ state_transport: 'polling' }),
+  });
+  if (![200, 201, 204].includes(res.status)) {
+    throw new Error(`Panasonic guardian_start_flow: Status ${res.status}`);
+  }
+  const body = await res.json().catch(() => ({}));
+  const transactionToken = body.transactionToken || body.transaction_token;
+  if (!transactionToken) throw new Error('Panasonic guardian_start_flow: kein transactionToken erhalten');
+  const safe = {};
+  for (const [k, v] of Object.entries(body)) {
+    if (/token|signature/i.test(k)) continue;
+    safe[k] = v;
+  }
+  return { transactionToken, info: JSON.stringify(safe).slice(0, 200) };
+}
+
 // Erkennt, ob eine Seite ein MFA-Challenge ist, und liefert dafür den
 // Zwischenstand (oder null).
 function detectChallenge(html) {
@@ -407,24 +437,38 @@ export async function startPanasonicLogin(env) {
     }
   }
 
+  let hint = pageText(challengeHtml);
+  if (challenge.kind === 'guardian') {
+    // Wie die echte Seite: Flow starten, damit Panasonic Code/Freigabe sendet.
+    try {
+      const flow = await guardianStartFlow(challenge.guardian);
+      challenge.transactionToken = flow.transactionToken;
+      hint = `${hint ? hint + ' | ' : ''}Panasonic-Antwort: ${flow.info}`;
+    } catch (err) {
+      hint = `${hint ? hint + ' | ' : ''}${err.message}`;
+    }
+  }
+
   await env.TADO_KV.put(PENDING_KV_KEY, JSON.stringify({
     ...pendingBase,
     cookies: jar.dump(),
     challenge,
-    hint: pageText(challengeHtml),
+    hint,
     createdAt: Date.now(),
   }), { expirationTtl: PENDING_TTL_SECONDS });
-  return { status: 'mfa', kind: challenge.kind, hint: pageText(challengeHtml) };
+  return { status: 'mfa', kind: challenge.kind, hint };
 }
 
 // Schritt 2: Bestätigungscode einlösen und Sitzung speichern.
 export async function verifyPanasonicMfa(env, rawCode) {
   const otp = String(rawCode || '').replace(/\s+/g, '');
-  if (!otp) throw new Error('Bitte den Bestätigungscode eingeben.');
   const raw = await env.TADO_KV.get(PENDING_KV_KEY);
   if (!raw) throw new Error('Keine offene Panasonic-Anmeldung (abgelaufen?) - bitte erneut auf "Anmelden" klicken.');
   const pending = JSON.parse(raw);
   const { challenge } = pending;
+  // Ohne Code geht nur die Push-Freigabe (Guardian): dort wird auf die
+  // Bestätigung in der Panasonic-App gewartet.
+  if (!otp && challenge.kind !== 'guardian') throw new Error('Bitte den Bestätigungscode eingeben.');
 
   if (challenge.kind === 'otp') {
     // Best effort, Fehler hier sind nicht fatal (Authenticator-Apps brauchen es meist nicht).
@@ -456,40 +500,42 @@ export async function verifyPanasonicMfa(env, rawCode) {
 
   // Guardian-Widget
   const g = challenge.guardian;
-  const bearer = (token) => ({
-    Authorization: `Bearer ${token}`,
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  });
+  let transactionToken = challenge.transactionToken;
+  if (!transactionToken) transactionToken = (await guardianStartFlow(g)).transactionToken;
 
-  let res = await fetch(`${g.serviceUrl}/api/start-flow`, {
-    method: 'POST',
-    headers: bearer(g.requestToken),
-    body: JSON.stringify({ state_transport: 'polling' }),
-  });
-  if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_start_flow');
-  const start = await res.json().catch(() => ({}));
-  const transactionToken = start.transactionToken || start.transaction_token;
-  if (!transactionToken) throw new Error('Panasonic guardian_start_flow: kein transactionToken erhalten');
+  let res;
+  if (otp) {
+    const submit = () => fetch(`${g.serviceUrl}/api/verify-otp`, {
+      method: 'POST',
+      headers: guardianHeaders(transactionToken),
+      body: JSON.stringify({ type: 'manual_input', code: otp }),
+    });
+    res = await submit();
+    if (res.status === 401 || res.status === 404) {
+      // gespeicherter Vorgang abgelaufen -> neu starten und noch einmal versuchen
+      transactionToken = (await guardianStartFlow(g)).transactionToken;
+      res = await submit();
+    }
+    if (res.status === 403) throw new Error('Bestätigungscode abgelehnt (falscher oder abgelaufener Code).');
+    if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_verify_otp');
+  }
 
-  res = await fetch(`${g.serviceUrl}/api/verify-otp`, {
-    method: 'POST',
-    headers: bearer(transactionToken),
-    body: JSON.stringify({ type: 'manual_input', code: otp }),
-  });
-  if (res.status === 403) throw new Error('Bestätigungscode abgelehnt (falscher oder abgelaufener Code).');
-  if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_verify_otp');
-
+  // Ohne Code (Push-Freigabe in der App) länger warten als nach einem Code.
   let signature = null;
-  for (let i = 0; i < 10 && !signature; i++) {
-    res = await fetch(`${g.serviceUrl}/api/transaction-state`, { method: 'POST', headers: bearer(transactionToken) });
+  const polls = otp ? 10 : 25;
+  for (let i = 0; i < polls && !signature; i++) {
+    res = await fetch(`${g.serviceUrl}/api/transaction-state`, { method: 'POST', headers: guardianHeaders(transactionToken) });
     if (![200, 201, 204].includes(res.status)) await expectStatus(res, 200, 'guardian_transaction_state');
     const body = await res.json().catch(() => ({}));
     if (body.state === 'accepted') signature = body.token;
     else if (body.state === 'rejected') throw new Error('Panasonic: Bestätigung wurde abgelehnt.');
     else await new Promise((resolve) => setTimeout(resolve, 1000));
   }
-  if (!signature) throw new Error('Panasonic: Zeitüberschreitung bei der Bestätigung.');
+  if (!signature) {
+    throw new Error(otp
+      ? 'Panasonic: Zeitüberschreitung bei der Bestätigung.'
+      : 'Panasonic: keine Freigabe erhalten - in der Comfort-Cloud-App bestätigen oder einen Code eingeben.');
+  }
 
   const jar = makeJar(pending.cookies);
   res = await jarFetch(jar, g.postActionURL, {
