@@ -166,6 +166,40 @@
   .trend.down{color:var(--blue);}
   .trend.flat{color:var(--text-dim);}
 
+  /* Statusleiste + Bereiche */
+  .strip{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;}
+  .chip{background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--text-dim);}
+  .chip b{color:var(--text);}
+  .chip.blue{border-color:#bcd9f0;background:#f2f9ff;}
+  .chip.orange{border-color:#f0d3b3;background:#fff7ee;}
+  .chip.red{border-color:var(--red);background:#fdecea;color:#b8291a;}
+  .chip.red b{color:#b8291a;}
+  h2.sec{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:18px 2px 10px;font-size:15px;}
+  h2.sec .sum{font-weight:600;color:var(--text-dim);font-size:13px;}
+  h2.sec .grow{flex:1;}
+  .link{background:none;border:none;color:var(--blue);text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;padding:0 0 0 6px;}
+  .link:disabled{opacity:.5;cursor:not-allowed;}
+
+  /* Klima-Zeilen mit Schalter */
+  .acrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+  .ac-row{
+    background:var(--card);border:1px solid var(--card-border);border-radius:18px;
+    padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;
+    box-shadow:0 1px 3px rgba(28,35,51,.06);
+  }
+  .ac-row:hover{border-color:var(--blue);}
+  .ac-row .ic{font-size:24px;width:34px;text-align:center;}
+  .ac-row .mid{flex:1;min-width:0;}
+  .ac-row .nm{font-weight:800;font-size:14.5px;}
+  .ac-row .sub{color:var(--text-dim);font-size:12.5px;margin-top:2px;}
+  .ac-row.off{background:#f7f9fc;}
+  .ac-row.off .nm{color:var(--text-dim);}
+  .sw{width:46px;height:26px;border-radius:999px;background:#c6cedd;position:relative;flex:none;border:none;cursor:pointer;transition:background .2s;padding:0;}
+  .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s;}
+  .sw.on{background:var(--blue);}
+  .sw.on::after{left:23px;}
+  .sw:disabled{opacity:.5;cursor:not-allowed;}
+
   /* Login-Screen */
   #loginScreen{
     display:flex;flex-direction:column;align-items:center;text-align:center;
@@ -264,8 +298,19 @@
   </div>
 
   <div id="dashboard" style="display:none;">
-    <div id="zoneGrid" class="zone-grid"></div>
-    <div id="panasonicNotice" class="status-line" style="display:none;margin-top:14px;"></div>
+    <div id="statusStrip" class="strip"></div>
+
+    <section id="klimaSection" style="display:none;">
+      <h2 class="sec">❄️ Klima <span class="sum" id="klimaSum"></span><span class="grow"></span>
+        <button class="link" id="acAllOff">Alle aus</button><button class="link" id="acAllOn">Alle an</button></h2>
+      <div id="panasonicNotice" class="status-line" style="display:none;margin:0 0 10px;"></div>
+      <div id="acList" class="acrow"></div>
+    </section>
+
+    <section id="heizungSection">
+      <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span></h2>
+      <div id="zoneGrid" class="zone-grid"></div>
+    </section>
   </div>
 
   <div id="loadingState" class="empty-state" style="display:none;">
@@ -417,8 +462,8 @@ async function loadDashboard() {
     if (data.error) throw new Error(data.error);
 
     renderWeather(data.weather);
-    renderZones(data.zones || []);
     renderPanasonicNotice(data);
+    renderZones(data.zones || []);
 
     show(loadingState, false);
     show(dashboard, true, 'block');
@@ -543,30 +588,7 @@ function trendArrow(diff) {
   return '<span class="trend flat">–</span>';
 }
 
-function historySparkline(history) {
-  const temps = history.map((h) => h.temp).filter((t) => t != null);
-  if (temps.length < 2) return '';
-  const min = Math.min(...temps), max = Math.max(...temps);
-  const span = Math.max(max - min, 0.3);
-  const w = 56, h = 18, pad = 2;
-  const pts = temps.map((t, i) => {
-    const x = pad + (i / (temps.length - 1)) * (w - pad * 2);
-    const y = h - pad - ((t - min) / span) * (h - pad * 2);
-    return [x, y];
-  });
-  const line = pts.map((p) => p.join(',')).join(' ');
-  const area = `${pad},${h} ${line} ${w - pad},${h}`;
-  const last = pts[pts.length - 1];
-  const rising = temps[temps.length - 1] >= temps[0];
-  const stroke = rising ? 'var(--orange)' : 'var(--blue)';
-  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
-    <polygon points="${area}" fill="${stroke}" opacity="0.15"></polygon>
-    <polyline points="${line}" fill="none" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></polyline>
-    <circle cx="${last[0]}" cy="${last[1]}" r="2" fill="${stroke}"></circle>
-  </svg>`;
-}
-
-function historyRows(history) {
+function historyRows(history, showHumidity = true) {
   return history.map((point, i) => {
     const time = new Date(point.t).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
     const diff = i === 0 ? 0 : point.temp - history[i - 1].temp;
@@ -577,7 +599,7 @@ function historyRows(history) {
     return `<div class="history-row ${isNow ? 'now' : ''}">
       <span class="h-time">${time}</span>
       <span class="h-temp"><b>${temp}</b>${arrow}</span>
-      <span class="h-hum">${humidity}</span>
+      ${showHumidity ? `<span class="h-hum">${humidity}</span>` : ''}
     </div>`;
   }).join('');
 }
@@ -615,24 +637,6 @@ function selectQuarterHourPoints(history, count) {
     if (best && bestDiff <= TOLERANCE_MS) picked.push(best);
   }
   return picked.filter((p, idx) => idx === 0 || p.t !== picked[idx - 1].t);
-}
-
-function historyHtml(history) {
-  if (!history || history.length < 2) return '';
-  return `
-    <div class="history">
-      <div class="history-head">
-        <span class="label">Verlauf · 15 Min</span>
-        ${historySparkline(history)}
-      </div>
-      <div class="history-table">
-        <span class="history-col-label">Zeit</span>
-        <span class="history-col-label num">Temp.</span>
-        <span class="history-col-label num">Feuchte</span>
-        ${historyRows(history)}
-      </div>
-    </div>
-  `;
 }
 
 // Warnt, wenn eine Zone seit min. 30 Min. aktiv heizt/kühlt, ohne dass sich
@@ -698,15 +702,83 @@ function runtimeHtml(history) {
   return `<div class="runtime-label">🔥 ${stats.hours.toFixed(1)}h aktiv (letzte ${period})</div>`;
 }
 
+const AC_MODE_NAMES = { AUTO: 'Auto', COOL: 'Kühlen', HEAT: 'Heizen', DRY: 'Entfeuchten', FAN: 'Lüften' };
+const klimaSection = document.getElementById('klimaSection');
+const heizungSection = document.getElementById('heizungSection');
+const acList = document.getElementById('acList');
+const statusStrip = document.getElementById('statusStrip');
+
+function acRowHtml(zone) {
+  const isOff = zone.power === 'OFF';
+  const cur = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
+  const hasTemp = !isOff && zone.mode !== 'DRY' && zone.mode !== 'FAN' && zone.targetTemp != null;
+  const sub = isOff
+    ? `${cur} · aus`
+    : `${cur} · ${AC_MODE_NAMES[zone.mode] || 'an'}${hasTemp ? ' → ' + zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0) + '°' : ''}`;
+  return `
+    <div class="ac-row ${isOff ? 'off' : ''}" data-zone-key="${zone.key}">
+      <div class="ic">${zoneIcon(zone)}</div>
+      <div class="mid"><div class="nm">${zone.name}</div><div class="sub">${sub}</div></div>
+      <button class="sw ${isOff ? '' : 'on'}" role="switch" aria-checked="${isOff ? 'false' : 'true'}"
+        aria-label="${zone.name} ${isOff ? 'einschalten' : 'ausschalten'}"
+        data-action="${isOff ? 'on' : 'off'}" data-zone-id="${zone.id}" data-home-id="${zone.homeId}"></button>
+    </div>`;
+}
+
+function average(values) {
+  const list = values.filter((v) => v != null);
+  return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
+}
+
+function renderStatusStrip(ac, rooms) {
+  const chips = [];
+  if (ac.length) {
+    const on = ac.filter((z) => z.power !== 'OFF').length;
+    chips.push(`<span class="chip blue">❄️ Klima: <b>${on} von ${ac.length} an</b></span>`);
+  }
+  const heatRooms = rooms.filter((z) => z.type === 'HEATING');
+  if (heatRooms.length) {
+    const heating = heatRooms.filter((z) => z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
+    chips.push(`<span class="chip orange">🔥 Heizung: <b>${heating} von ${heatRooms.length} heizen</b></span>`);
+  }
+  const hum = average(rooms.map((z) => z.humidity));
+  if (hum != null) chips.push(`<span class="chip">💧 Ø Luftfeuchte <b>${Math.round(hum)}%</b></span>`);
+  const temp = average(rooms.map((z) => z.currentTemp));
+  if (temp != null) chips.push(`<span class="chip">🌡️ Ø Innen <b>${temp.toFixed(1)}°</b></span>`);
+  const warnings = [...ac, ...rooms].filter((z) => z.openWindow || z.deviceOffline || z.batteryLow || isStagnant(z)).length;
+  if (warnings) chips.push(`<span class="chip red">⚠️ <b>${warnings}</b> ${warnings === 1 ? 'Hinweis' : 'Hinweise'}</span>`);
+  statusStrip.innerHTML = chips.join('');
+}
+
 function renderZones(zones) {
   currentZones = zones;
   // Ein gerade geöffnetes Auswahlfeld nicht durch den 60-s-Refresh schließen.
-  if (document.activeElement && document.activeElement.tagName === 'SELECT' && zoneGrid.contains(document.activeElement)) return;
-  if (!zones.length) {
-    zoneGrid.innerHTML = '<div class="empty-state">Keine Zonen gefunden.</div>';
-    return;
-  }
-  zoneGrid.innerHTML = zones.map(zoneCardHtml).join('');
+  const active = document.activeElement;
+  if (active && active.tagName === 'SELECT' && (zoneGrid.contains(active) || dayChartBody.contains(active))) return;
+
+  const ac = zones.filter((z) => z.type === 'AC');
+  const rooms = zones.filter((z) => z.type !== 'AC');
+  renderStatusStrip(ac, rooms);
+
+  // Klima: eigener Bereich mit Schalter je Anlage (auch sichtbar, wenn nur der Anmelde-Hinweis da ist)
+  const noticeVisible = panasonicNotice.style.display !== 'none';
+  show(klimaSection, ac.length > 0 || noticeVisible, 'block');
+  document.getElementById('klimaSum').textContent = ac.length
+    ? `${ac.filter((z) => z.power !== 'OFF').length} von ${ac.length} an` : '';
+  show(document.getElementById('acAllOff'), ac.length > 0, 'inline');
+  show(document.getElementById('acAllOn'), ac.length > 0, 'inline');
+  acList.innerHTML = ac.map(acRowHtml).join('');
+
+  // Heizung: kompakte Raum-Kacheln (Verlauf im Fenster per Klick)
+  show(heizungSection, rooms.length > 0 || ac.length === 0, 'block');
+  const heating = rooms.filter((z) => z.type === 'HEATING' && z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
+  document.getElementById('heizungSum').textContent = rooms.length
+    ? `${rooms.length} ${rooms.length === 1 ? 'Raum' : 'Räume'} · ${heating} heizen gerade` : '';
+  zoneGrid.innerHTML = rooms.length
+    ? rooms.map(zoneCardHtml).join('')
+    : (ac.length ? '' : '<div class="empty-state">Keine Zonen gefunden.</div>');
+
+  refreshZoneModal();
 }
 
 function formatTime(iso) {
@@ -838,7 +910,6 @@ function zoneCardHtml(zone) {
       ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
       ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
       ${controlsHtml(zone)}
-      ${historyHtml(selectQuarterHourPoints(zone.history, 3))}
     </div>
   `;
 }
@@ -882,18 +953,63 @@ function dayChartSvg(history, key, color, unit) {
   </svg>`;
 }
 
-function openDayChart(zone) {
+const dayChartBody = document.getElementById('dayChartBody');
+let modalZoneKey = null;
+
+function zoneModalHtml(zone) {
+  const hasHistory = zone.history && zone.history.length >= 2;
+  const hasHumidity = hasHistory && zone.history.some((p) => p.humidity != null);
+  let html = '';
+
+  if (zone.type === 'AC') {
+    const cur = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
+    html += `<div class="temp-row" style="margin-top:6px;"><span class="current">${cur}</span>
+      <span class="target">${zone.power === 'OFF' ? 'Ausgeschaltet' : (AC_MODE_NAMES[zone.mode] || '')}</span></div>
+      ${acControlsHtml(zone)}`;
+  }
+
+  if (!hasHistory) {
+    return html + '<p class="status-line">Noch zu wenige Messpunkte für einen Verlauf.</p>';
+  }
+  html += `<div class="chart-label">Temperatur (${zone.history.length} Messpunkte)</div>
+    ${dayChartSvg(zone.history, 'temp', 'var(--orange)', '°')}`;
+  if (hasHumidity) {
+    html += `<div class="chart-label">Luftfeuchte</div>${dayChartSvg(zone.history, 'humidity', 'var(--blue)', '%')}`;
+  }
+  const points = selectQuarterHourPoints(zone.history, 8);
+  if (points.length >= 2) {
+    html += `<div class="chart-label">Letzte 2 Stunden · alle 15 Min.</div>
+      <div class="history-table" ${hasHumidity ? '' : 'style="grid-template-columns:auto 1fr;"'}>
+        <span class="history-col-label">Zeit</span>
+        <span class="history-col-label num">Temp.</span>
+        ${hasHumidity ? '<span class="history-col-label num">Feuchte</span>' : ''}
+        ${historyRows(points, hasHumidity)}
+      </div>`;
+  }
+  return html;
+}
+
+function fillZoneModal(zone) {
   document.getElementById('dayChartTitle').textContent = zone.name;
-  document.getElementById('dayChartBody').innerHTML = `
-    <div class="chart-label">Temperatur (${zone.history.length} Messpunkte)</div>
-    ${dayChartSvg(zone.history, 'temp', 'var(--orange)', '°')}
-    <div class="chart-label">Luftfeuchte</div>
-    ${dayChartSvg(zone.history, 'humidity', 'var(--blue)', '%')}
-  `;
+  dayChartBody.innerHTML = zoneModalHtml(zone);
+}
+
+function openZoneModal(zone) {
+  modalZoneKey = zone.key;
+  fillZoneModal(zone);
   dayChartModal.style.display = 'flex';
 }
 
+// Nach jedem Neuladen den offenen Dialog aktualisieren (z. B. nach dem Umschalten der Klimaanlage).
+function refreshZoneModal() {
+  if (!modalZoneKey) return;
+  const zone = currentZones.find((z) => z.key === modalZoneKey);
+  if (!zone) { closeDayChart(); return; }
+  fillZoneModal(zone);
+}
+
 function closeDayChart() {
+  modalZoneKey = null;
   dayChartModal.style.display = 'none';
 }
 
@@ -935,32 +1051,42 @@ async function resumeZoneSchedule(zoneId, homeId, btn) {
   }
 }
 
-zoneGrid.addEventListener('click', (e) => {
-  if (e.target.closest('.ac-options')) return; // Auswahlfelder öffnen keinen Chart
+// Steuer-Knöpfe (Schalter, +/−, Ein/Aus, Zeitplan) - gemeinsam für Kacheln, Klima-Zeilen und den Dialog.
+function handleControlClick(e) {
   const controlBtn = e.target.closest('[data-action]');
-  if (controlBtn) {
-    const zoneId = controlBtn.dataset.zoneId;
-    const homeId = controlBtn.dataset.homeId;
-    const action = controlBtn.dataset.action;
-    if (action === 'resume') {
-      resumeZoneSchedule(zoneId, homeId, controlBtn);
-    } else if (action === 'on' || action === 'off') {
-      setZoneTemp(zoneId, homeId, undefined, controlBtn, action === 'off' ? 'OFF' : 'ON');
-    } else {
-      const current = parseFloat(controlBtn.dataset.temp);
-      const step = parseFloat(controlBtn.dataset.step) || 0.5;
-      const next = Math.round((action === 'inc' ? current + step : current - step) / step) * step;
-      setZoneTemp(zoneId, homeId, next, controlBtn);
-    }
-    return;
+  if (!controlBtn) return false;
+  const zoneId = controlBtn.dataset.zoneId;
+  const homeId = controlBtn.dataset.homeId;
+  const action = controlBtn.dataset.action;
+  if (action === 'resume') {
+    resumeZoneSchedule(zoneId, homeId, controlBtn);
+  } else if (action === 'on' || action === 'off') {
+    setZoneTemp(zoneId, homeId, undefined, controlBtn, action === 'off' ? 'OFF' : 'ON');
+  } else {
+    const current = parseFloat(controlBtn.dataset.temp);
+    const step = parseFloat(controlBtn.dataset.step) || 0.5;
+    const next = Math.round((action === 'inc' ? current + step : current - step) / step) * step;
+    setZoneTemp(zoneId, homeId, next, controlBtn);
   }
+  return true;
+}
 
+zoneGrid.addEventListener('click', (e) => {
+  if (handleControlClick(e)) return;
   const card = e.target.closest('.zone-card');
   if (!card) return;
   const zone = currentZones.find((z) => z.key === card.dataset.zoneKey);
-  if (zone && zone.history && zone.history.length >= 2) openDayChart(zone);
+  if (zone && zone.history && zone.history.length >= 2) openZoneModal(zone);
 });
-zoneGrid.addEventListener('change', (e) => {
+acList.addEventListener('click', (e) => {
+  if (handleControlClick(e)) return;
+  const row = e.target.closest('.ac-row');
+  if (!row) return;
+  const zone = currentZones.find((z) => z.key === row.dataset.zoneKey);
+  if (zone) openZoneModal(zone);
+});
+dayChartBody.addEventListener('click', handleControlClick);
+dayChartBody.addEventListener('change', (e) => {
   const select = e.target.closest('select[data-prop]');
   if (!select || !select.value) return;
   postZoneSet(
@@ -969,6 +1095,24 @@ zoneGrid.addEventListener('change', (e) => {
     'Konnte Klimaanlage nicht einstellen: ',
   );
 });
+
+// "Alle aus" / "Alle an" für alle Klimaanlagen (nur die, die den Zustand noch nicht haben).
+async function setAllAc(power, btn) {
+  const targets = currentZones.filter((z) => z.type === 'AC' && (power === 'OFF' ? z.power !== 'OFF' : z.power === 'OFF'));
+  if (!targets.length) return;
+  btn.disabled = true;
+  const results = await Promise.allSettled(targets.map((z) => api('/api/zones/set', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ zoneId: z.id, homeId: z.homeId, power }),
+  }).then((res) => { if (res.error) throw new Error(res.error); })));
+  const failed = results.filter((r) => r.status === 'rejected');
+  if (failed.length) alert('Konnte nicht alle Klimaanlagen schalten: ' + failed[0].reason.message);
+  btn.disabled = false;
+  await loadDashboard();
+}
+document.getElementById('acAllOff').addEventListener('click', (e) => setAllAc('OFF', e.currentTarget));
+document.getElementById('acAllOn').addEventListener('click', (e) => setAllAc('ON', e.currentTarget));
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);
 dayChartModal.addEventListener('click', (e) => {
   if (e.target === dayChartModal) closeDayChart();
