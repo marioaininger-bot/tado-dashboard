@@ -423,6 +423,7 @@ async function loadDashboard() {
 const panasonicNotice = document.getElementById('panasonicNotice');
 let panasonicMfaOpen = false; // hält das Code-Feld beim 60-s-Refresh offen
 let panasonicMfaHint = ''; // Text der Panasonic-Seite (was genau verlangt wird)
+let panasonicMfaKind = '';
 
 function renderPanasonicNotice(data) {
   // Solange jemand im Code-Feld tippt, nicht neu zeichnen.
@@ -431,13 +432,18 @@ function renderPanasonicNotice(data) {
   if (data.panasonicLoginRequired) {
     if (data.panasonicMfaPending || panasonicMfaOpen) {
       panasonicMfaOpen = true;
-      if (data.panasonicMfaPending && data.panasonicMfaPending.hint) panasonicMfaHint = data.panasonicMfaPending.hint;
+      if (data.panasonicMfaPending) {
+        panasonicMfaHint = data.panasonicMfaPending.hint || '';
+        panasonicMfaKind = data.panasonicMfaPending.kind || '';
+      }
       panasonicNotice.innerHTML = `
-        <div style="margin-bottom:6px;">Panasonic verlangt einen Bestätigungscode.
-          ${panasonicMfaHint ? `<br><i>Panasonic-Seite: „${panasonicMfaHint.replace(/[<>&]/g, '')}“</i>` : ''}</div>
+        <div style="margin-bottom:6px;">Panasonic verlangt einen Bestätigungscode${panasonicMfaKind ? ` (Variante: ${panasonicMfaKind})` : ''}.
+          ${panasonicMfaHint ? `<br><i>Panasonic: „${panasonicMfaHint.replace(/[<>&]/g, '')}“</i>` : ''}</div>
         Code eingeben:
         <input id="panasonicCode" inputmode="numeric" autocomplete="one-time-code" style="width:9em;padding:6px 8px;border:1px solid var(--card-border);border-radius:8px;font:inherit;">
         <button class="btn-link" id="panasonicVerifyBtn">Bestätigen</button>
+        ${panasonicMfaKind === 'guardian' ? '<button class="btn-link" id="panasonicPushBtn" title="Freigabe in der Comfort-Cloud-App bestätigen">Ohne Code (Freigabe in der App)</button>' : ''}
+        <button class="btn-link" id="panasonicRestartBtn">Neu starten</button>
         <span id="panasonicMsg"></span>`;
     } else {
       panasonicNotice.innerHTML = `⚠️ Panasonic: nicht angemeldet.
@@ -483,6 +489,11 @@ async function panasonicLoginStep(path, body, btn) {
 panasonicNotice.addEventListener('click', (e) => {
   if (e.target.id === 'panasonicStartBtn') {
     panasonicLoginStep('/api/panasonic/login/start', {}, e.target);
+  } else if (e.target.id === 'panasonicRestartBtn') {
+    panasonicMfaOpen = false;
+    panasonicLoginStep('/api/panasonic/login/start', {}, e.target);
+  } else if (e.target.id === 'panasonicPushBtn') {
+    panasonicLoginStep('/api/panasonic/login/verify', { code: '' }, e.target);
   } else if (e.target.id === 'panasonicVerifyBtn') {
     const code = document.getElementById('panasonicCode').value;
     panasonicLoginStep('/api/panasonic/login/verify', { code }, e.target);
