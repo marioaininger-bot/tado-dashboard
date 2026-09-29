@@ -32,10 +32,19 @@ const PENDING_TTL_SECONDS = 600;
 const MODE_CODES = { AUTO: 0, DRY: 1, COOL: 2, HEAT: 3, FAN: 4 };
 const FAN_CODES = { AUTO: 0, LOW: 1, LOWMID: 2, MID: 3, HIGHMID: 4, HIGH: 5 };
 const ECO_CODES = { AUTO: 0, POWERFUL: 1, QUIET: 2 };
+// Luftrichtung: senkrecht (UD) / waagrecht (LR). "Auto" steckt bei Panasonic
+// nicht im Positionswert, sondern in fanAutoMode (0 = beide Auto, 2 = nur
+// UD Auto, 3 = nur LR Auto, 1 = keine). LR-Wert 6 heißt "nicht vorhanden".
+const SWING_UD_CODES = { UP: 0, DOWN: 1, MID: 2, UPMID: 3, DOWNMID: 4, SWING: 5 };
+const SWING_LR_CODES = { RIGHT: 0, LEFT: 1, MID: 2, RIGHTMID: 4, LEFTMID: 5 };
+const LR_UNAVAILABLE = 6;
+const DEFAULT_ON_TEMP = 20;
 const invert = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [v, k]));
 const MODE_FROM_CODE = invert(MODE_CODES);
 const FAN_FROM_CODE = invert(FAN_CODES);
 const ECO_FROM_CODE = invert(ECO_CODES);
+const SWING_UD_FROM_CODE = invert(SWING_UD_CODES);
+const SWING_LR_FROM_CODE = invert(SWING_LR_CODES);
 const MIN_TEMP = 16;
 const MAX_TEMP = 30;
 
@@ -724,9 +733,21 @@ export function displayName(rawName) {
   return room ? `Klima ${room}` : 'Klima';
 }
 
+// Liest die Luftrichtungen aus den Status-Parametern (null = nicht vorhanden).
+function readSwing(p) {
+  const fan = p.fanAutoMode;
+  const udAuto = fan === 0 || fan === 2;
+  const lrAuto = fan === 0 || fan === 3;
+  const ud = p.airSwingUD === undefined ? null : (udAuto ? 'AUTO' : (SWING_UD_FROM_CODE[p.airSwingUD] || null));
+  const lrSupported = p.airSwingLR !== undefined && p.airSwingLR !== LR_UNAVAILABLE;
+  const lr = lrSupported ? (lrAuto ? 'AUTO' : (SWING_LR_FROM_CODE[p.airSwingLR] || null)) : null;
+  return { ud, lr };
+}
+
 function mapDevice(device, status) {
   const p = (status && status.parameters) || {};
   const on = p.operate === 1;
+  const swing = readSwing(p);
   return {
     id: device.id,
     name: displayName(device.name),
@@ -743,6 +764,8 @@ function mapDevice(device, status) {
     mode: MODE_FROM_CODE[p.operationMode] || null,
     fanLevel: FAN_FROM_CODE[p.fanSpeed] || null,
     ecoMode: ECO_FROM_CODE[p.ecoMode] || null,
+    swingUD: swing.ud,
+    swingLR: swing.lr,
     openWindow: false,
     link: null,
     manualOverride: false,
@@ -781,7 +804,7 @@ export async function fetchPanasonicZones(env) {
 // Steuert ein Gerät. Gesendet werden nur die genannten Felder (Ein/Aus,
 // Zieltemperatur, Modus, Lüfterstufe, Eco-Modus) - alles andere bleibt
 // unverändert. Das Gerät wird dabei nie von selbst eingeschaltet.
-export async function setPanasonicDevice(env, deviceId, { power, temperature, mode, fanSpeed, eco }) {
+export async function setPanasonicDevice(env, deviceId, { power, temperature, mode, fanSpeed, eco, swingUD, swingLR }) {
   if (!isPanasonicConfigured(env)) {
     throw new Error('Panasonic ist nicht konfiguriert (Secrets PANASONIC_USER / PANASONIC_PASS fehlen).');
   }
@@ -797,6 +820,14 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature, mo
     // Beim Einschalten immer Kühlen (nicht der zuletzt benutzte Modus,
     // z. B. Entfeuchten) - außer es wird ausdrücklich ein Modus mitgegeben.
     if (mode == null) parameters.operationMode = MODE_CODES.COOL;
+    // ... und mit Standard-Zieltemperatur (PANASONIC_DEFAULT_TEMP, sonst 20),
+    // außer eine Temperatur wird mitgegeben oder der Modus hat keine.
+    const targetMode = mode == null ? 'COOL' : String(mode).toUpperCase();
+    if (temperature == null && targetMode !== 'DRY' && targetMode !== 'FAN') {
+      const configured = Number(env.PANASONIC_DEFAULT_TEMP);
+      const base = Number.isFinite(configured) && configured > 0 ? configured : DEFAULT_ON_TEMP;
+      parameters.temperatureSet = Math.min(MAX_TEMP, Math.max(MIN_TEMP, base));
+    }
   }
   if (temperature != null) {
     const t = Math.min(MAX_TEMP, Math.max(MIN_TEMP, Number(temperature)));
@@ -811,6 +842,25 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature, mo
   if (mode != null) parameters.operationMode = pick(mode, MODE_CODES, 'Modus');
   if (fanSpeed != null) parameters.fanSpeed = pick(fanSpeed, FAN_CODES, 'Lüfterstufe');
   if (eco != null) parameters.ecoMode = pick(eco, ECO_CODES, 'Eco-Modus');
+  if (swingUD != null || swingLR != null) {
+    // "Auto" hängt an fanAutoMode und betrifft beide Achsen gemeinsam - deshalb
+    // erst den aktuellen Zustand der anderen Achse lesen.
+    const current = await accRequest(env, 'GET', `/deviceStatus/${guidPath(device.guid)}`);
+    const fan = (current.parameters || {}).fanAutoMode;
+    let udAuto = fan === 0 || fan === 2;
+    let lrAuto = fan === 0 || fan === 3;
+    if (swingUD != null) {
+      const v = String(swingUD).toUpperCase();
+      udAuto = v === 'AUTO';
+      if (!udAuto) parameters.airSwingUD = pick(v, SWING_UD_CODES, 'Luftrichtung senkrecht');
+    }
+    if (swingLR != null) {
+      const v = String(swingLR).toUpperCase();
+      lrAuto = v === 'AUTO';
+      if (!lrAuto) parameters.airSwingLR = pick(v, SWING_LR_CODES, 'Luftrichtung waagrecht');
+    }
+    parameters.fanAutoMode = udAuto && lrAuto ? 0 : udAuto ? 2 : lrAuto ? 3 : 1;
+  }
   if (!Object.keys(parameters).length) throw new Error('Nichts zu setzen.');
 
   await accRequest(env, 'POST', '/deviceStatus/control', { deviceGuid: device.guid, parameters });
