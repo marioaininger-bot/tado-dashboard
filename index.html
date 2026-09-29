@@ -725,10 +725,11 @@ function acRowHtml(zone) {
   const sub = isOff
     ? `${cur} · aus`
     : `${cur} · ${AC_MODE_NAMES[zone.mode] || 'an'}${hasTemp ? ' → ' + zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0) + '°' : ''}`;
+  const note = zone.cachedState ? ' · Stand evtl. veraltet' : '';
   return `
     <div class="ac-row ${isOff ? 'off' : ''}" data-zone-key="${zone.key}">
       <div class="ic">${zoneIcon(zone)}</div>
-      <div class="mid"><div class="nm">${zone.name}</div><div class="sub">${sub}</div></div>
+      <div class="mid"><div class="nm">${zone.name}</div><div class="sub">${sub}${note}</div></div>
       <button class="sw ${isOff ? '' : 'on'}" role="switch" aria-checked="${isOff ? 'false' : 'true'}"
         aria-label="${zone.name} ${isOff ? 'einschalten' : 'ausschalten'}"
         data-action="${isOff ? 'on' : 'off'}" data-zone-id="${zone.id}" data-home-id="${zone.homeId}"></button>

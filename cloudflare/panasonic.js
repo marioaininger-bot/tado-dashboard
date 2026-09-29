@@ -715,6 +715,8 @@ async function listDevices(env) {
         id: device.deviceHashGuid || device.deviceGuid,
         guid: device.deviceGuid,
         name: device.deviceName || group.groupName || 'Klimaanlage',
+        // Manche Geräte liefern ihre Werte schon in der Geräteliste mit (so wie sie die App zeigt).
+        params: device.parameters && typeof device.parameters === 'object' ? device.parameters : null,
       });
     }
   }
@@ -829,6 +831,11 @@ export async function fetchPanasonicZones(env) {
       } catch (err) {
         // Anmeldeprobleme betreffen alle Geräte; ein einzelnes Gerät, das nicht antwortet, nur seine Kachel.
         if (err.loginRequired) throw err;
+        // Antwortet die Einzelabfrage nicht (z. B. 5005), aber die Geräteliste kennt Werte
+        // (so zeigt es auch die App): zuletzt bekannten Zustand anzeigen.
+        if (device.params && Object.keys(device.params).length) {
+          return { ...mapDevice(device, { parameters: device.params }), cachedState: true };
+        }
         return offlineZone(device, err);
       }
     }));
