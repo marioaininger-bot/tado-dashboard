@@ -216,6 +216,17 @@ function detectChallenge(html) {
   return null;
 }
 
+// Sichtbarer Text einer Seite (für den Hinweis neben dem Code-Feld).
+function pageText(html, max = 300) {
+  return html
+    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+}
+
 // Für Fehlermeldungen bei unbekannten Seiten: Titel, Feldnamen, Textanfang.
 function describePage(html, url) {
   const title = (/<title[^>]*>([^<]*)/i.exec(html) || [])[1];
@@ -363,6 +374,7 @@ export async function startPanasonicLogin(env) {
 
   const pendingBase = { cookies: jar.dump(), codeVerifier, appVersion };
   let challenge = detectChallenge(loginHtml);
+  let challengeHtml = challenge ? loginHtml : null;
 
   if (!challenge) {
     const hidden = parseHiddenInputs(loginHtml);
@@ -389,6 +401,7 @@ export async function startPanasonicLogin(env) {
       throw new Error(`Panasonic login_redirect: kein Authorization-Code erhalten (${describeUrl(result.url)})`);
     }
     challenge = detectChallenge(result.page);
+    challengeHtml = result.page;
     if (!challenge) {
       throw new Error(`Panasonic: unbekannte Seite nach dem Login - ${describePage(result.page, result.url)}`);
     }
@@ -398,9 +411,10 @@ export async function startPanasonicLogin(env) {
     ...pendingBase,
     cookies: jar.dump(),
     challenge,
+    hint: pageText(challengeHtml),
     createdAt: Date.now(),
   }), { expirationTtl: PENDING_TTL_SECONDS });
-  return { status: 'mfa', kind: challenge.kind };
+  return { status: 'mfa', kind: challenge.kind, hint: pageText(challengeHtml) };
 }
 
 // Schritt 2: Bestätigungscode einlösen und Sitzung speichern.
@@ -496,8 +510,12 @@ export async function verifyPanasonicMfa(env, rawCode) {
   return { status: 'ok' };
 }
 
+// Liefert null oder { kind, hint } für den offenen Bestätigungscode-Schritt.
 export async function panasonicMfaPending(env) {
-  return Boolean(await env.TADO_KV.get(PENDING_KV_KEY));
+  const raw = await env.TADO_KV.get(PENDING_KV_KEY);
+  if (!raw) return null;
+  const pending = JSON.parse(raw);
+  return { kind: pending.challenge.kind, hint: pending.hint || '' };
 }
 
 async function refresh(session) {
@@ -626,21 +644,21 @@ function mapDevice(device, status) {
 // Liefert { zones, error, loginRequired, mfaPending } - Fehler blockieren nie
 // das restliche Dashboard.
 export async function fetchPanasonicZones(env) {
-  if (!isPanasonicConfigured(env)) return { zones: [], error: null, loginRequired: false, mfaPending: false };
+  if (!isPanasonicConfigured(env)) return { zones: [], error: null, loginRequired: false, mfaPending: null };
   try {
     const devices = await listDevices(env);
     const zones = await Promise.all(devices.map(async (device) => {
       const status = await accRequest(env, 'GET', `/deviceStatus/${guidPath(device.guid)}`);
       return mapDevice(device, status);
     }));
-    return { zones, error: null, loginRequired: false, mfaPending: false };
+    return { zones, error: null, loginRequired: false, mfaPending: null };
   } catch (err) {
     const loginRequired = Boolean(err.loginRequired);
     return {
       zones: [],
       error: err.message,
       loginRequired,
-      mfaPending: loginRequired ? await panasonicMfaPending(env) : false,
+      mfaPending: loginRequired ? await panasonicMfaPending(env) : null,
     };
   }
 }

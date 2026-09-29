@@ -422,6 +422,7 @@ async function loadDashboard() {
 /* ---------- Panasonic-Anmeldung (Bestätigungscode) ---------- */
 const panasonicNotice = document.getElementById('panasonicNotice');
 let panasonicMfaOpen = false; // hält das Code-Feld beim 60-s-Refresh offen
+let panasonicMfaHint = ''; // Text der Panasonic-Seite (was genau verlangt wird)
 
 function renderPanasonicNotice(data) {
   // Solange jemand im Code-Feld tippt, nicht neu zeichnen.
@@ -430,8 +431,11 @@ function renderPanasonicNotice(data) {
   if (data.panasonicLoginRequired) {
     if (data.panasonicMfaPending || panasonicMfaOpen) {
       panasonicMfaOpen = true;
+      if (data.panasonicMfaPending && data.panasonicMfaPending.hint) panasonicMfaHint = data.panasonicMfaPending.hint;
       panasonicNotice.innerHTML = `
-        Panasonic hat einen Bestätigungscode angefordert. Code eingeben:
+        <div style="margin-bottom:6px;">Panasonic verlangt einen Bestätigungscode.
+          ${panasonicMfaHint ? `<br><i>Panasonic-Seite: „${panasonicMfaHint.replace(/[<>&]/g, '')}“</i>` : ''}</div>
+        Code eingeben:
         <input id="panasonicCode" inputmode="numeric" autocomplete="one-time-code" style="width:9em;padding:6px 8px;border:1px solid var(--card-border);border-radius:8px;font:inherit;">
         <button class="btn-link" id="panasonicVerifyBtn">Bestätigen</button>
         <span id="panasonicMsg"></span>`;
@@ -465,7 +469,7 @@ async function panasonicLoginStep(path, body, btn) {
     if (res.error) throw new Error(res.error);
     if (res.status === 'mfa') {
       panasonicMfaOpen = true;
-      renderPanasonicNotice({ panasonicLoginRequired: true, panasonicMfaPending: true });
+      renderPanasonicNotice({ panasonicLoginRequired: true, panasonicMfaPending: { kind: res.kind, hint: res.hint } });
       return;
     }
     panasonicMfaOpen = false;
