@@ -25,6 +25,9 @@ const AUDIENCE = `https://digital.panasonic.com/${APP_CLIENT_ID}/api/v1/`;
 const SESSION_KV_KEY = 'panasonic_session';
 const BLOCK_KV_KEY = 'panasonic_login_block';
 const LOGIN_BLOCK_MS = 30 * 60 * 1000;
+// Wird in den Block-Fingerabdruck einbezogen: ein neuer Login-Ablauf im Code
+// hebt eine alte Pause auf.
+const LOGIN_FLOW_VERSION = 2;
 const APP_VERSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 // Panasonic-Zahlencodes (siehe python-panasonic-comfort-cloud/constants.py)
@@ -226,8 +229,11 @@ async function login(env) {
     }),
   });
   if (res.status === 400 || res.status === 401 || res.status === 403) {
-    const err = new Error('Panasonic-Login abgelehnt - Benutzername/Passwort (Secrets PANASONIC_USER / PANASONIC_PASS) prüfen.');
-    err.credentials = true;
+    // Auth0 liefert den Grund im Body (z. B. invalid_user_password). 400 kann
+    // auch ein Ablauf-Problem sein und nicht zwingend falsche Zugangsdaten.
+    const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 300);
+    const err = new Error(`Panasonic-Login abgelehnt (Status ${res.status})${detail ? ' - ' + detail : ''}`);
+    err.credentials = res.status !== 400;
     throw err;
   }
   await expectStatus(res, 200, 'login');
@@ -324,10 +330,13 @@ async function getSession(env, forceRelogin = false) {
     }
   }
 
+  // Die Pause gilt nur für dieselben Zugangsdaten und denselben Login-Code:
+  // wer die Secrets korrigiert oder neu deployt, muss nicht warten.
+  const fingerprint = await sha256Hex(`${LOGIN_FLOW_VERSION}|${env.PANASONIC_USER}|${env.PANASONIC_PASS}`);
   const blockRaw = await env.TADO_KV.get(BLOCK_KV_KEY);
   if (blockRaw) {
     const block = JSON.parse(blockRaw);
-    if (Date.now() < block.until) {
+    if (block.fingerprint === fingerprint && Date.now() < block.until) {
       throw new Error(`Panasonic-Login pausiert (${block.reason}) - nächster Versuch gegen ${new Date(block.until).toISOString().slice(11, 16)} UTC.`);
     }
   }
@@ -337,7 +346,8 @@ async function getSession(env, forceRelogin = false) {
   } catch (err) {
     await env.TADO_KV.put(BLOCK_KV_KEY, JSON.stringify({
       until: Date.now() + LOGIN_BLOCK_MS,
-      reason: err.message.slice(0, 160),
+      fingerprint,
+      reason: err.message.slice(0, 300),
     }), { expirationTtl: 3600 });
     throw err;
   }
