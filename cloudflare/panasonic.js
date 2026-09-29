@@ -716,12 +716,20 @@ function validTemp(value) {
   return typeof value === 'number' && value > -50 && value < 100 ? value : null;
 }
 
+// Anzeigename: immer "Klima <Raum>" - ein vorhandenes "Klima"/"Klimaanlage"/
+// "AC" am Anfang des in der Comfort-Cloud-App vergebenen Namens wird dabei
+// nicht doppelt gesetzt.
+export function displayName(rawName) {
+  const room = String(rawName || '').trim().replace(/^(klimaanlage|klima|ac)\b[\s:_-]*/i, '').trim();
+  return room ? `Klima ${room}` : 'Klima';
+}
+
 function mapDevice(device, status) {
   const p = (status && status.parameters) || {};
   const on = p.operate === 1;
   return {
     id: device.id,
-    name: device.name,
+    name: displayName(device.name),
     type: 'AC',
     power: on ? 'ON' : 'OFF',
     targetTemp: validTemp(p.temperatureSet),
@@ -786,6 +794,9 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature, mo
     parameters.operate = 0;
   } else if (power === 'ON') {
     parameters.operate = 1;
+    // Beim Einschalten immer Kühlen (nicht der zuletzt benutzte Modus,
+    // z. B. Entfeuchten) - außer es wird ausdrücklich ein Modus mitgegeben.
+    if (mode == null) parameters.operationMode = MODE_CODES.COOL;
   }
   if (temperature != null) {
     const t = Math.min(MAX_TEMP, Math.max(MIN_TEMP, Number(temperature)));
