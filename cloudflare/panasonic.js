@@ -80,7 +80,8 @@ async function apiHeaders(session, includeClientId = true) {
   const now = new Date();
   const ts = appTimestamp(now);
   const headers = {
-    'Content-Type': 'application/json;charset=utf-8',
+    Accept: 'application/json; charset=utf-8',
+    'Content-Type': 'application/json',
     'User-Agent': 'G-RAC',
     'x-app-name': 'Comfort Cloud',
     'x-app-timestamp': ts.str,
@@ -172,17 +173,52 @@ function queryParam(location, name) {
 
 /* ---------- App-Version (Panasonic prüft sie serverseitig) ---------- */
 
-async function detectAppVersion(env) {
-  if (env.PANASONIC_APP_VERSION) return env.PANASONIC_APP_VERSION;
-  try {
-    const res = await fetch('https://play.google.com/store/apps/details?id=com.panasonic.ACCsmart');
-    const text = await res.text();
-    const match = /\["(\d+\.\d+\.\d+)"\]/.exec(text);
-    if (match) return match[1];
-  } catch (e) {
-    // fällt auf den Standardwert zurück
+const VERSION_RE = /^\d+\.\d+\.\d+$/;
+const MIN_PLAUSIBLE_VERSION = [1, 21, 0];
+
+function plausibleVersion(v) {
+  if (!VERSION_RE.test(v)) return false;
+  const parts = v.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (parts[i] > MIN_PLAUSIBLE_VERSION[i]) return true;
+    if (parts[i] < MIN_PLAUSIBLE_VERSION[i]) return false;
   }
-  return FALLBACK_APP_VERSION;
+  return true;
+}
+
+async function fetchText(url, options = {}) {
+  const res = await fetch(url, { ...options, signal: AbortSignal.timeout(4000) });
+  return res.text();
+}
+
+// Liefert die App-Versionen, die für den Header probiert werden (in dieser
+// Reihenfolge). Panasonic weist unbekannte/zu alte Versionen ab; die
+// Erkennung über die Store-Seiten kann aus dem Worker heraus scheitern oder
+// Unsinn liefern, deshalb gibt es mehrere Quellen und feste Rückfallwerte.
+async function detectAppVersions(env) {
+  const found = [];
+  if (env.PANASONIC_APP_VERSION) found.push(String(env.PANASONIC_APP_VERSION).trim());
+
+  const sources = await Promise.allSettled([
+    fetchText('https://play.google.com/store/apps/details?id=com.panasonic.ACCsmart&hl=en')
+      .then((t) => (/\["(\d+\.\d+\.\d+)"\]/.exec(t) || [])[1]),
+    fetchText('https://www.appbrain.com/app/panasonic-comfort-cloud/com.panasonic.ACCsmart')
+      .then((t) => (/itemprop="softwareVersion"[^>]*content="([^"]+)"|content="([^"]+)"[^>]*itemprop="softwareVersion"/i.exec(t) || []).slice(1).find(Boolean)),
+  ]);
+  for (const r of sources) {
+    if (r.status === 'fulfilled' && r.value) found.push(String(r.value).trim());
+  }
+  found.push(FALLBACK_APP_VERSION, '1.21.0');
+
+  const seen = new Set();
+  return found.filter((v) => {
+    if (seen.has(v) || !VERSION_RE.test(v)) return false;
+    // Nur automatisch erkannte Werte auf Plausibilität prüfen; ein
+    // ausdrücklich gesetzter Wert (PANASONIC_APP_VERSION) gilt immer.
+    if (v !== env.PANASONIC_APP_VERSION && !plausibleVersion(v)) return false;
+    seen.add(v);
+    return true;
+  });
 }
 
 /* ---------- Login / Session ---------- */
@@ -270,29 +306,44 @@ function describePage(html, url) {
   return `${describeUrl(url)} | Titel: ${title ? title.trim() : '-'} | Felder: ${names || '-'} | Text: ${text || '-'}`;
 }
 
-async function fetchAccClientId(session) {
-  const res = await fetch(`${BASE_ACC}/auth/v2/login`, {
-    method: 'POST',
-    headers: await apiHeaders(session, false),
-    body: JSON.stringify({ language: 0 }),
-  });
-  await expectStatus(res, 200, 'get_acc_client_id');
-  const clientId = (await res.json()).clientId;
-  if (!clientId) throw new Error('Panasonic get_acc_client_id: keine clientId in der Antwort');
-  return clientId;
+// Comfort-Cloud-Client-ID holen. Probiert die App-Versionen der Reihe nach,
+// solange Panasonic den Header ablehnt (400 "bad header" bzw. 401 4106 =
+// neue App-Version veröffentlicht); die funktionierende Version wird in der
+// Sitzung gespeichert.
+async function fetchAccClientId(session, appVersions) {
+  const tried = [];
+  let lastDetail = '';
+  for (const version of appVersions) {
+    session.app_version = version;
+    const res = await fetch(`${BASE_ACC}/auth/v2/login`, {
+      method: 'POST',
+      headers: await apiHeaders(session, false),
+      body: JSON.stringify({ language: 0 }),
+    });
+    if (res.status === 200) {
+      const clientId = (await res.json()).clientId;
+      if (!clientId) throw new Error('Panasonic get_acc_client_id: keine clientId in der Antwort');
+      return clientId;
+    }
+    lastDetail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+    tried.push(`${version}→${res.status}`);
+    if (res.status !== 400 && res.status !== 401) break;
+  }
+  throw new Error(`Panasonic get_acc_client_id fehlgeschlagen (App-Versionen: ${tried.join(', ')}) - ${lastDetail}`
+    + ' - ggf. PANASONIC_APP_VERSION als Variable setzen.');
 }
 
 // Token-Antwort -> gespeicherte Sitzung (inkl. Comfort-Cloud-Client-ID).
-async function buildSession(env, tokens, appVersion) {
+async function buildSession(env, tokens, appVersions) {
   const session = {
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: Date.now() + (tokens.expires_in - 60) * 1000,
     scope: tokens.scope || SCOPE,
-    app_version: appVersion,
+    app_version: appVersions[0],
     acc_client_id: null,
   };
-  session.acc_client_id = await fetchAccClientId(session);
+  session.acc_client_id = await fetchAccClientId(session, appVersions);
   await env.TADO_KV.put(SESSION_KV_KEY, JSON.stringify(session));
   await env.TADO_KV.delete(PENDING_KV_KEY);
   return session;
@@ -348,7 +399,7 @@ export async function startPanasonicLogin(env) {
   const codeChallenge = base64Url(new Uint8Array(
     await crypto.subtle.digest('SHA-256', new TextEncoder().encode(codeVerifier))
   ));
-  const appVersion = await detectAppVersion(env);
+  const appVersions = await detectAppVersions(env);
 
   // 1. authorize -> Redirect auf die Login-Seite
   const authorizeParams = new URLSearchParams({
@@ -402,7 +453,7 @@ export async function startPanasonicLogin(env) {
   await expectStatus(res, 200, 'login');
   const loginHtml = await res.text();
 
-  const pendingBase = { cookies: jar.dump(), codeVerifier, appVersion };
+  const pendingBase = { cookies: jar.dump(), codeVerifier, appVersions };
   let challenge = detectChallenge(loginHtml);
   let challengeHtml = challenge ? loginHtml : null;
 
@@ -424,7 +475,7 @@ export async function startPanasonicLogin(env) {
 
     if (result.code) {
       const tokens = await exchangeCode(result.code, codeVerifier);
-      await buildSession(env, tokens, appVersion);
+      await buildSession(env, tokens, appVersions);
       return { status: 'ok' };
     }
     if (!result.page) {
@@ -494,7 +545,7 @@ export async function verifyPanasonicMfa(env, rawCode) {
       throw new Error(`Bestätigungscode abgelehnt (Status ${res.status})${detail ? ' - ' + detail : ''}`);
     }
     await expectStatus(res, 200, 'verify_mfa');
-    await buildSession(env, await res.json(), pending.appVersion);
+    await buildSession(env, await res.json(), pending.appVersions || [pending.appVersion]);
     return { status: 'ok' };
   }
 
@@ -552,7 +603,7 @@ export async function verifyPanasonicMfa(env, rawCode) {
     throw new Error(`Panasonic guardian: kein Authorization-Code erhalten (${describeUrl(result.url)})`);
   }
   const tokens = await exchangeCode(result.code, pending.codeVerifier);
-  await buildSession(env, tokens, pending.appVersion);
+  await buildSession(env, tokens, pending.appVersions || [pending.appVersion]);
   return { status: 'ok' };
 }
 
@@ -621,6 +672,9 @@ async function accRequest(env, method, path, body) {
     }
     if (!res.ok) {
       const detail = (await res.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 200);
+      if (res.status === 401 && detail.includes('4106')) {
+        throw new Error(`Panasonic verlangt eine neuere App-Version (aktuell ${session.app_version}) - PANASONIC_APP_VERSION als Variable setzen.`);
+      }
       throw new Error(`Panasonic ${method} ${path.split('/').slice(0, 3).join('/')} -> ${res.status}${detail ? ' - ' + detail : ''}`);
     }
     return res.json();
