@@ -293,11 +293,11 @@
   <div id="forecastRow" class="forecast-row" style="display:none;"></div>
 
   <div id="keyScreen" style="display:none;">
-    <h2>Zugriffsschlüssel</h2>
-    <p>Dieses Dashboard ist geschützt. Gib den Schlüssel ein, der im Worker als <code>DASHBOARD_KEY</code> gesetzt ist. Er wird nur in diesem Browser gespeichert.</p>
+    <h2>Halt! Wer klopft da? 🔒</h2>
+    <p>Hier wohnen Heizung und Klimaanlage, und die reden nicht mit Fremden. Sag das Zauberwort (dein <code>DASHBOARD_KEY</code>), dann darfst du rein. Ich merke es mir nur in diesem Browser, Ehrenwort.</p>
     <form id="keyForm" style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;">
-      <input id="keyInput" type="password" autocomplete="current-password" placeholder="Schlüssel" aria-label="Zugriffsschlüssel">
-      <button class="btn-primary" id="keyBtn" type="submit">Öffnen</button>
+      <input id="keyInput" type="password" autocomplete="current-password" placeholder="Zauberwort" aria-label="Zugriffsschlüssel (Zauberwort)">
+      <button class="btn-primary" id="keyBtn" type="submit">Sesam, öffne dich!</button>
     </form>
     <p class="status-line" id="keyMsg"></p>
   </div>
@@ -416,7 +416,7 @@ function showKeyScreen(wasWrong) {
   if (typeof pollTimer !== 'undefined' && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   [dashboard, weatherStrip, forecastRow, logoutBtn, loadingState, loginScreen].forEach((el) => show(el, false));
   if (wasWrong) clearKey();
-  document.getElementById('keyMsg').textContent = wasWrong ? 'Der Schlüssel ist falsch.' : '';
+  document.getElementById('keyMsg').textContent = wasWrong ? 'Hmm, das war nicht das Zauberwort. Tippfehler? Heizung und Klimaanlage schauen skeptisch. 🧐' : '';
   show(keyScreen, true, 'flex');
   document.getElementById('keyInput').focus();
 }
