@@ -12,6 +12,9 @@ compatibility_date = "2024-09-01"
 # ALLOWED_ORIGIN unten auf deine GitHub-Pages-URL setzen, damit nur
 # dein Dashboard die API aufrufen darf (z.B. "https://<user>.github.io").
 #
+# DASHBOARD_KEY (Zugriffsschutz) ist ein Secret und steht NICHT in dieser Datei:
+#   wrangler secret put DASHBOARD_KEY
+#
 # Deploy:
 #   wrangler deploy
 

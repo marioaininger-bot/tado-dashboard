@@ -65,6 +65,26 @@ API aufrufen darf.
 
 In `index.html` die Konstante `API_ENDPOINT` auf deine Worker-URL setzen.
 
+### 2b. Zugriffsschutz (DASHBOARD_KEY)
+
+Der Worker hält den Tado-/Panasonic-Login für alle, die ihn aufrufen. Damit
+nicht jeder, der die Adresse kennt, deine Räume sieht oder steuert, verlangt
+jeder `/api/`-Aufruf einen geheimen Schlüssel (Header `X-Dashboard-Key`). Das
+Dashboard fragt beim ersten Öffnen einmal danach und merkt ihn sich im
+Browser (localStorage). Ohne gesetztes Secret lehnt der Worker alles ab.
+
+```bash
+cd cloudflare
+# Schlüssel erzeugen (PowerShell), mind. 24 Zeichen:
+#   -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 32 | % {[char]$_})
+wrangler secret put DASHBOARD_KEY
+wrangler deploy
+```
+
+Schlüssel ändern: `wrangler secret put DASHBOARD_KEY` erneut ausführen; die
+Dashboards fragen danach neu. Den Schlüssel gut aufbewahren (Passwort-Manager).
+Der Cron-Trigger ist nicht betroffen.
+
 ### 3. GitHub Pages aktivieren
 
 Repo-Settings → Pages → Branch `main`, Root-Verzeichnis. Optional eigene

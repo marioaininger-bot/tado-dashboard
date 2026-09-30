@@ -36,7 +36,7 @@ function corsHeaders(env) {
   return {
     'Access-Control-Allow-Origin': env.ALLOWED_ORIGIN || '*',
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Dashboard-Key',
   };
 }
 
@@ -45,6 +45,33 @@ function json(status, body, env) {
     status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders(env) },
   });
+}
+
+// Zugriffsschutz: Alle /api/-Aufrufe brauchen den geheimen Schlüssel aus dem
+// Worker-Secret DASHBOARD_KEY (Header X-Dashboard-Key). Ohne gesetztes Secret
+// wird alles abgelehnt (fail closed) statt offen zu bleiben. Der Vergleich
+// läuft über SHA-256-Hashes ohne vorzeitigen Abbruch.
+async function digest(text) {
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)));
+}
+
+async function checkDashboardKey(request, env) {
+  if (!env.DASHBOARD_KEY) {
+    return json(503, {
+      error: 'Zugriffsschutz nicht eingerichtet: Secret DASHBOARD_KEY fehlt (wrangler secret put DASHBOARD_KEY).',
+      code: 'KEY_NOT_CONFIGURED',
+    }, env);
+  }
+  const [given, expected] = await Promise.all([
+    digest(request.headers.get('X-Dashboard-Key') || ''),
+    digest(String(env.DASHBOARD_KEY)),
+  ]);
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= given[i] ^ expected[i];
+  if (diff === 0) return null;
+  // Kleine Bremse gegen automatisiertes Durchprobieren (ohne KV-Schreibzugriffe).
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  return json(401, { error: 'Zugriffsschlüssel fehlt oder ist falsch.', code: 'KEY_REQUIRED' }, env);
 }
 
 async function tokenRequest(env, params) {
@@ -671,6 +698,9 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders(env) });
     }
+
+    const denied = await checkDashboardKey(request, env);
+    if (denied) return denied;
 
     const url = new URL(request.url);
 
