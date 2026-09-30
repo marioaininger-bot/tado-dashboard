@@ -214,6 +214,19 @@
     font:inherit;font-size:16px;padding:12px 14px;width:min(320px,100%);
     border:1px solid var(--card-border);border-radius:12px;background:#fff;color:var(--text);
   }
+  .pw-wrap{position:relative;width:min(320px,100%);}
+  .pw-wrap input{width:100%;box-sizing:border-box;padding-right:46px;}
+  .pw-wrap input::-ms-reveal{display:none;}
+  .pw-toggle{
+    position:absolute;right:4px;top:50%;transform:translateY(-50%);
+    width:40px;height:40px;display:flex;align-items:center;justify-content:center;
+    background:none;border:0;border-radius:10px;padding:0;cursor:pointer;color:var(--text-dim);
+  }
+  .pw-toggle:hover{color:var(--text);}
+  .pw-toggle svg{width:22px;height:22px;}
+  .pw-toggle .eye-off{display:none;}
+  .pw-toggle[aria-pressed="true"] .eye{display:none;}
+  .pw-toggle[aria-pressed="true"] .eye-off{display:block;}
   .code-box{
     font-family:monospace;font-size:32px;letter-spacing:6px;
     background:#eef1f8;border:1px solid var(--card-border);border-radius:14px;
@@ -296,7 +309,13 @@
     <h2>Halt! Wer klopft da? 🔒</h2>
     <p>Hier wohnen Heizung und Klimaanlage, und die reden nicht mit Fremden. Sag das Zauberwort (dein <code>DASHBOARD_KEY</code>), dann darfst du rein. Ich merke es mir nur in diesem Browser, Ehrenwort.</p>
     <form id="keyForm" style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;">
-      <input id="keyInput" type="password" autocomplete="current-password" placeholder="Zauberwort" aria-label="Zugriffsschlüssel (Zauberwort)">
+      <div class="pw-wrap">
+        <input id="keyInput" type="password" autocomplete="current-password" placeholder="Zauberwort" aria-label="Zugriffsschlüssel (Zauberwort)">
+        <button type="button" class="pw-toggle" id="keyToggle" aria-label="Zauberwort anzeigen" aria-pressed="false">
+          <svg class="eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A10.9 10.9 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></svg>
+        </button>
+      </div>
       <button class="btn-primary" id="keyBtn" type="submit">Sesam, öffne dich!</button>
     </form>
     <p class="status-line" id="keyMsg"></p>
@@ -421,6 +440,15 @@ function showKeyScreen(wasWrong) {
   document.getElementById('keyInput').focus();
 }
 
+document.getElementById('keyToggle').addEventListener('click', (e) => {
+  const input = document.getElementById('keyInput');
+  const reveal = input.type === 'password';
+  input.type = reveal ? 'text' : 'password';
+  e.currentTarget.setAttribute('aria-pressed', String(reveal));
+  e.currentTarget.setAttribute('aria-label', reveal ? 'Zauberwort verbergen' : 'Zauberwort anzeigen');
+  input.focus();
+});
+
 document.getElementById('keyForm').addEventListener('submit', (e) => {
   e.preventDefault();
   const input = document.getElementById('keyInput');
@@ -428,6 +456,10 @@ document.getElementById('keyForm').addEventListener('submit', (e) => {
   if (!key) return;
   setKey(key);
   input.value = '';
+  input.type = 'password';
+  const toggle = document.getElementById('keyToggle');
+  toggle.setAttribute('aria-pressed', 'false');
+  toggle.setAttribute('aria-label', 'Zauberwort anzeigen');
   show(keyScreen, false);
   loadingState.innerHTML = LOADING_HTML;
   show(loadingState, true, 'block');
