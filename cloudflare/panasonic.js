@@ -715,6 +715,8 @@ async function listDevices(env) {
         id: device.deviceHashGuid || device.deviceGuid,
         guid: device.deviceGuid,
         name: device.deviceName || group.groupName || 'Klimaanlage',
+        // Manche Geräte liefern ihre Werte schon in der Geräteliste mit (so wie sie die App zeigt).
+        params: device.parameters && typeof device.parameters === 'object' ? device.parameters : null,
       });
     }
   }
@@ -779,6 +781,43 @@ function mapDevice(device, status) {
   };
 }
 
+// Platzhalter für ein Gerät, das gerade nicht antwortet (z. B. WLAN-Adapter
+// offline, Panasonic-Fehler 5005): Die Kachel bleibt sichtbar, statt alle
+// Klimaanlagen zu verdecken.
+function offlineZone(device, err) {
+  const reason = /5005/.test(err.message)
+    ? 'Der WLAN-Adapter antwortet nicht (Panasonic-Fehler 5005).'
+    : err.message.slice(0, 160);
+  return {
+    id: device.id,
+    name: displayName(device.name),
+    type: 'AC',
+    power: null,
+    targetTemp: null,
+    currentTemp: null,
+    humidity: null,
+    heatingPower: null,
+    acPower: 'OFF',
+    noPowerData: true,
+    mode: null,
+    fanLevel: null,
+    ecoMode: null,
+    swingUD: null,
+    swingLR: null,
+    openWindow: false,
+    link: null,
+    manualOverride: false,
+    nextScheduleChange: null,
+    batteryLow: false,
+    deviceOffline: true,
+    offlineReason: reason,
+    hasBatteryInfo: false,
+    homeId: PANASONIC_HOME_ID,
+    homeName: 'Panasonic',
+    key: `${PANASONIC_HOME_ID}:${device.id}`,
+  };
+}
+
 // Liefert { zones, error, loginRequired, mfaPending } - Fehler blockieren nie
 // das restliche Dashboard.
 export async function fetchPanasonicZones(env) {
@@ -786,8 +825,19 @@ export async function fetchPanasonicZones(env) {
   try {
     const devices = await listDevices(env);
     const zones = await Promise.all(devices.map(async (device) => {
-      const status = await accRequest(env, 'GET', `/deviceStatus/${guidPath(device.guid)}`);
-      return mapDevice(device, status);
+      try {
+        const status = await accRequest(env, 'GET', `/deviceStatus/${guidPath(device.guid)}`);
+        return mapDevice(device, status);
+      } catch (err) {
+        // Anmeldeprobleme betreffen alle Geräte; ein einzelnes Gerät, das nicht antwortet, nur seine Kachel.
+        if (err.loginRequired) throw err;
+        // Antwortet die Einzelabfrage nicht (z. B. 5005), aber die Geräteliste kennt Werte
+        // (so zeigt es auch die App): zuletzt bekannten Zustand anzeigen.
+        if (device.params && Object.keys(device.params).length) {
+          return { ...mapDevice(device, { parameters: device.params }), cachedState: true };
+        }
+        return offlineZone(device, err);
+      }
     }));
     return { zones, error: null, loginRequired: false, mfaPending: null };
   } catch (err) {
