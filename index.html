@@ -203,13 +203,17 @@
   .sw:disabled{opacity:.5;cursor:not-allowed;}
 
   /* Login-Screen */
-  #loginScreen{
+  #loginScreen,#keyScreen{
     display:flex;flex-direction:column;align-items:center;text-align:center;
     background:var(--card);border:1px solid var(--card-border);border-radius:20px;
     padding:40px 24px;margin-top:40px;gap:16px;
   }
-  #loginScreen h2{margin:0;font-size:22px;}
-  #loginScreen p{color:var(--text-dim);margin:0;max-width:420px;line-height:1.5;}
+  #loginScreen h2,#keyScreen h2{margin:0;font-size:22px;}
+  #loginScreen p,#keyScreen p{color:var(--text-dim);margin:0;max-width:420px;line-height:1.5;}
+  #keyScreen input{
+    font:inherit;font-size:16px;padding:12px 14px;width:min(320px,100%);
+    border:1px solid var(--card-border);border-radius:12px;background:#fff;color:var(--text);
+  }
   .code-box{
     font-family:monospace;font-size:32px;letter-spacing:6px;
     background:#eef1f8;border:1px solid var(--card-border);border-radius:14px;
@@ -238,7 +242,7 @@
   @media (max-width:480px){
     .wrap{padding:24px 16px 50px;}
     .code-box{font-size:24px;letter-spacing:4px;padding:12px 16px;}
-    #loginScreen{padding:32px 18px;}
+    #loginScreen,#keyScreen{padding:32px 18px;}
     .zone-grid{grid-template-columns:1fr;}
   }
 
@@ -287,6 +291,16 @@
 
   <div id="weatherStrip" class="weather-strip" style="display:none;"></div>
   <div id="forecastRow" class="forecast-row" style="display:none;"></div>
+
+  <div id="keyScreen" style="display:none;">
+    <h2>Zugriffsschlüssel</h2>
+    <p>Dieses Dashboard ist geschützt. Gib den Schlüssel ein, der im Worker als <code>DASHBOARD_KEY</code> gesetzt ist. Er wird nur in diesem Browser gespeichert.</p>
+    <form id="keyForm" style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;">
+      <input id="keyInput" type="password" autocomplete="current-password" placeholder="Schlüssel" aria-label="Zugriffsschlüssel">
+      <button class="btn-primary" id="keyBtn" type="submit">Öffnen</button>
+    </form>
+    <p class="status-line" id="keyMsg"></p>
+  </div>
 
   <div id="loginScreen" style="display:none;">
     <h2>Mit Tado verbinden</h2>
@@ -363,10 +377,62 @@ const forecastRow = document.getElementById('forecastRow');
 const logoutBtn = document.getElementById('logoutBtn');
 const zoneGrid = document.getElementById('zoneGrid');
 
-async function api(path, options) {
-  const res = await fetch(API_ENDPOINT + path, options);
-  return res.json();
+/* ---------- Zugriffsschlüssel ---------- */
+const KEY_STORAGE = 'dashboardKey';
+let memoryKey = ''; // Rückfall, falls der Browser localStorage sperrt
+function getKey() {
+  try { return localStorage.getItem(KEY_STORAGE) || memoryKey; } catch (e) { return memoryKey; }
 }
+function setKey(key) {
+  memoryKey = key;
+  try { localStorage.setItem(KEY_STORAGE, key); } catch (e) { /* nur im Speicher */ }
+}
+function clearKey() {
+  memoryKey = '';
+  try { localStorage.removeItem(KEY_STORAGE); } catch (e) { /* ignorieren */ }
+}
+
+const keyScreen = document.getElementById('keyScreen');
+const LOADING_HTML = '<div class="spinner"></div>Lade Zonen …';
+
+async function api(path, options = {}) {
+  const key = getKey();
+  const headers = { ...(options.headers || {}) };
+  if (key) headers['X-Dashboard-Key'] = key;
+  const res = await fetch(API_ENDPOINT + path, { ...options, headers });
+  const data = await res.json();
+  if (res.status === 401 && data.code === 'KEY_REQUIRED') {
+    showKeyScreen(Boolean(key));
+    const err = new Error(data.error);
+    err.keyRequired = true;
+    throw err;
+  }
+  return data;
+}
+
+// Schlüssel fehlt oder ist falsch: alles ausblenden und nach dem Schlüssel fragen.
+function showKeyScreen(wasWrong) {
+  if (typeof refreshTimer !== 'undefined' && refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  if (typeof pollTimer !== 'undefined' && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  [dashboard, weatherStrip, forecastRow, logoutBtn, loadingState, loginScreen].forEach((el) => show(el, false));
+  if (wasWrong) clearKey();
+  document.getElementById('keyMsg').textContent = wasWrong ? 'Der Schlüssel ist falsch.' : '';
+  show(keyScreen, true, 'flex');
+  document.getElementById('keyInput').focus();
+}
+
+document.getElementById('keyForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const input = document.getElementById('keyInput');
+  const key = input.value.trim();
+  if (!key) return;
+  setKey(key);
+  input.value = '';
+  show(keyScreen, false);
+  loadingState.innerHTML = LOADING_HTML;
+  show(loadingState, true, 'block');
+  init();
+});
 
 function show(el, visible, display) {
   el.style.display = visible ? (display || 'block') : 'none';
@@ -375,12 +441,19 @@ function show(el, visible, display) {
 async function init() {
   try {
     const status = await api('/api/auth/status');
+    if (status.error) {
+      // z. B. Zugriffsschutz im Worker noch nicht eingerichtet
+      loadingState.innerHTML = `<p>${String(status.error).replace(/[<>&]/g, '')}</p>`;
+      show(loadingState, true, 'block');
+      return;
+    }
     if (status.loggedIn) {
       startDashboard();
     } else {
       show(loginScreen, true, 'flex');
     }
   } catch (e) {
+    if (e.keyRequired) return; // Schlüssel-Maske ist schon sichtbar
     show(loginScreen, true, 'flex');
   }
 }
@@ -470,6 +543,7 @@ async function loadDashboard() {
     show(loadingState, false);
     show(dashboard, true, 'block');
   } catch (e) {
+    if (e.keyRequired) return;
     loadingState.innerHTML = `<p>Konnte Daten nicht laden: ${e.message}</p>`;
     show(loadingState, true, 'block');
     show(dashboard, false);
