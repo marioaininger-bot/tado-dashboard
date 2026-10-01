@@ -4,8 +4,10 @@ Persönliches Dashboard für Tado-Heizkörper (und später die Panasonic-Klimaan
 sobald sie über Tados "Smart AC Control" eingebunden ist). Zeigt alle Zonen mit
 Ist-/Solltemperatur, Luftfeuchte, Heiz-/Kühlleistung, offenen Fenstern und
 Außentemperatur – inklusive Verlauf (alle 5 Minuten, 24h Historie) pro Zone.
-Das Dashboard hat oben eine Statusleiste (Klima an, Räume heizen, Ø
-Luftfeuchte/Innentemperatur, Hinweise), darunter den Bereich „Klima“ (eine
+Das Dashboard ist als helles Kachel-Layout (Bento-Stil) aufgebaut: oben eine
+Begrüßung mit Kurzstatus (Räume heizen, Klima an, Hinweise), eine Außen-Kachel
+mit Wetter und Stunden-Vorschau sowie Kacheln für Ø Innentemperatur und Ø
+Luftfeuchte, darunter den Bereich „Klima“ (eine
 Zeile mit Schalter je Klimaanlage, „Alle aus/an“) und den Bereich „Heizung“
 mit kompakten Raum-Kacheln. Ein Klick auf eine Kachel oder Klima-Zeile öffnet
 ein Fenster: bei Räumen der Tages-Chart für Temperatur und Luftfeuchte plus
