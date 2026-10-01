@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⚡ Stromverbrauch</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f2f1ed;
+    --card:#ffffff;
+    --card-border:#e6e3dc;
+    --text:#1b1b1f;
+    --text-dim:#76767f;
+    --track:#eeece6;
+    --orange:#ff7a3d;
+    --blue:#2c8fd6;
+    --green:#3ea86a;
+    --red:#e04f38;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);background:var(--bg);min-height:100vh;}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 60px;}
+  .hero{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+  .hero h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.3px;color:var(--text);white-space:nowrap;}
+  .icon-btn{white-space:nowrap;}
+  @media (max-width:480px){.hero h1{font-size:16px;}.hero .spacer{display:none;}}
+  .icon-btn{
+    background:var(--card);border:none;color:var(--text-dim);text-decoration:none;
+    padding:9px 16px;border-radius:999px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
+  }
+  .icon-btn:hover{color:var(--text);}
+  a:focus-visible,button:focus-visible,input:focus-visible,.col:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
+
+  .banner{
+    display:flex;gap:10px;align-items:flex-start;border-radius:18px;padding:12px 16px;margin-bottom:14px;
+    font-size:13px;line-height:1.45;background:#fff3e6;color:#8a4a12;border:1px solid #f6d9b8;
+  }
+  .banner.live{background:#e8f6ee;color:#25663f;border-color:#c5e6d3;}
+  .banner b{font-weight:700;}
+
+  .bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
+  .t{background:var(--card);border-radius:26px;padding:20px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);min-width:0;}
+  .t.w4{grid-column:span 4;}
+  .t.dark{background:#1b1b1f;color:#fff;}
+  .t.org{background:var(--orange);color:#fff;}
+  .t.blu{background:#dff0ff;}
+  .lab{font-size:12px;opacity:.65;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+  .big-num{font-size:40px;font-weight:700;letter-spacing:-.03em;margin:6px 0 2px;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .big-num small{font-size:16px;font-weight:600;letter-spacing:0;opacity:.75;margin-left:3px;}
+  .t-sub{font-size:13px;opacity:.75;}
+  @media (max-width:720px){
+    .bento{grid-template-columns:repeat(2,1fr);}
+    .t.w4{grid-column:span 2;}
+    .big-num{font-size:34px;}
+  }
+
+  .card-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;margin-bottom:12px;}
+  .card-head h2{margin:0;font-size:15px;font-weight:700;}
+  .readout{font-size:13px;color:var(--text-dim);font-variant-numeric:tabular-nums;min-height:1.4em;}
+  .readout b{color:var(--text);font-weight:600;}
+
+  .chart{position:relative;display:flex;align-items:flex-end;gap:3px;height:190px;border-bottom:1px solid var(--card-border);}
+  .chart .col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;cursor:default;border-radius:4px 4px 0 0;}
+  .chart .bar{width:100%;background:var(--blue);border-radius:4px 4px 0 0;min-height:2px;transition:filter .12s;}
+  .chart .bar.high{background:var(--orange);}
+  .chart .bar.partial{background:repeating-linear-gradient(45deg,#b9d9f1,#b9d9f1 4px,#dff0ff 4px,#dff0ff 8px);}
+  .chart .col:hover .bar,.chart .col:focus-visible .bar{filter:brightness(1.12);}
+  .avg-line{position:absolute;left:0;right:0;border-top:1.5px dashed #1b1b1f66;pointer-events:none;}
+  .avg-line span{position:absolute;right:0;top:-18px;font-size:11px;color:var(--text-dim);background:var(--card);padding:0 4px;}
+  .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:6px;font-variant-numeric:tabular-nums;}
+  .key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--text-dim);margin-top:12px;}
+  .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
+
+  .profile .chart{height:150px;}
+  .profile .bar{background:#8fc4ec;}
+  .profile .bar.night{background:var(--green);}
+  .controls{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;font-size:13px;color:var(--text-dim);margin-top:14px;}
+  .controls input{font:inherit;width:84px;padding:7px 10px;border:1px solid var(--card-border);border-radius:10px;background:#fff;color:var(--text);}
+  .foot{font-size:12px;color:var(--text-dim);margin-top:18px;line-height:1.5;}
+  .loading{text-align:center;color:var(--text-dim);padding:60px 0;font-size:14px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <a class="icon-btn" href="./">← Dashboard</a>
+    <h1>⚡ Stromverbrauch</h1>
+    <span class="spacer" style="width:104px" aria-hidden="true"></span>
+  </div>
+
+  <div id="banner" class="banner" role="status">Lade Daten …</div>
+
+  <div id="content" hidden>
+    <div class="bento">
+      <div class="t blu"><div class="lab">Zuletzt</div><div class="big-num" id="tLast">–</div><div class="t-sub" id="tLastSub"></div></div>
+      <div class="t"><div class="lab">Ø pro Tag</div><div class="big-num" id="tAvg">–</div><div class="t-sub" id="tAvgSub"></div></div>
+      <div class="t org"><div class="lab">Kosten</div><div class="big-num" id="tCost">–</div><div class="t-sub" id="tCostSub"></div></div>
+      <div class="t dark"><div class="lab">Grundlast nachts</div><div class="big-num" id="tBase">–</div><div class="t-sub" id="tBaseSub"></div></div>
+    </div>
+
+    <div class="t w4" style="margin-bottom:14px;">
+      <div class="card-head"><h2>Verbrauch pro Tag</h2><div class="readout" id="dayReadout">Balken antippen oder darüberfahren</div></div>
+      <div class="chart" id="dayChart" aria-label="Balkendiagramm: Stromverbrauch pro Tag in kWh"></div>
+      <div class="axis"><span id="axFrom"></span><span id="axTo"></span></div>
+      <div class="key">
+        <span><i style="background:var(--blue)"></i>Normaler Tag</span>
+        <span><i style="background:var(--orange)"></i>Über dem Durchschnitt + 20 %</span>
+        <span><i style="background:#b9d9f1"></i>Unvollständiger Tag</span>
+      </div>
+    </div>
+
+    <div class="t w4 profile">
+      <div class="card-head"><h2>Typischer Tagesverlauf</h2><div class="readout" id="hourReadout">Ø Verbrauch je Uhrzeit</div></div>
+      <div class="chart" id="hourChart" aria-label="Balkendiagramm: durchschnittlicher Stromverbrauch je Stunde"></div>
+      <div class="axis"><span>0 Uhr</span><span>6</span><span>12</span><span>18</span><span>24</span></div>
+      <div class="key">
+        <span><i style="background:var(--green)"></i>Nacht (2 bis 5 Uhr): zeigt, was dauerhaft läuft</span>
+      </div>
+      <div class="controls">
+        <label for="price">Strompreis gesamt (ct/kWh, inkl. Netz und Steuern)</label>
+        <input id="price" type="number" min="1" max="100" step="0.1" value="35.2" inputmode="decimal">
+      </div>
+      <div class="foot" id="foot"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// URL des Cloudflare Workers (siehe index.html).
+const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
+const KEY_STORAGE = 'dashboardKey';       // gleicher Schlüssel wie im Dashboard
+const REFERENCE_KWH_PER_DAY = 16.75;       // Jahresabrechnung 2024/25 (6.115 kWh in 365 Tagen)
+const DEFAULT_PRICE_CT = 35.2;             // Gesamtkosten 2.152,63 EUR / 6.115 kWh (inkl. Netz, Steuern, USt.)
+const DAYS = 30;
+const TZ = 'Europe/Vienna';
+
+const $ = (id) => document.getElementById(id);
+const hourParts = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', hourCycle: 'h23' });
+const hourOf = (d) => Number(hourParts.formatToParts(d).find((p) => p.type === 'hour').value);
+const fmt = (n, d = 1) => n.toLocaleString('de-AT', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+/* ---------- Beispieldaten im Format des Workers (/api/strom/quarter-hours) ---------- */
+function makeSampleResponse() {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  // Beginn und Ende auf Mitternacht in Wien legen, damit ganze Tage entstehen.
+  const viennaMidnight = (ms) => {
+    const day = new Date(ms); day.setUTCHours(0, 0, 0, 0);
+    return new Date(day.getTime() - hourOf(day) * 3600000);
+  };
+  const end = viennaMidnight(Date.now());
+  const start = viennaMidnight(end.getTime() - DAYS * 86400000 + 12 * 3600000);
+  const values = [];
+  const dayFactor = {};                                         // jeder Tag ist etwas anders aktiv
+  for (let t = start.getTime(); t < end.getTime(); t += 900000) {
+    const d = new Date(t);
+    const hour = hourOf(d);
+    const weekend = ['Sat', 'Sun'].includes(new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: TZ }).format(d));
+    const dayKey = dayFmt.format(d);
+    if (!(dayKey in dayFactor)) dayFactor[dayKey] = 0.6 + rnd() * 0.9 + (weekend ? 0.25 : 0);
+    let kwhPerHour = 0.22 + rnd() * 0.05;                       // Grundlast (Kühlschrank, Router, Standby)
+    const active = dayFactor[dayKey];
+    if (hour >= 6 && hour < 9) kwhPerHour += (0.35 + rnd() * 0.3) * active;
+    if (hour >= 11 && hour < 14) kwhPerHour += ((weekend ? 0.6 : 0.2) + rnd() * 0.25) * active;
+    if (hour >= 18 && hour < 22) kwhPerHour += (0.9 + rnd() * 0.7) * active;
+    if (rnd() < 0.02 * active) kwhPerHour += 2.4;               // Waschmaschine, Backrohr, Geschirrspüler
+    const kwh = kwhPerHour / 4;
+    values.push({
+      from: d.toISOString(), to: new Date(t + 900000).toISOString(),
+      value: Math.round(kwh * 1000), kwh, quality: 'VAL',
+    });
+  }
+  return { wertetyp: 'QUARTER_HOUR', series: [{ obis: '1-1:1.29.0', unit: 'WH', values }] };
+}
+
+/* ---------- Auswertung ---------- */
+const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
+const hhmmFmt = new Intl.DateTimeFormat('de-AT', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+
+function analyse(response) {
+  const series = (response.series || []).find((s) => String(s.obis || '').includes('1.29.0'))
+    || (response.series || [])[0];
+  if (!series || !series.values.length) throw new Error('Keine Messwerte in der Antwort.');
+  if (series.values.some((v) => typeof v.kwh !== 'number')) {
+    throw new Error(`Einheit "${series.unit}" unbekannt - kWh-Werte fehlen. Bitte Einheit im Worker ergänzen.`);
+  }
+  const days = new Map();
+  const hours = Array.from({ length: 24 }, () => ({ sum: 0, n: 0 }));
+  const night = [];
+  let peak = { kw: 0, at: null };
+  for (const v of series.values) {
+    const d = new Date(v.from);
+    const key = dayFmt.format(d);
+    const day = days.get(key) || { date: key, kwh: 0, n: 0 };
+    day.kwh += v.kwh; day.n += 1;
+    days.set(key, day);
+    const h = hourOf(d);
+    hours[h].sum += v.kwh; hours[h].n += 1;
+    if (h >= 2 && h < 5) night.push(v.kwh * 4);
+    if (v.kwh * 4 > peak.kw) peak = { kw: v.kwh * 4, at: d };
+  }
+  const list = [...days.values()].sort((a, b) => (a.date < b.date ? -1 : 1))
+    .map((d) => ({ ...d, partial: d.n < 90 }));            // 96 Viertelstunden, Sommer-/Winterzeit 92/100
+  night.sort((a, b) => a - b);
+  const baseKw = night.length ? night[Math.floor(night.length / 2)] : null;
+  return {
+    days: list,
+    hourly: hours.map((h) => (h.n ? (h.sum / h.n) * 4 : 0)),   // Ø Leistung in kW je Stunde
+    baseW: baseKw === null ? null : baseKw * 1000,
+    peak,
+  };
+}
+
+/* ---------- Darstellung ---------- */
+let model = null;
+const shortDate = (iso) => { const [, m, d] = iso.split('-'); return `${Number(d)}.${Number(m)}.`; };
+
+function render() {
+  const price = parseFloat($('price').value) || DEFAULT_PRICE_CT;
+  const full = model.days.filter((d) => !d.partial);
+  const total = full.reduce((s, d) => s + d.kwh, 0);
+  const avg = full.length ? total / full.length : 0;
+  const last = full[full.length - 1] || model.days[model.days.length - 1];
+
+  $('tLast').innerHTML = `${fmt(last.kwh)}<small>kWh</small>`;
+  $('tLastSub').textContent = `am ${shortDate(last.date)}, ${last.kwh > avg ? Math.round((last.kwh / avg - 1) * 100) + ' % über' : Math.round((1 - last.kwh / avg) * 100) + ' % unter'} dem Schnitt`;
+  $('tAvg').innerHTML = `${fmt(avg)}<small>kWh</small>`;
+  $('tAvgSub').textContent = `Jahresschnitt laut Rechnung: ${fmt(REFERENCE_KWH_PER_DAY, 2)} kWh`;
+  const cost = total * price / 100;
+  $('tCost').innerHTML = `${fmt(cost, 2)}<small>€</small>`;
+  $('tCostSub').textContent = `${full.length} Tage, hochgerechnet ca. ${Math.round(avg * 365 * price / 100).toLocaleString('de-AT')} € pro Jahr`;
+  $('tBase').innerHTML = model.baseW === null ? '–' : `${Math.round(model.baseW)}<small>W</small>`;
+  $('tBaseSub').textContent = model.baseW === null ? '' : `≈ ${fmt(model.baseW * 24 / 1000)} kWh pro Tag, die rund um die Uhr laufen`;
+
+  // Tagesbalken
+  const max = Math.max(...model.days.map((d) => d.kwh), avg) * 1.1;
+  const chart = $('dayChart');
+  chart.innerHTML = '';
+  model.days.forEach((d) => {
+    const col = document.createElement('div');
+    col.className = 'col'; col.tabIndex = 0;
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (d.partial ? ' partial' : d.kwh > avg * 1.2 ? ' high' : '');
+    bar.style.height = (d.kwh / max * 100) + '%';
+    col.appendChild(bar);
+    const show = () => {
+      $('dayReadout').innerHTML = `<b>${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(d.kwh * price / 100, 2)} €${d.partial ? ' (unvollständig)' : ''}`;
+    };
+    ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
+    chart.appendChild(col);
+  });
+  const line = document.createElement('div');
+  line.className = 'avg-line';
+  line.style.bottom = (avg / max * 100) + '%';
+  line.innerHTML = `<span>Ø ${fmt(avg)} kWh</span>`;
+  chart.appendChild(line);
+  $('axFrom').textContent = shortDate(model.days[0].date);
+  $('axTo').textContent = shortDate(model.days[model.days.length - 1].date);
+
+  // Tagesverlauf
+  const hmax = Math.max(...model.hourly) * 1.1 || 1;
+  const hc = $('hourChart');
+  hc.innerHTML = '';
+  model.hourly.forEach((kw, h) => {
+    const col = document.createElement('div');
+    col.className = 'col'; col.tabIndex = 0;
+    const bar = document.createElement('div');
+    bar.className = 'bar' + (h >= 2 && h < 5 ? ' night' : '');
+    bar.style.height = (kw / hmax * 100) + '%';
+    col.appendChild(bar);
+    const show = () => { $('hourReadout').innerHTML = `<b>${String(h).padStart(2, '0')}:00 bis ${String((h + 1) % 24).padStart(2, '0')}:00</b> Ø ${Math.round(kw * 1000)} W`; };
+    ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
+    hc.appendChild(col);
+  });
+  const p = model.peak;
+  $('foot').textContent = p.at
+    ? `Höchste Leistung im Zeitraum: ${fmt(p.kw, 2)} kW am ${shortDate(dayFmt.format(p.at))} um ${hhmmFmt.format(p.at)} Uhr. `
+      + 'Der voreingestellte Preis ist aus deiner Jahresabrechnung berechnet (Gesamtkosten geteilt durch Verbrauch).'
+    : '';
+}
+
+/* ---------- Laden: echte Daten, sonst Beispieldaten ---------- */
+function banner(html, live) {
+  const el = $('banner');
+  el.className = 'banner' + (live ? ' live' : '');
+  el.innerHTML = html;
+}
+
+function getKey() { try { return localStorage.getItem(KEY_STORAGE) || ''; } catch (e) { return ''; } }
+
+async function workerGet(path) {
+  const key = getKey();
+  if (!key) throw Object.assign(new Error('Kein Zugriffsschlüssel gespeichert.'), { reason: 'nokey' });
+  const res = await fetch(API_ENDPOINT + path, { headers: { 'X-Dashboard-Key': key } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error(data.error || `HTTP ${res.status}`), { reason: data.code || 'http', data });
+  return data;
+}
+
+async function load() {
+  const demo = new URLSearchParams(location.search).has('demo');
+  let note = '';
+  if (demo) {
+    note = 'Demo-Modus (<code>?demo</code> in der Adresse).';
+  } else {
+    try {
+      const status = await workerGet('/api/strom/status');
+      if (!status.configured) {
+        note = `Der Smart-Meter-Zugang ist noch nicht eingerichtet (es fehlen: ${status.missing.join(', ')}).`;
+      } else {
+        const to = new Date(); to.setUTCHours(0, 0, 0, 0);
+        const from = new Date(to.getTime() - DAYS * 86400000);
+        const iso = (d) => d.toISOString().slice(0, 10);
+        const response = await workerGet(`/api/strom/quarter-hours?von=${iso(from)}&bis=${iso(to)}`);
+        model = analyse(response);
+        banner(`<span>✅</span><span><b>Echte Messwerte</b> aus dem Smart Meter${response.cached ? ' (aus dem Zwischenspeicher)' : ''}.</span>`, true);
+      }
+    } catch (err) {
+      note = err.reason === 'nokey' ? 'Bitte zuerst im <a href="./">Dashboard</a> anmelden, dann gilt der Zugangsschlüssel auch hier.'
+        : err.reason === 'KEY_REQUIRED' ? 'Der gespeicherte Zugriffsschlüssel stimmt nicht. Bitte im <a href="./">Dashboard</a> neu anmelden.'
+        : `Abruf nicht möglich: ${err.message}`;
+    }
+  }
+  if (!model) {
+    model = analyse(makeSampleResponse());
+    banner(`<span>🧪</span><span><b>Beispieldaten.</b> ${note} Sobald der Zugang steht, zeigt diese Seite automatisch deine echten Werte.</span>`, false);
+  }
+  $('content').hidden = false;
+  render();
+}
+
+$('price').addEventListener('input', () => { if (model) render(); });
+load();
+</script>
+</body>
+</html>
