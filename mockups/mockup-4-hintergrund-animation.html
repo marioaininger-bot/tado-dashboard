@@ -1,0 +1,105 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 4 – Hintergrund-Animationen</title>
+<style>
+*{box-sizing:border-box}
+:root{--fg:#1b1b1f;--fg2:#4a4f5a}
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:var(--fg);min-height:100vh;background:#4aa3f0;transition:color .8s}
+body.light{--fg:#fff;--fg2:#ffffffcc}
+#bg{position:fixed;inset:0;width:100%;height:100%;z-index:0}
+.wrap{position:relative;z-index:1;max-width:1040px;margin:0 auto;padding:20px 20px 60px}
+.scenebar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:22px;padding:10px 12px;border-radius:18px;background:#0000004d;backdrop-filter:blur(10px);color:#fff;font-size:12.5px}
+.scenebar b{margin-right:4px;opacity:.85}
+.scenebar button{border:0;border-radius:999px;padding:7px 13px;font:inherit;font-size:12.5px;cursor:pointer;background:#ffffff26;color:#fff}
+.scenebar button.on{background:#fff;color:#1b1b1f;font-weight:600}
+.top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px}
+.top h1{margin:0;font-size:28px;letter-spacing:-.02em;text-shadow:0 1px 12px #0000001a}.top p{margin:3px 0 0;color:var(--fg2);font-size:14px}
+.stand{background:#fff;border-radius:999px;padding:7px 13px;font-size:12.5px;color:#76767f;box-shadow:0 2px 8px #0000001a}
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px}
+.t{color:#1b1b1f;background:#ffffffeb;border-radius:26px;padding:20px;box-shadow:0 8px 28px #00000014;backdrop-filter:blur(6px)}
+.t.w2{grid-column:span 2}.t.w4{grid-column:span 4}.t.dark{background:#1b1b1fe6;color:#fff}.t.org{background:#ff7a3d;color:#fff}.t.blu{background:#dff0ffee}
+.lab{font-size:12px;opacity:.65;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.num{font-size:44px;font-weight:700;letter-spacing:-.03em;margin:6px 0 2px}.num sup{font-size:20px}
+.sub{font-size:13px;opacity:.75}
+.room .num{font-size:38px;margin:10px 0 2px}.room .bar{height:6px;border-radius:9px;background:#0000000f;margin-top:12px}.room .bar i{display:block;height:100%;border-radius:9px;background:#ff7a3d}
+.room .next{margin-top:14px;padding-top:10px;border-top:1px dashed #0000001f;font-size:12.5px;color:#76767f}.room .next b{color:#1b1b1f}
+.room.heat{box-shadow:0 0 0 1.5px #ff7a3d66,0 8px 28px #00000014}
+.sec{margin:24px 2px 12px;font-size:15px;font-weight:700}
+.acrow{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:14px}.sw{margin-left:auto;width:42px;height:24px;border-radius:99px;background:#0000002a;position:relative}.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}.sw.on{background:#1b1b1f}.sw.on::after{left:21px}
+@media(max-width:760px){.bento{grid-template-columns:1fr 1fr}.t.w4{grid-column:span 2}}
+@media(prefers-reduced-motion:reduce){#bg{display:none}}
+</style></head><body>
+<canvas id="bg"></canvas>
+<div class="wrap">
+ <div class="scenebar" id="bar"><b>Mockup-Szene:</b></div>
+ <div class="top"><div><h1 id="greet">Guten Morgen 👋</h1><p>3 von 6 Räume heizen · ❄️ Klima 1 von 2 an</p></div><div class="stand">● ↻ Stand 14:32</div></div>
+ <div class="bento">
+  <div class="t dark w2"><div class="lab">Außen</div><div class="num" id="outT">12<sup>°C</sup></div><div class="sub" id="outS">Bewölkt</div></div>
+  <div class="t org"><div class="lab">Ø Innen</div><div class="num">20,5<sup>°</sup></div><div class="sub">Soll Ø 20,8°</div></div>
+  <div class="t blu"><div class="lab">Ø Luftfeuchte</div><div class="num">52<sup>%</sup></div><div class="sub">Im grünen Bereich</div></div>
+  <div class="t w4"><div class="lab">❄️ Klima</div><div class="acrow"><span style="font-size:20px">❄️</span><b>Klima Wohnzimmer</b><span class="sub">Kühlen · 24°</span><div class="sw on"></div></div></div>
+ </div>
+ <div class="sec" style="color:var(--fg)">🔥 Heizung</div>
+ <div class="bento" id="g"></div>
+</div>
+<script>
+const R=[['🛋️','Wohnzimmer',21.4,22,48,70,'22:00 → 18°',1],['🛏️','Schlafzimmer',18.9,19,55,0,'21:30 → 17°'],['🍳','Küche',20.2,21,51,40,'22:00 → 17°',1],['🛁','Bad',23.1,23,67,0,'06:00 → 23°']];
+g.innerHTML=R.map(r=>`<div class="t room ${r[7]?'heat':''}"><div class="lab">${r[0]} ${r[1]}</div><div class="num">${r[2].toFixed(1)}<sup>°</sup></div><div class="sub">Soll ${r[3]}° · 💧 ${r[4]}%</div><div class="bar"><i style="width:${r[5]}%"></i></div><div class="next">🕒 <b>${r[6].split(' ')[0]}</b> ${r[6].slice(5)}</div></div>`).join('');
+
+// ---------- Szenen ----------
+const S={
+ sunrise:{n:'🌅 Sonnenaufgang',top:'#5b6cb5',bot:'#ffb88a',sun:[.72,.8],sunA:1,glow:1,moon:0,stars:.15,cloud:.45,cc:[255,214,196],rain:0,snow:0,light:1,greet:'Guten Morgen',w:'Klar, 6°'},
+ day:{n:'☀️ Sonnig',top:'#3d9bf0',bot:'#c6e6ff',sun:[.8,.17],sunA:1,glow:.7,moon:0,stars:0,cloud:.4,cc:[255,255,255],rain:0,snow:0,light:0,greet:'Guten Tag',w:'Sonnig, 18°'},
+ cloudy:{n:'☁️ Bewölkt',top:'#8d99a9',bot:'#d9dfe6',sun:[.8,.17],sunA:0,glow:0,moon:0,stars:0,cloud:1,cc:[242,244,247],rain:0,snow:0,light:0,greet:'Guten Tag',w:'Bewölkt, 12°'},
+ rain:{n:'🌧️ Regen',top:'#3f4a5c',bot:'#8794a6',sun:[.8,.17],sunA:0,glow:0,moon:0,stars:0,cloud:1,cc:[120,130,146],rain:1,snow:0,light:1,greet:'Guten Tag',w:'Regen, 9°'},
+ snow:{n:'❄️ Schnee',top:'#98acc4',bot:'#eef3f8',sun:[.8,.17],sunA:0,glow:0,moon:0,stars:0,cloud:.9,cc:[236,240,246],rain:0,snow:1,light:0,greet:'Guten Tag',w:'Schneefall, -2°'},
+ wintersun:{n:'🌤️ Winter-Sonne',top:'#69b0e6',bot:'#eaf5ff',sun:[.78,.2],sunA:1,glow:.6,moon:0,stars:0,cloud:.2,cc:[255,255,255],rain:0,snow:.45,light:0,greet:'Guten Tag',w:'Sonnig, 1°'},
+ sunset:{n:'🌇 Sonnenuntergang',top:'#3a3877',bot:'#ff8f6b',sun:[.24,.82],sunA:1,glow:1,moon:0,stars:.25,cloud:.5,cc:[255,170,140],rain:0,snow:0,light:1,greet:'Guten Abend',w:'Klar, 14°'},
+ night:{n:'🌙 Nacht',top:'#080c2a',bot:'#1d2a5c',sun:[.78,1.1],sunA:0,glow:0,moon:1,stars:1,cloud:.18,cc:[60,70,110],rain:0,snow:0,light:1,greet:'Gute Nacht',w:'Klar, 7°'},
+};
+const bar=document.getElementById('bar');let cur='day',auto=false;
+Object.keys(S).forEach(k=>{const b=document.createElement('button');b.textContent=S[k].n;b.dataset.k=k;b.onclick=()=>{auto=false;set(k)};bar.appendChild(b)});
+const ab=document.createElement('button');ab.textContent='🕒 Auto (Uhrzeit + Wetter)';ab.onclick=()=>{auto=true;set(autoScene())};bar.appendChild(ab);
+function autoScene(){const h=new Date().getHours();if(h<5||h>=21)return'night';if(h<8)return'sunrise';if(h>=18)return'sunset';return'day'}
+const hexRGB=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+let st=null;
+function set(k){cur=k;const s=S[k];
+ [...bar.querySelectorAll('button')].forEach(b=>b.classList.toggle('on',b.dataset.k===k));
+ document.body.classList.toggle('light',!!s.light);
+ greet.textContent=s.greet+' 👋';outS.textContent=s.w.split(',')[0];outT.innerHTML=s.w.split(', ')[1].replace('°','<sup>°C</sup>');
+ const T={top:hexRGB(s.top),bot:hexRGB(s.bot),sx:s.sun[0],sy:s.sun[1],sunA:s.sunA,glow:s.glow,moon:s.moon,stars:s.stars,cloud:s.cloud,cc:s.cc,rain:s.rain,snow:s.snow};
+ if(!st)st=JSON.parse(JSON.stringify(T));window.T=T}
+// ---------- Canvas ----------
+const cv=document.getElementById('bg'),c=cv.getContext('2d');let W,H,dpr=Math.min(devicePixelRatio||1,2);
+function rs(){W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;c.setTransform(dpr,0,0,dpr,0,0)}addEventListener('resize',rs);rs();
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const drops=Array.from({length:160},()=>({x:rnd(0,1),y:rnd(0,1),l:rnd(10,22),v:rnd(.9,1.5)}));
+const flakes=Array.from({length:120},()=>({x:rnd(0,1),y:rnd(0,1),r:rnd(1.2,3.4),v:rnd(.25,.7),p:rnd(0,6.28)}));
+const stars=Array.from({length:110},()=>({x:rnd(0,1),y:rnd(0,.7),r:rnd(.4,1.5),p:rnd(0,6.28)}));
+const clouds=Array.from({length:9},(_,i)=>({x:rnd(0,1),y:.06+i*.05+rnd(0,.04),s:rnd(.7,1.6),v:rnd(.004,.012)}));
+const L=(a,b,t)=>a+(b-a)*t, LA=(a,b,t)=>a.map((v,i)=>L(v,b[i],t));
+function frame(ts){requestAnimationFrame(frame);if(!window.T)return;const t=ts/1000,k=.045;
+ for(const p of ['sx','sy','sunA','glow','moon','stars','cloud','rain','snow'])st[p]=L(st[p],T[p],k);
+ st.top=LA(st.top,T.top,k);st.bot=LA(st.bot,T.bot,k);st.cc=LA(st.cc,T.cc,k);
+ const gr=c.createLinearGradient(0,0,0,H);gr.addColorStop(0,`rgb(${st.top.map(Math.round)})`);gr.addColorStop(1,`rgb(${st.bot.map(Math.round)})`);c.fillStyle=gr;c.fillRect(0,0,W,H);
+ // Sterne
+ if(st.stars>.01)stars.forEach(s=>{c.globalAlpha=st.stars*(.4+.6*Math.abs(Math.sin(t*1.2+s.p)));c.fillStyle='#fff';c.beginPath();c.arc(s.x*W,s.y*H,s.r,0,6.3);c.fill()});
+ // Mond
+ if(st.moon>.01){const x=st.sx*W,y=.2*H;c.globalAlpha=st.moon;const g=c.createRadialGradient(x,y,10,x,y,140);g.addColorStop(0,'#fff6d8aa');g.addColorStop(1,'#fff6d800');c.fillStyle=g;c.fillRect(x-140,y-140,280,280);c.fillStyle='#fff6d8';c.beginPath();c.arc(x,y,34,0,6.3);c.fill();c.fillStyle=`rgb(${st.top.map(Math.round)})`;c.beginPath();c.arc(x+14,y-6,30,0,6.3);c.fill()}
+ // Sonne (auf-/untergehend + Strahlen)
+ if(st.sunA>.01){const x=st.sx*W,y=st.sy*H,r=Math.min(W,H)*.075;c.globalAlpha=st.sunA;
+  const g=c.createRadialGradient(x,y,r*.4,x,y,r*5.5);g.addColorStop(0,`rgba(255,226,150,${.75*st.glow+.1})`);g.addColorStop(1,'rgba(255,226,150,0)');c.fillStyle=g;c.fillRect(0,0,W,H);
+  c.save();c.translate(x,y);c.rotate(t*.05);c.strokeStyle='rgba(255,240,190,.28)';c.lineWidth=3;for(let i=0;i<14;i++){c.rotate(6.283/14);c.beginPath();c.moveTo(r*1.4,0);c.lineTo(r*(2.3+.5*Math.sin(t+i)),0);c.stroke()}c.restore();
+  c.fillStyle='#ffe9a8';c.beginPath();c.arc(x,y,r,0,6.3);c.fill()}
+ // Wolken
+ c.fillStyle=`rgb(${st.cc.map(Math.round)})`;
+ clouds.forEach(o=>{o.x+=o.v*.016;if(o.x>1.3)o.x=-.3;c.globalAlpha=Math.min(1,st.cloud*(1.15-o.y))*.85;const x=o.x*W,y=o.y*H,s=o.s*Math.min(W,1100)/26;
+  [[0,0,1.2],[1.1,.1,1],[-1.1,.15,.9],[.5,-.5,.9],[-.4,-.4,.8]].forEach(p=>{c.beginPath();c.arc(x+p[0]*s,y+p[1]*s,p[2]*s,0,6.3);c.fill()})});
+ // Regen
+ if(st.rain>.02){c.globalAlpha=st.rain*.55;c.strokeStyle='#cfe3ff';c.lineWidth=1.4;c.beginPath();
+  drops.forEach(d=>{d.y+=d.v*.024;d.x-=d.v*.003;if(d.y>1){d.y=-.05;d.x=rnd(0,1.1)}if(d.x<0)d.x+=1.1;c.moveTo(d.x*W,d.y*H);c.lineTo(d.x*W-3,d.y*H+d.l)});c.stroke()}
+ // Schnee
+ if(st.snow>.02){c.fillStyle='#fff';flakes.forEach((f,i)=>{if(i/flakes.length>st.snow)return;f.y+=f.v*.0035;f.p+=.01;if(f.y>1.02){f.y=-.02;f.x=rnd(0,1)}c.globalAlpha=.9;c.beginPath();c.arc((f.x+Math.sin(f.p)*.012)*W,f.y*H,f.r,0,6.3);c.fill()})}
+ c.globalAlpha=1}
+set('day');requestAnimationFrame(frame);
+const q=new URLSearchParams(location.search).get('s');if(q&&S[q])set(q);
+</script></body></html>
