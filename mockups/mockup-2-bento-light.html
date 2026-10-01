@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 2 – Bento Light</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:#f2f1ed;color:#1b1b1f}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}.top h1{font-size:26px;margin:0;letter-spacing:-.02em}.top p{margin:2px 0 0;color:#76767f;font-size:14px}
+.bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.t{background:#fff;border-radius:26px;padding:20px;box-shadow:0 1px 0 #0000000a,0 8px 24px #0000000a;position:relative;overflow:hidden}
+.t.w2{grid-column:span 2}.t.dark{background:#1b1b1f;color:#fff}.t.org{background:#ff7a3d;color:#fff}.t.blu{background:#dff0ff}
+.lab{font-size:12px;opacity:.65;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.num{font-size:44px;font-weight:700;letter-spacing:-.03em;margin:6px 0 2px}.num sup{font-size:20px;font-weight:600}
+.room .num{font-size:38px}.room .ic{font-size:22px;float:right}
+.bar{height:6px;border-radius:9px;background:#0000000f;margin-top:12px}.bar i{display:block;height:100%;border-radius:9px;background:#ff7a3d}
+.sub{font-size:13px;opacity:.7}
+.pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:#0000000d;margin-top:10px}
+.pill.r{background:#ffe3df;color:#c0341f}.pill.y{background:#fff1cc;color:#8a6200}
+#ac{display:grid;grid-template-columns:1fr 1fr;gap:0 40px}.acrow{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px}.acrow .sw{margin-left:auto;width:42px;height:24px;border-radius:99px;background:#0000002a;position:relative}
+.acrow .sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}.acrow .sw.on{background:#1b1b1f}.acrow .sw.on::after{left:21px}
+h2{font-size:15px;margin:26px 0 12px}
+@media(max-width:760px){.bento{grid-template-columns:1fr 1fr}}
+</style></head><body><div class="wrap">
+<div class="top"><div><h1>Guten Tag 👋</h1><p>3 Räume heizen · 1 Hinweis</p></div><b style="font-size:20px">tado°</b></div>
+<div class="bento">
+<div class="t w2 dark"><div class="lab">Außen</div><div class="num">12<sup>°C</sup></div><div class="sub">Bewölkt, später Regen ab 18 Uhr</div><div style="margin-top:14px;opacity:.9" id="fc"></div></div>
+<div class="t org"><div class="lab">Ø Innen</div><div class="num">20,5<sup>°</sup></div><div class="sub">Soll Ø 20,8°</div></div>
+<div class="t blu"><div class="lab">Ø Luftfeuchte</div><div class="num">52<sup>%</sup></div><div class="sub">Im grünen Bereich</div></div>
+<div class="t" style="grid-column:span 4"><div class="lab">❄️ Klima</div><div id="ac"></div></div>
+</div>
+<h2>Räume</h2><div class="bento" id="g"></div></div>
+<script>// Dummy-Daten nur für Mockups
+const ROOMS=[
+ {n:'Wohnzimmer',i:'🛋️',t:21.4,s:22,h:48,p:70,st:'heat'},
+ {n:'Schlafzimmer',i:'🛏️',t:18.9,s:19,h:55,p:0,st:'idle'},
+ {n:'Küche',i:'🍳',t:20.2,s:21,h:51,p:40,st:'heat'},
+ {n:'Bad',i:'🛁',t:23.1,s:23,h:67,p:0,st:'idle'},
+ {n:'Büro',i:'💻',t:19.4,s:21,h:44,p:90,st:'warn'},
+ {n:'Kinderzimmer',i:'🧸',t:20.0,s:20,h:49,p:0,st:'off',win:true},
+];
+const AC=[{n:'Klima Wohnzimmer',on:true,sub:'Kühlen · 24° · Auto'},{n:'Klima Schlafzimmer',on:false,sub:'Aus'}];
+function spark(w,h,seed,color){let v=[],x=seed;for(let i=0;i<24;i++){x=(x*9301+49297)%233280;v.push(.5+Math.sin(i/3+seed)*.25+(x/233280-.5)*.2)}
+ const pts=v.map((y,i)=>`${(i/23*w).toFixed(1)},${(h-y*h).toFixed(1)}`).join(' ');
+ return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`}
+</script><script>
+fc.innerHTML=spark(420,46,3,'#ffb48a');
+ac.innerHTML=AC.map(a=>`<div class="acrow"><span style="font-size:20px">❄️</span><div><b>${a.n}</b><div class="sub">${a.sub}</div></div><div class="sw ${a.on?'on':''}"></div></div>`).join('');
+g.innerHTML=ROOMS.map((r,k)=>`<div class="t room"><span class="ic">${r.i}</span><div class="lab">${r.n}</div><div class="num">${r.t.toFixed(1)}<sup>°</sup></div><div class="sub">Soll ${r.s}° · 💧${r.h}%</div>
+<div class="bar"><i style="width:${r.p}%"></i></div>${spark(160,26,k+2,'#c9c9d1')}
+${r.st==='warn'?'<span class="pill y">⚠ reagiert nicht</span>':''}${r.win?'<span class="pill r">🪟 Fenster offen</span>':''}${r.st==='heat'?'<span class="pill">🔥 heizt</span>':''}</div>`).join('');
+</script></body></html>

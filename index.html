@@ -7,16 +7,16 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg-1:#f4f6fb;
-    --bg-2:#e8ecf5;
+    --bg-1:#f2f1ed;
+    --bg-2:#f2f1ed;
     --card:#ffffff;
-    --card-border:#dde3ee;
-    --text:#1c2333;
-    --text-dim:#63708a;
-    --orange:#e8873b;
+    --card-border:#e6e3dc;
+    --text:#1b1b1f;
+    --text-dim:#76767f;
+    --orange:#ff7a3d;
     --blue:#2c8fd6;
     --green:#3ea86a;
     --red:#e04f38;
@@ -25,7 +25,7 @@
   html,body{height:100%;}
   body{
     margin:0;
-    font-family:'Nunito',sans-serif;
+    font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
     color:var(--text);
     background:linear-gradient(180deg,var(--bg-1),var(--bg-2));
     min-height:100%;
@@ -41,84 +41,97 @@
   .tado-logo .ring{color:var(--blue);font-weight:800;}
   .hero .icon-btn{justify-self:end;}
   .icon-btn{
-    background:var(--card);border:1px solid var(--card-border);color:var(--text-dim);
-    padding:9px 14px;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13.5px;
+    background:var(--card);border:none;color:var(--text-dim);
+    padding:9px 16px;border-radius:999px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
-  .icon-btn:hover{color:var(--text);border-color:var(--blue);}
+  .icon-btn:hover{color:var(--text);}
 
-  .weather-strip{
-    display:flex;align-items:center;flex-wrap:wrap;gap:10px 18px;
-    background:var(--card);border:1px solid var(--card-border);border-radius:16px;
-    padding:14px 20px;margin-bottom:22px;color:var(--text-dim);font-size:14px;
+  /* Bento-Kacheln oben */
+  .bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
+  .t{
+    background:var(--card);border-radius:26px;padding:20px;position:relative;overflow:hidden;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
   }
-  .weather-strip b{color:var(--text);font-size:16px;}
-
+  .t.w2{grid-column:span 2;}
+  .t.w4{grid-column:span 4;}
+  .t.dark{background:#1b1b1f;color:#fff;}
+  .t.org{background:var(--orange);color:#fff;}
+  .t.blu{background:#dff0ff;}
+  .lab{font-size:12px;opacity:.65;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+  .big-num{font-size:44px;font-weight:700;letter-spacing:-.03em;margin:6px 0 2px;line-height:1.1;}
+  .big-num sup{font-size:20px;font-weight:600;vertical-align:top;position:relative;top:4px;}
+  .t-sub{font-size:13px;opacity:.75;}
+  .weather-strip{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;opacity:.85;margin-top:2px;}
+  .weather-strip b{font-weight:600;}
+  .outside-spark{margin-top:10px;}
   .forecast-row{
-    display:flex;gap:10px;overflow-x:auto;margin-bottom:22px;padding-bottom:10px;
-    scrollbar-width:thin;scrollbar-color:var(--card-border) transparent;
+    display:flex;gap:8px;overflow-x:auto;margin-top:12px;padding-bottom:6px;
+    scrollbar-width:thin;scrollbar-color:#ffffff40 transparent;
   }
-  .forecast-row::-webkit-scrollbar{height:6px;}
+  .forecast-row::-webkit-scrollbar{height:5px;}
   .forecast-row::-webkit-scrollbar-track{background:transparent;}
-  .forecast-row::-webkit-scrollbar-thumb{background:var(--card-border);border-radius:999px;}
-  .forecast-row::-webkit-scrollbar-thumb:hover{background:var(--text-dim);}
+  .forecast-row::-webkit-scrollbar-thumb{background:#ffffff40;border-radius:999px;}
   .forecast-chip{
-    flex:0 0 auto;min-width:56px;text-align:center;
-    background:var(--card);border:1px solid var(--card-border);border-radius:12px;
-    padding:8px 10px;color:var(--text-dim);font-size:12px;
+    flex:0 0 auto;min-width:54px;text-align:center;
+    background:#ffffff14;border-radius:14px;padding:7px 9px;color:#ffffffa6;font-size:12px;
   }
-  .forecast-chip .fc-temp{color:var(--text);font-weight:700;font-size:14px;margin:2px 0;}
-  .forecast-chip .fc-rain{color:var(--blue);}
+  .forecast-chip .fc-temp{color:#fff;font-weight:700;font-size:14px;margin:2px 0;}
+  .forecast-chip .fc-rain{color:#8fd0ff;}
   .day-divider{
     flex:0 0 auto;display:flex;align-items:center;justify-content:center;
-    color:var(--text-dim);font-size:11px;font-weight:700;
+    color:#ffffff99;font-size:11px;font-weight:700;
     text-transform:uppercase;letter-spacing:.04em;
-    border-left:1px dashed var(--card-border);padding:0 12px;
-    align-self:stretch;
+    border-left:1px dashed #ffffff40;padding:0 10px;align-self:stretch;
   }
+  .greeting{margin:2px 2px 18px;}
+  .greeting h1{margin:0;font-size:26px;letter-spacing:-.02em;}
+  .greeting p{margin:3px 0 0;color:var(--text-dim);font-size:14px;}
+  .greeting p .warn{color:#c0341f;font-weight:600;}
 
-  .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:16px;}
+  .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
   .zone-card{
-    background:linear-gradient(180deg,var(--card),#f7f9fc);
-    border:1px solid var(--card-border);border-radius:18px;padding:18px;
-    box-shadow:0 1px 3px rgba(28,35,51,.06);
-    position:relative;overflow:hidden;
+    background:var(--card);border-radius:26px;padding:20px;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    position:relative;overflow:hidden;display:flex;flex-direction:column;
   }
-  .zone-card.open-window{border-color:var(--red);}
-  .zone-card.clickable{cursor:pointer;}
-  .zone-card.clickable:hover{border-color:var(--blue);}
-  .zone-card .type-badge{
-    position:absolute;top:14px;right:16px;font-size:22px;opacity:.85;
-  }
-  .zone-card h3{margin:0 0 14px;font-size:16px;padding-right:32px;}
-  .temp-row{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
-  .temp-row .current{font-size:34px;font-weight:800;}
+  .zone-card.heating{box-shadow:0 0 0 1.5px #ff7a3d55,0 8px 24px #ff7a3d14;}
+  .zone-card.open-window{box-shadow:0 0 0 1.5px #e0452e88,0 8px 24px rgba(0,0,0,.05);}
+  .zone-card.clickable{cursor:pointer;transition:transform .15s;}
+  .zone-card.clickable:hover{transform:translateY(-2px);}
+  .zc-top{display:flex;justify-content:space-between;align-items:center;}
+  .zc-name{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
+  .temp-row{display:flex;align-items:baseline;gap:8px;margin:10px 0 2px;}
+  .temp-row .current{font-size:38px;font-weight:700;letter-spacing:-.03em;line-height:1.1;}
+  .temp-row .current .trend{font-size:16px;margin-left:4px;}
   .temp-row .target{color:var(--text-dim);font-size:14px;}
-  .meta-row{display:flex;align-items:center;flex-wrap:wrap;gap:6px 14px;color:var(--text-dim);font-size:13px;margin-bottom:12px;}
-  .power-bar-track{background:#e7ebf3;border-radius:999px;height:8px;overflow:hidden;}
-  .power-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--orange),#ffd08a);transition:width .4s ease;}
-  .zone-card.type-AC .power-bar-fill{background:linear-gradient(90deg,var(--blue),#bfe6ff);}
-  .power-label{color:var(--text-dim);font-size:12px;margin-top:6px;}
-  .off-chip{
-    display:inline-block;background:#eef1f8;border:1px solid var(--card-border);
-    color:var(--text-dim);font-size:12px;padding:3px 10px;border-radius:999px;margin-top:4px;
+  .zc-sub{font-size:13px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:2px 10px;}
+  .power-bar-track{background:rgba(0,0,0,.06);border-radius:999px;height:6px;overflow:hidden;margin-top:12px;}
+  .power-bar-fill{height:100%;border-radius:999px;background:var(--orange);transition:width .4s ease;}
+  .zone-card.type-AC .power-bar-fill{background:var(--blue);}
+  .power-label{color:var(--text-dim);font-size:12px;margin-top:6px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+  .zc-spark{margin:8px 0 2px;}
+  .zc-spark svg{display:block;}
+  .off-chip,.pill{
+    display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.05);
+    color:var(--text);font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;margin-top:10px;
   }
-  .warn-chip{
+  .pill.red,.warn-chip{background:#ffe3df;color:#c0341f;}
+  .pill.yellow,.stagnant-chip{background:#fff1cc;color:#8a6200;}
+  .warn-chip,.stagnant-chip{
     display:inline-flex;align-items:center;gap:6px;
-    background:#fdecea;border:1px solid var(--red);color:#b8291a;
-    font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
+    font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;margin-top:10px;align-self:flex-start;
   }
-  .stagnant-chip{
-    display:inline-flex;align-items:center;gap:6px;
-    background:#fdf1e4;border:1px solid var(--orange);color:#8a5417;
-    font-size:12px;padding:4px 10px;border-radius:999px;margin-top:10px;
+  .runtime-label{color:var(--text-dim);font-size:12px;}
+  .zc-next{
+    margin-top:auto;padding-top:10px;border-top:1px dashed rgba(0,0,0,.12);
+    font-size:12.5px;color:var(--text-dim);display:flex;align-items:center;gap:6px;
   }
-  .runtime-label{color:var(--text-dim);font-size:12px;margin-top:4px;}
-  .next-change-inline{white-space:nowrap;}
+  .zc-next b{color:var(--text);font-weight:700;}
   .battery-icon{font-size:14px;line-height:1;}
 
   .zone-controls{
-    display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;
-    border-top:1px dashed var(--card-border);
+    display:flex;align-items:center;gap:8px;margin-top:12px;
   }
   .temp-btn{
     width:28px;height:28px;border-radius:50%;border:1px solid var(--card-border);
@@ -166,61 +179,56 @@
   .trend.down{color:var(--blue);}
   .trend.flat{color:var(--text-dim);}
 
-  /* Statusleiste + Bereiche */
-  .strip{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;}
-  .chip{background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:6px 14px;font-size:13px;color:var(--text-dim);}
-  .chip b{color:var(--text);}
-  .chip.blue{border-color:#bcd9f0;background:#f2f9ff;}
-  .chip.orange{border-color:#f0d3b3;background:#fff7ee;}
-  .chip.red{border-color:var(--red);background:#fdecea;color:#b8291a;}
-  .chip.red b{color:#b8291a;}
-  h2.sec{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:18px 2px 10px;font-size:15px;}
+  /* Bereiche */
+  .tiles{display:contents;}
+  h2.sec{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 10px;margin:26px 2px 12px;font-size:15px;}
+  #klimaSection h2.sec{margin:0 0 6px;font-size:12px;opacity:.65;font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
   h2.sec .sum{font-weight:600;color:var(--text-dim);font-size:13px;}
   h2.sec .grow{flex:1;}
   .link{background:none;border:none;color:var(--blue);text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;padding:0 0 0 6px;}
   .link:disabled{opacity:.5;cursor:not-allowed;}
 
   /* Klima-Zeilen mit Schalter */
-  .acrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;}
+  .acrow{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:0 40px;}
   .ac-row{
-    background:var(--card);border:1px solid var(--card-border);border-radius:18px;
-    padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;
-    box-shadow:0 1px 3px rgba(28,35,51,.06);
+    padding:10px 0;display:flex;align-items:center;gap:12px;cursor:pointer;
   }
-  .ac-row:hover{border-color:var(--blue);}
-  .ac-row .ic{font-size:24px;width:34px;text-align:center;}
+  .ac-row:hover .nm{color:var(--blue);}
+  .ac-row .ic{font-size:22px;width:30px;text-align:center;}
   .ac-row .mid{flex:1;min-width:0;}
-  .ac-row .nm{font-weight:800;font-size:14.5px;}
+  .ac-row .nm{font-weight:700;font-size:14.5px;}
   .ac-row .sub{color:var(--text-dim);font-size:12.5px;margin-top:2px;}
-  .ac-row.off{background:#f7f9fc;}
   .ac-row.off .nm{color:var(--text-dim);}
-  .ac-row.offline{background:#f7f9fc;opacity:.8;}
+  .ac-row.offline{opacity:.7;}
   .ac-row.offline .nm{color:var(--text-dim);}
-  .sw{width:46px;height:26px;border-radius:999px;background:#c6cedd;position:relative;flex:none;border:none;cursor:pointer;transition:background .2s;padding:0;}
+  .sw{width:46px;height:26px;border-radius:999px;background:#0000002a;position:relative;flex:none;border:none;cursor:pointer;transition:background .2s;padding:0;}
   .sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .2s;}
-  .sw.on{background:var(--blue);}
+  .sw.on{background:#1b1b1f;}
   .sw.on::after{left:23px;}
   .sw:disabled{opacity:.5;cursor:not-allowed;}
 
   /* Login-Screen */
   #loginScreen,#keyScreen{
     display:flex;flex-direction:column;align-items:center;text-align:center;
-    background:var(--card);border:1px solid var(--card-border);border-radius:20px;
-    padding:40px 24px;margin-top:40px;gap:16px;
+    background:var(--card);border-radius:28px;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    padding:44px 24px;margin:40px auto 0;gap:16px;max-width:460px;
   }
-  #loginScreen h2,#keyScreen h2{margin:0;font-size:22px;}
-  #loginScreen p,#keyScreen p{color:var(--text-dim);margin:0;max-width:420px;line-height:1.5;}
+  #loginScreen h2,#keyScreen h2{margin:0;font-size:24px;letter-spacing:-.02em;}
+  #loginScreen p,#keyScreen p{color:var(--text-dim);margin:0;max-width:380px;line-height:1.5;font-size:14px;}
   #keyScreen input{
-    font:inherit;font-size:16px;padding:12px 14px;width:min(320px,100%);
-    border:1px solid var(--card-border);border-radius:12px;background:#fff;color:var(--text);
+    font:inherit;font-size:16px;padding:13px 16px;width:min(320px,100%);
+    border:1px solid var(--card-border);border-radius:16px;background:var(--bg-1);color:var(--text);
+    outline:none;transition:border-color .15s,box-shadow .15s;
   }
+  #keyScreen input:focus{border-color:var(--orange);box-shadow:0 0 0 3px #ff7a3d33;background:#fff;}
   .pw-wrap{position:relative;width:min(320px,100%);}
   .pw-wrap input{width:100%;box-sizing:border-box;padding-right:46px;}
   .pw-wrap input::-ms-reveal{display:none;}
   .pw-toggle{
     position:absolute;right:4px;top:50%;transform:translateY(-50%);
     width:40px;height:40px;display:flex;align-items:center;justify-content:center;
-    background:none;border:0;border-radius:10px;padding:0;cursor:pointer;color:var(--text-dim);
+    background:none;border:0;border-radius:12px;padding:0;cursor:pointer;color:var(--text-dim);
   }
   .pw-toggle:hover{color:var(--text);}
   .pw-toggle svg{width:22px;height:22px;}
@@ -228,15 +236,16 @@
   .pw-toggle[aria-pressed="true"] .eye{display:none;}
   .pw-toggle[aria-pressed="true"] .eye-off{display:block;}
   .code-box{
-    font-family:monospace;font-size:32px;letter-spacing:6px;
-    background:#eef1f8;border:1px solid var(--card-border);border-radius:14px;
-    padding:14px 24px;margin:6px 0;color:var(--orange);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;letter-spacing:6px;
+    background:#1b1b1f;border-radius:20px;
+    padding:16px 26px;margin:6px 0;color:var(--orange);font-weight:700;
   }
   .btn-primary{
-    background:linear-gradient(90deg,var(--orange),#ffd08a);color:#241a03;
-    border:none;padding:13px 24px;border-radius:14px;font-weight:700;font-size:15px;
-    cursor:pointer;font-family:inherit;
+    background:#1b1b1f;color:#fff;
+    border:none;padding:13px 26px;border-radius:999px;font-weight:600;font-size:15px;
+    cursor:pointer;font-family:inherit;transition:transform .15s,background .15s;
   }
+  .btn-primary:hover:not(:disabled){background:#33333a;transform:translateY(-1px);}
   .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
   .btn-link{
     background:none;border:none;color:var(--blue);text-decoration:underline;
@@ -252,45 +261,62 @@
   }
   @keyframes spin{to{transform:rotate(360deg);}}
 
+  @media (max-width:820px){
+    .bento{grid-template-columns:1fr 1fr;}
+    .t.w4{grid-column:span 2;}
+  }
   @media (max-width:480px){
     .wrap{padding:24px 16px 50px;}
     .code-box{font-size:24px;letter-spacing:4px;padding:12px 16px;}
     #loginScreen,#keyScreen{padding:32px 18px;}
-    .zone-grid{grid-template-columns:1fr;}
+    .zone-grid{grid-template-columns:1fr 1fr;gap:10px;}
+    .zone-card{padding:16px;border-radius:22px;}
+    .temp-row .current{font-size:32px;}
+    .acrow{grid-template-columns:1fr;}
+    .zc-name{font-size:11px;letter-spacing:.04em;}
   }
-
-  /* Tablets im Querformat (iPad & ähnlich): mehr Breite nutzen, damit
-     mehr Kacheln pro Zeile passen und man nicht scrollen muss. */
   @media (min-width:820px){
     .wrap{max-width:1180px;}
-    .zone-grid{grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
-    .zone-card{padding:15px;}
-    .zone-card h3{margin:0 0 10px;font-size:15px;}
-    .temp-row .current{font-size:28px;}
-    .meta-row{margin-bottom:9px;}
   }
 
   .modal-overlay{
-    display:none;position:fixed;inset:0;background:rgba(20,24,36,.45);
+    display:none;position:fixed;inset:0;background:rgba(27,27,31,.5);backdrop-filter:blur(3px);
     align-items:center;justify-content:center;padding:20px;z-index:50;
   }
   .modal-card{
-    background:var(--card);border-radius:18px;padding:20px;
-    max-width:420px;width:100%;max-height:85vh;overflow-y:auto;
-    box-shadow:0 12px 30px rgba(0,0,0,.2);
+    background:var(--bg-1);border-radius:28px;padding:20px;
+    max-width:460px;width:100%;max-height:88vh;overflow-y:auto;
+    box-shadow:0 20px 50px rgba(0,0,0,.25);
   }
-  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
-  .modal-head h3{margin:0;font-size:17px;}
+  .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .modal-head h3{margin:0;font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
   .modal-close{
-    background:none;border:none;color:var(--text-dim);font-size:20px;
-    cursor:pointer;line-height:1;padding:4px;font-family:inherit;
+    background:var(--card);border:none;color:var(--text-dim);font-size:16px;
+    width:32px;height:32px;border-radius:50%;
+    cursor:pointer;line-height:1;padding:0;font-family:inherit;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
   .modal-close:hover{color:var(--text);}
+  .m-tile{background:var(--card);border-radius:22px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.04);}
+  .m-tile:last-child{margin-bottom:0;}
+  .m-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px;margin-bottom:12px;}
+  .m-stat{border-radius:20px;padding:12px 14px;background:var(--card);box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.04);}
+  .m-stat.org{background:var(--orange);color:#fff;}
+  .m-stat.blu{background:#dff0ff;}
+  .m-stat .lab{font-size:10.5px;}
+  .m-stat .v{font-size:26px;font-weight:700;letter-spacing:-.03em;line-height:1.15;margin-top:3px;}
+  .m-stat .v .trend{font-size:13px;margin-left:3px;}
+  .m-stat.org .v .trend{color:#fff;}
+  .m-stat .s{font-size:11.5px;opacity:.75;margin-top:1px;}
+  .m-tile .zone-controls{margin-top:0;}
+  .m-tile .ac-options{margin-top:12px;padding-top:12px;border-top:1px dashed rgba(0,0,0,.12);}
+  .m-tile .zc-next{margin-top:0;padding-top:0;border-top:none;}
   .chart-label{
-    font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;
-    color:var(--text-dim);font-weight:700;margin:16px 0 4px;
+    font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--text-dim);font-weight:600;margin:0 0 6px;
   }
-  .chart-label:first-of-type{margin-top:12px;}
+  .m-tile .history-table{margin-top:2px;}
+  .m-tile .history-row.now{background:none;}
 </style>
 </head>
 <body>
@@ -302,8 +328,6 @@
     <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
   </div>
 
-  <div id="weatherStrip" class="weather-strip" style="display:none;"></div>
-  <div id="forecastRow" class="forecast-row" style="display:none;"></div>
 
   <div id="keyScreen" style="display:none;">
     <h2>Halt! Wer klopft da? 🔒</h2>
@@ -333,12 +357,23 @@
   </div>
 
   <div id="dashboard" style="display:none;">
-    <div id="statusStrip" class="strip"></div>
+    <div id="greeting" class="greeting"></div>
 
-    <section id="klimaSection" style="display:none;">
+    <div class="bento">
+      <div id="weatherTile" class="t dark w2" style="display:none;">
+        <div class="lab">Außen</div>
+        <div id="weatherBig"></div>
+        <div id="weatherStrip" class="weather-strip"></div>
+        <div id="outsideSpark" class="outside-spark"></div>
+        <div id="forecastRow" class="forecast-row" style="display:none;"></div>
+      </div>
+      <div id="statusStrip" class="tiles"></div>
+    </div>
+
+    <section id="klimaSection" class="t w4" style="display:none;margin-bottom:14px;">
       <h2 class="sec">❄️ Klima <span class="sum" id="klimaSum"></span><span class="grow"></span>
         <button class="link" id="acAllOff">Alle aus</button><button class="link" id="acAllOn">Alle an</button></h2>
-      <div id="panasonicNotice" class="status-line" style="display:none;margin:0 0 10px;"></div>
+      <div id="panasonicNotice" class="status-line" style="display:none;margin:0 0 6px;"></div>
       <div id="acList" class="acrow"></div>
     </section>
 
@@ -543,8 +578,7 @@ logoutBtn.addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' });
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   show(dashboard, false);
-  show(weatherStrip, false);
-  show(forecastRow, false);
+  show(weatherTile, false);
   show(logoutBtn, false);
   show(loginScreen, true, 'flex');
   document.getElementById('deviceCodeBox').style.display = 'none';
@@ -663,19 +697,36 @@ panasonicNotice.addEventListener('click', (e) => {
   }
 });
 
+const weatherTile = document.getElementById('weatherTile');
+const weatherBig = document.getElementById('weatherBig');
+const outsideSpark = document.getElementById('outsideSpark');
+
+function sparkSvg(values, color, height = 26) {
+  const vals = values.filter((v) => v != null);
+  if (vals.length < 2) return '';
+  const min = Math.min(...vals), max = Math.max(...vals);
+  const span = Math.max(max - min, 0.5);
+  const w = 200;
+  const pts = vals.map((v, i) =>
+    `${((i / (vals.length - 1)) * w).toFixed(1)},${(height - 2 - ((v - min) / span) * (height - 4)).toFixed(1)}`
+  ).join(' ');
+  return `<svg viewBox="0 0 ${w} ${height}" width="100%" height="${height}" preserveAspectRatio="none" aria-hidden="true">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+
 function renderWeather(weather) {
-  if (!weather) { show(weatherStrip, false); show(forecastRow, false); return; }
+  if (!weather) { show(weatherTile, false); return; }
   const icon = WEATHER_ICONS[weather.state] || '🌡️';
+  weatherBig.innerHTML = `<div class="big-num">${weather.outsideTemp != null ? weather.outsideTemp.toFixed(1).replace(/\.0$/, '') : '–'}<sup>°C</sup> <span style="font-size:28px;">${icon}</span></div>`;
   weatherStrip.innerHTML = `
-    <span style="font-size:26px;">${icon}</span>
-    <span>Außen: <b>${weather.outsideTemp != null ? weather.outsideTemp.toFixed(1) + '°C' : '–'}</b></span>
-    <span>Sonne: <b>${weather.solarIntensity != null ? Math.round(weather.solarIntensity) + '%' : '–'}</b></span>
-    ${weather.humidity != null ? `<span>Luftfeuchte: <b>${Math.round(weather.humidity)}%</b></span>` : ''}
-    ${weather.windSpeed != null ? `<span>Wind: <b>${Math.round(weather.windSpeed)} km/h</b></span>` : ''}
+    ${weather.solarIntensity != null ? `<span>Sonne <b>${Math.round(weather.solarIntensity)}%</b></span>` : ''}
+    ${weather.humidity != null ? `<span>Luftfeuchte <b>${Math.round(weather.humidity)}%</b></span>` : ''}
+    ${weather.windSpeed != null ? `<span>Wind <b>${Math.round(weather.windSpeed)} km/h</b></span>` : ''}
   `;
-  show(weatherStrip, true, 'flex');
+  show(weatherTile, true, 'block');
 
   if (weather.hourly && weather.hourly.length) {
+    outsideSpark.innerHTML = sparkSvg(weather.hourly.map((h) => h.temp), '#ffb48a', 40);
     forecastRow.innerHTML = weather.hourly.map((h) => `
       ${h.newDay ? '<div class="day-divider">Morgen</div>' : ''}
       <div class="forecast-chip">
@@ -686,6 +737,7 @@ function renderWeather(weather) {
     `).join('');
     show(forecastRow, true, 'flex');
   } else {
+    outsideSpark.innerHTML = '';
     show(forecastRow, false);
   }
 }
@@ -807,7 +859,7 @@ function runtimeHtml(history) {
   const period = stats.spanHours < 1
     ? `${Math.round(stats.spanHours * 60)} Min.`
     : `${stats.spanHours.toFixed(1)}h`;
-  return `<div class="runtime-label">🔥 ${stats.hours.toFixed(1)}h aktiv (letzte ${period})</div>`;
+  return `<span class="runtime-label">🔥 ${stats.hours.toFixed(1)}h aktiv (letzte ${period})</span>`;
 }
 
 const AC_MODE_NAMES = { AUTO: 'Auto', COOL: 'Kühlen', HEAT: 'Heizen', DRY: 'Entfeuchten', FAN: 'Lüften' };
@@ -847,24 +899,39 @@ function average(values) {
   return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
 }
 
+function greetingWord() {
+  const h = new Date().getHours();
+  return h < 11 ? 'Guten Morgen' : (h < 18 ? 'Guten Tag' : 'Guten Abend');
+}
+
 function renderStatusStrip(ac, rooms) {
-  const chips = [];
-  if (ac.length) {
-    const on = ac.filter((z) => z.power === 'ON').length;
-    chips.push(`<span class="chip blue">❄️ Klima: <b>${on} von ${ac.length} an</b></span>`);
-  }
   const heatRooms = rooms.filter((z) => z.type === 'HEATING');
-  if (heatRooms.length) {
-    const heating = heatRooms.filter((z) => z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
-    chips.push(`<span class="chip orange">🔥 Heizung: <b>${heating} von ${heatRooms.length} heizen</b></span>`);
+  const heating = heatRooms.filter((z) => z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
+  const warnings = [...ac, ...rooms].filter((z) => z.openWindow || z.deviceOffline || z.batteryLow || isStagnant(z)).length;
+
+  const parts = [];
+  if (heatRooms.length) parts.push(`${heating} von ${heatRooms.length} ${heating === 1 ? 'Raum heizt' : 'Räume heizen'}`);
+  if (ac.length) parts.push(`❄️ Klima ${ac.filter((z) => z.power === 'ON').length} von ${ac.length} an`);
+  if (warnings) parts.push(`<span class="warn">⚠️ ${warnings} ${warnings === 1 ? 'Hinweis' : 'Hinweise'}</span>`);
+  document.getElementById('greeting').innerHTML =
+    `<h1>${greetingWord()} 👋</h1><p>${parts.join(' · ') || '&nbsp;'}</p>`;
+
+  const tiles = [];
+  const temp = average(rooms.map((z) => z.currentTemp));
+  if (temp != null) {
+    const tgt = average(rooms.filter((z) => z.power !== 'OFF').map((z) => z.targetTemp));
+    tiles.push(`<div class="t org"><div class="lab">Ø Innen</div>
+      <div class="big-num">${temp.toFixed(1)}<sup>°</sup></div>
+      <div class="t-sub">${tgt != null ? 'Soll Ø ' + tgt.toFixed(1) + '°' : '&nbsp;'}</div></div>`);
   }
   const hum = average(rooms.map((z) => z.humidity));
-  if (hum != null) chips.push(`<span class="chip">💧 Ø Luftfeuchte <b>${Math.round(hum)}%</b></span>`);
-  const temp = average(rooms.map((z) => z.currentTemp));
-  if (temp != null) chips.push(`<span class="chip">🌡️ Ø Innen <b>${temp.toFixed(1)}°</b></span>`);
-  const warnings = [...ac, ...rooms].filter((z) => z.openWindow || z.deviceOffline || z.batteryLow || isStagnant(z)).length;
-  if (warnings) chips.push(`<span class="chip red">⚠️ <b>${warnings}</b> ${warnings === 1 ? 'Hinweis' : 'Hinweise'}</span>`);
-  statusStrip.innerHTML = chips.join('');
+  if (hum != null) {
+    const note = hum < 40 ? 'Eher trocken' : (hum > 60 ? 'Eher feucht' : 'Im grünen Bereich');
+    tiles.push(`<div class="t blu"><div class="lab">Ø Luftfeuchte</div>
+      <div class="big-num">${Math.round(hum)}<sup>%</sup></div>
+      <div class="t-sub">${note}</div></div>`);
+  }
+  statusStrip.innerHTML = tiles.join('');
 }
 
 function renderZones(zones) {
@@ -906,11 +973,11 @@ function nextChangeHtml(zone) {
   // Bei aktiver manueller Übersteuerung greift der Zeitplan nicht
   // automatisch wieder - die nächste geplante Änderung wäre daher
   // irreführend (siehe Kommentar zu extractScheduleChange im Worker).
-  if (zone.manualOverride) return '';
+  if (zone.manualOverride) return '<div class="zc-next">✋ Manuell übersteuert</div>';
   const next = zone.nextScheduleChange;
   if (!next || !next.start) return '';
   const value = next.power === 'OFF' ? 'Aus' : (next.temperature != null ? next.temperature.toFixed(1) + '°' : '–');
-  return `<span class="next-change-inline" title="Nächste geplante Änderung">🕒 ${formatTime(next.start)} → ${value}</span>`;
+  return `<div class="zc-next" title="Nächste geplante Änderung">🕒 <b>${formatTime(next.start)}</b> → ${value}</div>`;
 }
 
 const AC_MODE_LABELS = { COOL: '❄️ Kühlen', HEAT: '🔥 Heizen', DRY: '💧 Entfeuchten', FAN: '🌀 Lüften', AUTO: '🔄 Auto' };
@@ -985,48 +1052,56 @@ function acControlsHtml(zone) {
   `;
 }
 
+// Trend der letzten ~30 Minuten (▲ steigt, ▼ fällt, – gleich).
+function zoneTrend(zone) {
+  const h = zone.history;
+  if (!h || h.length < 2) return '';
+  const last = h[h.length - 1];
+  const lastT = new Date(last.t).getTime();
+  const ref = h.find((p) => lastT - new Date(p.t).getTime() <= 30 * 60 * 1000);
+  if (!ref || ref === last || ref.temp == null || last.temp == null) return '';
+  return trendArrow(last.temp - ref.temp);
+}
+
 function zoneCardHtml(zone) {
   const icon = zoneIcon(zone);
   const isOff = zone.power === 'OFF';
   const powerPct = zone.type === 'AC'
     ? (typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0))
     : (zone.heatingPower || 0);
+  const isHeating = !isOff && zone.type === 'HEATING' && powerPct > 0;
 
   const current = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
-  const target = zone.targetTemp != null ? 'Ziel ' + zone.targetTemp.toFixed(1) + '°' : '';
-  const humidity = zone.humidity != null ? Math.round(zone.humidity) + '% Luftfeuchte' : '';
+  const target = zone.targetTemp != null ? 'Soll ' + zone.targetTemp.toFixed(1) + '°' : '';
+  const humidity = zone.humidity != null ? '💧 ' + Math.round(zone.humidity) + '%' : '';
   const hasChart = zone.history && zone.history.length >= 2;
 
-  const metaItems = [
-    acModeHtml(zone),
-    humidity ? `<span>${humidity}</span>` : '',
-    nextChangeHtml(zone),
-    batteryIconHtml(zone),
-  ].filter(Boolean).join('');
+  const subItems = [
+    isOff ? '' : target,
+    humidity,
+    acModeHtml(zone).replace(/^<span>|<\/span>$/g, ''),
+  ].filter(Boolean).map((t) => `<span>${t}</span>`).join('');
+
+  const spark = hasChart ? sparkSvg(zone.history.map((p) => p.temp), '#c9c9d1', 26) : '';
 
   return `
-    <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}">
-      <span class="type-badge">${icon}</span>
-      <h3>${zone.name}</h3>
-      ${isOff ? `
-        <div class="temp-row"><span class="current">${current}</span></div>
-        <span class="off-chip">Ausgeschaltet</span>
-      ` : `
-        <div class="temp-row">
-          <span class="current">${current}</span>
-          <span class="target">${target}</span>
-        </div>
-      `}
-      ${metaItems ? `<div class="meta-row">${metaItems}</div>` : ''}
+    <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${isHeating ? 'heating' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}">
+      <div class="zc-top"><span class="zc-name">${icon} ${zone.name}</span>${batteryIconHtml(zone)}</div>
+      <div class="temp-row"><span class="current">${current}${isOff ? '' : zoneTrend(zone)}</span></div>
+      ${subItems ? `<div class="zc-sub">${subItems}</div>` : ''}
       ${!isOff && !zone.noPowerData ? `
         <div class="power-bar-track"><div class="power-bar-fill" style="width:${powerPct}%"></div></div>
-        <div class="power-label">${Math.round(powerPct)}% Leistung</div>
+        <div class="power-label"><span>${Math.round(powerPct)}% Leistung</span>${zone.noPowerData ? '' : runtimeHtml(zone.history)}</div>
       ` : ''}
-      ${zone.noPowerData ? '' : runtimeHtml(zone.history)}
-      ${zone.openWindow ? '<div class="warn-chip">🪟 Fenster offen erkannt</div>' : ''}
-      ${zone.deviceOffline ? '<div class="warn-chip">📡 Gerät offline</div>' : ''}
-      ${isStagnant(zone) ? '<div class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</div>' : ''}
+      ${spark ? `<div class="zc-spark">${spark}</div>` : ''}
+      <div>
+        ${isOff ? '<span class="off-chip">Ausgeschaltet</span>' : (isHeating ? '<span class="pill">🔥 heizt</span>' : '')}
+        ${zone.openWindow ? '<span class="warn-chip">🪟 Fenster offen erkannt</span>' : ''}
+        ${zone.deviceOffline ? '<span class="warn-chip">📡 Gerät offline</span>' : ''}
+        ${isStagnant(zone) ? '<span class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</span>' : ''}
+      </div>
       ${controlsHtml(zone)}
+      ${nextChangeHtml(zone) ? `<div style="margin-top:auto;padding-top:12px;">${nextChangeHtml(zone)}</div>` : ''}
     </div>
   `;
 }
@@ -1080,36 +1155,58 @@ function zoneModalHtml(zone) {
   }
   const hasHistory = zone.history && zone.history.length >= 2;
   const hasHumidity = hasHistory && zone.history.some((p) => p.humidity != null);
+  const isOff = zone.power === 'OFF';
+  const isAC = zone.type === 'AC';
+  const powerPct = isAC
+    ? (typeof zone.acPower === 'number' ? zone.acPower : (zone.acPower === 'ON' ? 100 : 0))
+    : (zone.heatingPower || 0);
   let html = '';
 
-  if (zone.type === 'AC') {
-    const cur = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
-    html += `<div class="temp-row" style="margin-top:6px;"><span class="current">${cur}</span>
-      <span class="target">${zone.power === 'OFF' ? 'Ausgeschaltet' : (AC_MODE_NAMES[zone.mode] || '')}</span></div>
-      ${acControlsHtml(zone)}`;
+  // Kennzahlen-Kacheln wie auf dem Dashboard
+  const cur = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
+  const stats = [`<div class="m-stat org"><div class="lab">Aktuell</div>
+      <div class="v">${cur}${isOff ? '' : zoneTrend(zone)}</div>
+      <div class="s">${isOff ? 'Ausgeschaltet' : (isAC ? (AC_MODE_NAMES[zone.mode] || '') : (zone.targetTemp != null ? 'Soll ' + zone.targetTemp.toFixed(1) + '°' : ''))}&nbsp;</div></div>`];
+  if (zone.humidity != null) {
+    stats.push(`<div class="m-stat blu"><div class="lab">Luftfeuchte</div>
+      <div class="v">${Math.round(zone.humidity)}<span style="font-size:15px;">%</span></div><div class="s">&nbsp;</div></div>`);
   }
+  if (!isOff && !zone.noPowerData) {
+    const rt = runtimeStats(zone.history);
+    stats.push(`<div class="m-stat"><div class="lab">Leistung</div>
+      <div class="v">${Math.round(powerPct)}<span style="font-size:15px;">%</span></div>
+      <div class="s">${rt && rt.spanHours >= 0.25 ? '🔥 ' + rt.hours.toFixed(1) + 'h aktiv' : '&nbsp;'}</div></div>`);
+  }
+  html += `<div class="m-stats">${stats.join('')}</div>`;
+
+  if (isAC) {
+    html += `<div class="m-tile">${acControlsHtml(zone)}</div>`;
+  } else if (zone.type === 'HEATING') {
+    html += `<div class="m-tile">${controlsHtml(zone)}</div>`;
+  }
+  const next = nextChangeHtml(zone);
+  if (next) html += `<div class="m-tile">${next}</div>`;
 
   if (!hasHistory) {
-    return html + '<p class="status-line">Noch zu wenige Messpunkte für einen Verlauf.</p>';
+    return html + '<div class="m-tile"><p class="status-line" style="margin:0;">Noch zu wenige Messpunkte für einen Verlauf.</p></div>';
   }
-  html += `<div class="chart-label">Temperatur (${zone.history.length} Messpunkte)</div>
-    ${dayChartSvg(zone.history, 'temp', 'var(--orange)', '°')}`;
+  html += `<div class="m-tile"><div class="chart-label">Temperatur (${zone.history.length} Messpunkte)</div>
+    ${dayChartSvg(zone.history, 'temp', 'var(--orange)', '°')}</div>`;
   if (hasHumidity) {
-    html += `<div class="chart-label">Luftfeuchte</div>${dayChartSvg(zone.history, 'humidity', 'var(--blue)', '%')}`;
+    html += `<div class="m-tile"><div class="chart-label">Luftfeuchte</div>${dayChartSvg(zone.history, 'humidity', 'var(--blue)', '%')}</div>`;
   }
   const points = selectQuarterHourPoints(zone.history, 8);
   if (points.length >= 2) {
-    html += `<div class="chart-label">Letzte 2 Stunden · alle 15 Min.</div>
+    html += `<div class="m-tile"><div class="chart-label">Letzte 2 Stunden · alle 15 Min.</div>
       <div class="history-table" ${hasHumidity ? '' : 'style="grid-template-columns:auto 1fr;"'}>
         <span class="history-col-label">Zeit</span>
         <span class="history-col-label num">Temp.</span>
         ${hasHumidity ? '<span class="history-col-label num">Feuchte</span>' : ''}
         ${historyRows(points, hasHumidity)}
-      </div>`;
+      </div></div>`;
   }
   return html;
 }
-
 function fillZoneModal(zone) {
   document.getElementById('dayChartTitle').textContent = zone.name;
   dayChartBody.innerHTML = zoneModalHtml(zone);

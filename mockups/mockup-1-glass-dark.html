@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 1 – Glass Dark</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;color:#eaf0ff;min-height:100vh;
+background:radial-gradient(900px 500px at 10% -10%,#3b2a6b55,transparent),radial-gradient(800px 500px at 100% 0,#0e6c8c55,transparent),#0b1020}
+.wrap{max-width:1000px;margin:0 auto;padding:28px 20px 60px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
+.logo{font-weight:800;letter-spacing:.5px}.logo i{color:#5ec2ff;font-style:normal}
+.glass{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(14px);border-radius:22px}
+.hero{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;margin-bottom:26px}
+.hero .big{padding:26px}.big .v{font-size:64px;font-weight:300;line-height:1}.big small{color:#93a0c4}
+.fc{display:flex;gap:14px;margin-top:18px;overflow:auto}.fc div{text-align:center;font-size:12px;color:#93a0c4}.fc b{display:block;color:#eaf0ff;font-size:15px;margin:3px 0}
+.stats{padding:22px;display:grid;grid-template-columns:1fr 1fr;gap:14px}.stats div{font-size:12px;color:#93a0c4}.stats b{display:block;font-size:24px;color:#fff;font-weight:600}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:#93a0c4;margin:0 0 12px;font-weight:600}
+.ac{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-bottom:26px}
+.acc{padding:16px 18px;display:flex;align-items:center;gap:14px}.acc .nm{font-weight:600}.acc .sub{font-size:12px;color:#93a0c4}
+.sw{margin-left:auto;width:46px;height:26px;border-radius:99px;background:#2a3358;position:relative}.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}
+.sw.on{background:linear-gradient(90deg,#3aa8ff,#6be1ff);box-shadow:0 0 16px #3aa8ff88}.sw.on::after{left:23px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}
+.card{padding:18px;position:relative;overflow:hidden}.card.heat{box-shadow:inset 0 0 60px #ff8a3d22;border-color:#ff8a3d55}
+.card.warn{border-color:#ffd34d77}.card .hd{display:flex;justify-content:space-between;font-weight:600}
+.row{display:flex;align-items:center;gap:16px;margin:12px 0}
+.ring{--p:0;width:92px;height:92px;border-radius:50%;display:grid;place-items:center;flex:none;
+background:conic-gradient(var(--c,#5ec2ff) calc(var(--p)*1%),#ffffff14 0)}
+.ring span{width:74px;height:74px;border-radius:50%;background:#10172e;display:grid;place-items:center;font-size:22px;font-weight:600}
+.meta{font-size:12.5px;color:#93a0c4;line-height:1.7}.meta b{color:#eaf0ff}
+.tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:99px;background:#ffffff14;margin-top:8px}.tag.r{background:#ff4d6d33;color:#ff9aab}.tag.y{background:#ffd34d22;color:#ffe08a}
+</style></head><body><div class="wrap">
+<div class="top"><div class="logo">tado<i>°</i></div><div style="font-size:13px;color:#93a0c4">Heute, 14:32 · alles verbunden ●</div></div>
+<div class="hero"><div class="glass big"><small>Außen · Wien</small><div class="v">12°</div><small>Bewölkt · Wind 9 km/h</small>
+<div class="fc" id="fc"></div></div>
+<div class="glass stats"><div>Räume heizen<b>3 von 6</b></div><div>Klima<b>1 von 2 an</b></div><div>Ø Innen<b>20,5°</b></div><div>Ø Luftfeuchte<b>52 %</b></div></div></div>
+<h2>Klima</h2><div class="ac" id="ac"></div>
+<h2>Heizung</h2><div class="grid" id="g"></div>
+</div><script>// Dummy-Daten nur für Mockups
+const ROOMS=[
+ {n:'Wohnzimmer',i:'🛋️',t:21.4,s:22,h:48,p:70,st:'heat'},
+ {n:'Schlafzimmer',i:'🛏️',t:18.9,s:19,h:55,p:0,st:'idle'},
+ {n:'Küche',i:'🍳',t:20.2,s:21,h:51,p:40,st:'heat'},
+ {n:'Bad',i:'🛁',t:23.1,s:23,h:67,p:0,st:'idle'},
+ {n:'Büro',i:'💻',t:19.4,s:21,h:44,p:90,st:'warn'},
+ {n:'Kinderzimmer',i:'🧸',t:20.0,s:20,h:49,p:0,st:'off',win:true},
+];
+const AC=[{n:'Klima Wohnzimmer',on:true,sub:'Kühlen · 24° · Auto'},{n:'Klima Schlafzimmer',on:false,sub:'Aus'}];
+function spark(w,h,seed,color){let v=[],x=seed;for(let i=0;i<24;i++){x=(x*9301+49297)%233280;v.push(.5+Math.sin(i/3+seed)*.25+(x/233280-.5)*.2)}
+ const pts=v.map((y,i)=>`${(i/23*w).toFixed(1)},${(h-y*h).toFixed(1)}`).join(' ');
+ return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`}
+</script><script>
+fc.innerHTML=[13,14,14,13,11,10,9,9].map((t,i)=>`<div>${14+i}:00<b>${t}°</b>🌧️${i*8}%</div>`).join('');
+ac.innerHTML=AC.map(a=>`<div class="glass acc"><div style="font-size:24px">❄️</div><div><div class="nm">${a.n}</div><div class="sub">${a.sub}</div></div><div class="sw ${a.on?'on':''}"></div></div>`).join('');
+g.innerHTML=ROOMS.map((r,k)=>`<div class="glass card ${r.st}"><div class="hd"><span>${r.i} ${r.n}</span><span style="color:#93a0c4;font-weight:400">${r.win?'🪟 offen':''}</span></div>
+<div class="row"><div class="ring" style="--p:${Math.max(r.p,4)};--c:${r.st==='warn'?'#ffd34d':'#ff8a3d'}"><span>${r.t.toFixed(1)}°</span></div>
+<div class="meta">Soll <b>${r.s}°</b><br>💧 <b>${r.h}%</b><br>🔥 Leistung <b>${r.p}%</b></div></div>
+<div style="height:34px">${spark(260,34,k+1,'#7fd0ff')}</div>
+${r.st==='warn'?'<span class="tag y">⚠ Reagiert nicht wie erwartet</span>':''}${r.win?'<span class="tag r">Fenster offen</span>':''}</div>`).join('');
+</script></body></html>
