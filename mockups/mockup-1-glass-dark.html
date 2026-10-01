@@ -32,7 +32,20 @@ background:conic-gradient(var(--c,#5ec2ff) calc(var(--p)*1%),#ffffff14 0)}
 <div class="glass stats"><div>Räume heizen<b>3 von 6</b></div><div>Klima<b>1 von 2 an</b></div><div>Ø Innen<b>20,5°</b></div><div>Ø Luftfeuchte<b>52 %</b></div></div></div>
 <h2>Klima</h2><div class="ac" id="ac"></div>
 <h2>Heizung</h2><div class="grid" id="g"></div>
-</div><script src="shared.js"></script><script>
+</div><script>// Dummy-Daten nur für Mockups
+const ROOMS=[
+ {n:'Wohnzimmer',i:'🛋️',t:21.4,s:22,h:48,p:70,st:'heat'},
+ {n:'Schlafzimmer',i:'🛏️',t:18.9,s:19,h:55,p:0,st:'idle'},
+ {n:'Küche',i:'🍳',t:20.2,s:21,h:51,p:40,st:'heat'},
+ {n:'Bad',i:'🛁',t:23.1,s:23,h:67,p:0,st:'idle'},
+ {n:'Büro',i:'💻',t:19.4,s:21,h:44,p:90,st:'warn'},
+ {n:'Kinderzimmer',i:'🧸',t:20.0,s:20,h:49,p:0,st:'off',win:true},
+];
+const AC=[{n:'Klima Wohnzimmer',on:true,sub:'Kühlen · 24° · Auto'},{n:'Klima Schlafzimmer',on:false,sub:'Aus'}];
+function spark(w,h,seed,color){let v=[],x=seed;for(let i=0;i<24;i++){x=(x*9301+49297)%233280;v.push(.5+Math.sin(i/3+seed)*.25+(x/233280-.5)*.2)}
+ const pts=v.map((y,i)=>`${(i/23*w).toFixed(1)},${(h-y*h).toFixed(1)}`).join(' ');
+ return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`}
+</script><script>
 fc.innerHTML=[13,14,14,13,11,10,9,9].map((t,i)=>`<div>${14+i}:00<b>${t}°</b>🌧️${i*8}%</div>`).join('');
 ac.innerHTML=AC.map(a=>`<div class="glass acc"><div style="font-size:24px">❄️</div><div><div class="nm">${a.n}</div><div class="sub">${a.sub}</div></div><div class="sw ${a.on?'on':''}"></div></div>`).join('');
 g.innerHTML=ROOMS.map((r,k)=>`<div class="glass card ${r.st}"><div class="hd"><span>${r.i} ${r.n}</span><span style="color:#93a0c4;font-weight:400">${r.win?'🪟 offen':''}</span></div>

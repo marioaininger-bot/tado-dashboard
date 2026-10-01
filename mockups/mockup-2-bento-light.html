@@ -14,7 +14,7 @@
 .sub{font-size:13px;opacity:.7}
 .pill{display:inline-flex;gap:6px;align-items:center;font-size:12px;font-weight:600;padding:4px 10px;border-radius:99px;background:#0000000d;margin-top:10px}
 .pill.r{background:#ffe3df;color:#c0341f}.pill.y{background:#fff1cc;color:#8a6200}
-.acrow{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px}.acrow .sw{margin-left:auto;width:42px;height:24px;border-radius:99px;background:#0000002a;position:relative}
+#ac{display:grid;grid-template-columns:1fr 1fr;gap:0 40px}.acrow{display:flex;align-items:center;gap:10px;margin-top:12px;font-size:14px}.acrow .sw{margin-left:auto;width:42px;height:24px;border-radius:99px;background:#0000002a;position:relative}
 .acrow .sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff}.acrow .sw.on{background:#1b1b1f}.acrow .sw.on::after{left:21px}
 h2{font-size:15px;margin:26px 0 12px}
 @media(max-width:760px){.bento{grid-template-columns:1fr 1fr}}
@@ -24,10 +24,23 @@ h2{font-size:15px;margin:26px 0 12px}
 <div class="t w2 dark"><div class="lab">Außen</div><div class="num">12<sup>°C</sup></div><div class="sub">Bewölkt, später Regen ab 18 Uhr</div><div style="margin-top:14px;opacity:.9" id="fc"></div></div>
 <div class="t org"><div class="lab">Ø Innen</div><div class="num">20,5<sup>°</sup></div><div class="sub">Soll Ø 20,8°</div></div>
 <div class="t blu"><div class="lab">Ø Luftfeuchte</div><div class="num">52<sup>%</sup></div><div class="sub">Im grünen Bereich</div></div>
-<div class="t w2"><div class="lab">❄️ Klima</div><div id="ac"></div></div>
+<div class="t" style="grid-column:span 4"><div class="lab">❄️ Klima</div><div id="ac"></div></div>
 </div>
 <h2>Räume</h2><div class="bento" id="g"></div></div>
-<script src="shared.js"></script><script>
+<script>// Dummy-Daten nur für Mockups
+const ROOMS=[
+ {n:'Wohnzimmer',i:'🛋️',t:21.4,s:22,h:48,p:70,st:'heat'},
+ {n:'Schlafzimmer',i:'🛏️',t:18.9,s:19,h:55,p:0,st:'idle'},
+ {n:'Küche',i:'🍳',t:20.2,s:21,h:51,p:40,st:'heat'},
+ {n:'Bad',i:'🛁',t:23.1,s:23,h:67,p:0,st:'idle'},
+ {n:'Büro',i:'💻',t:19.4,s:21,h:44,p:90,st:'warn'},
+ {n:'Kinderzimmer',i:'🧸',t:20.0,s:20,h:49,p:0,st:'off',win:true},
+];
+const AC=[{n:'Klima Wohnzimmer',on:true,sub:'Kühlen · 24° · Auto'},{n:'Klima Schlafzimmer',on:false,sub:'Aus'}];
+function spark(w,h,seed,color){let v=[],x=seed;for(let i=0;i<24;i++){x=(x*9301+49297)%233280;v.push(.5+Math.sin(i/3+seed)*.25+(x/233280-.5)*.2)}
+ const pts=v.map((y,i)=>`${(i/23*w).toFixed(1)},${(h-y*h).toFixed(1)}`).join(' ');
+ return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`}
+</script><script>
 fc.innerHTML=spark(420,46,3,'#ffb48a');
 ac.innerHTML=AC.map(a=>`<div class="acrow"><span style="font-size:20px">❄️</span><div><b>${a.n}</b><div class="sub">${a.sub}</div></div><div class="sw ${a.on?'on':''}"></div></div>`).join('');
 g.innerHTML=ROOMS.map((r,k)=>`<div class="t room"><span class="ic">${r.i}</span><div class="lab">${r.n}</div><div class="num">${r.t.toFixed(1)}<sup>°</sup></div><div class="sub">Soll ${r.s}° · 💧${r.h}%</div>
