@@ -30,7 +30,8 @@
     background:linear-gradient(180deg,var(--bg-1),var(--bg-2));
     min-height:100%;
   }
-  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 60px;}
+  #bg{position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;}
+  .wrap{position:relative;z-index:1;max-width:900px;margin:0 auto;padding:32px 20px 60px;}
 
   .hero{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;min-height:8px;margin-bottom:14px;}
   .tado-logo{
@@ -84,6 +85,16 @@
     text-transform:uppercase;letter-spacing:.04em;
     border-left:1px dashed #ffffff40;padding:0 10px;align-self:stretch;
   }
+  /* Heller Text auf dunklen Hintergrund-Szenen (Regen, Nacht, Sonnenauf-/untergang) */
+  body{transition:color .8s;}
+  body.light .tado-logo,body.light .tado-logo b,body.light .greeting h1{color:#fff;}
+  body.light .greeting h1,body.light .greeting p,body.light h2.sec:not(#klimaSection h2.sec){text-shadow:0 1px 10px rgba(0,0,0,.35);}
+  body.light .greeting p{color:#ffffffd0;}
+  body.light .greeting p .warn{color:#ffb4a8;}
+  body.light h2.sec:not(#klimaSection h2.sec){color:#fff;}
+  body.light h2.sec .sum{color:#ffffffb3;}
+  body.light .empty-state,body.light #loadingState,body.light .status-line{color:#ffffffd0;}
+  body.light #loginScreen .status-line,body.light #keyScreen .status-line,body.light .t .status-line{color:var(--text-dim);}
   .greeting-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:2px 2px 18px;}
   .greeting{min-width:0;margin:0;}
   .updated{
@@ -346,6 +357,7 @@
 </style>
 </head>
 <body>
+<canvas id="bg" aria-hidden="true"></canvas>
 <div class="wrap">
 
   <div class="hero">
@@ -618,6 +630,182 @@ logoutBtn.addEventListener('click', async () => {
 /* ---------- Dashboard ---------- */
 let refreshTimer = null;
 
+/* ---------- Animierter Hintergrund (Tageszeit + Wetter) ---------- */
+// Szenen: Farben, Sonne/Mond/Sterne, Wolken, Regen, Schnee. Die Anzeige wird
+// weich zwischen den Szenen überblendet. Eine Szene zum Ausprobieren kann per
+// ?scene=sunrise|day|cloudy|rain|snow|wintersun|sunset|night erzwungen werden.
+const SCENES = {
+  sunrise:   { top: '#5b6cb5', bot: '#ffb88a', sunA: 1, glow: 1,  moon: 0, stars: .15, cloud: .45, cc: [255, 214, 196], rain: 0, snow: 0,   light: 1 },
+  day:       { top: '#3d9bf0', bot: '#c6e6ff', sunA: 1, glow: .7, moon: 0, stars: 0,   cloud: .4,  cc: [255, 255, 255], rain: 0, snow: 0,   light: 0 },
+  cloudy:    { top: '#8d99a9', bot: '#d9dfe6', sunA: 0, glow: 0,  moon: 0, stars: 0,   cloud: 1,   cc: [242, 244, 247], rain: 0, snow: 0,   light: 0 },
+  rain:      { top: '#3f4a5c', bot: '#8794a6', sunA: 0, glow: 0,  moon: 0, stars: 0,   cloud: 1,   cc: [120, 130, 146], rain: 1, snow: 0,   light: 1 },
+  snow:      { top: '#98acc4', bot: '#eef3f8', sunA: 0, glow: 0,  moon: 0, stars: 0,   cloud: .9,  cc: [236, 240, 246], rain: 0, snow: 1,   light: 0 },
+  wintersun: { top: '#69b0e6', bot: '#eaf5ff', sunA: 1, glow: .6, moon: 0, stars: 0,   cloud: .2,  cc: [255, 255, 255], rain: 0, snow: .45, light: 0 },
+  sunset:    { top: '#3a3877', bot: '#ff8f6b', sunA: 1, glow: 1,  moon: 0, stars: .25, cloud: .5,  cc: [255, 170, 140], rain: 0, snow: 0,   light: 1 },
+  night:     { top: '#080c2a', bot: '#1d2a5c', sunA: 0, glow: 0,  moon: 1, stars: 1,   cloud: .18, cc: [60, 70, 110],   rain: 0, snow: 0,   light: 1 },
+};
+const RAIN_STATES = ['RAIN', 'DRIZZLE', 'SCATTERED_SHOWERS', 'THUNDERSTORM'];
+const CLOUDY_STATES = ['CLOUDY', 'CLOUDY_MOSTLY', 'FOGGY'];
+let lastWeather = null;
+
+// Sonnenauf-/untergang (Minuten seit Mitternacht, Ortszeit) - Näherung für
+// Österreich (48,2° N / 14,3° O), Abweichung wenige Minuten.
+function sunTimes(date, lat = 48.2, lon = 14.3) {
+  const rad = Math.PI / 180;
+  const n = Math.floor((date - new Date(date.getFullYear(), 0, 0)) / 864e5);
+  const decl = 23.44 * Math.sin(2 * Math.PI * (284 + n) / 365) * rad;
+  const B = 2 * Math.PI * (n - 81) / 364;
+  const eot = 9.87 * Math.sin(2 * B) - 7.53 * Math.cos(B) - 1.5 * Math.sin(B);
+  const cosH = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(decl)) / (Math.cos(lat * rad) * Math.cos(decl));
+  const H = Math.acos(Math.max(-1, Math.min(1, cosH))) / rad / 15;
+  const noon = 12 - lon / 15 - eot / 60;
+  const off = -date.getTimezoneOffset();
+  return { sr: (noon - H) * 60 + off, ss: (noon + H) * 60 + off };
+}
+
+function pickScene(now, weather) {
+  const forced = new URLSearchParams(location.search).get('scene');
+  if (forced && SCENES[forced]) return { name: forced, mods: {} };
+  const { sr, ss } = sunTimes(now);
+  const m = now.getHours() * 60 + now.getMinutes();
+  let base = 'day';
+  if (m < sr - 30 || m > ss + 45) base = 'night';
+  else if (m < sr + 60) base = 'sunrise';
+  else if (m >= ss - 60) base = 'sunset';
+
+  const state = weather && weather.state;
+  if (RAIN_STATES.includes(state)) return { name: 'rain', mods: {} };
+  if (state === 'SNOW') return { name: 'snow', mods: {} };
+  if (CLOUDY_STATES.includes(state)) {
+    if (base === 'day') return { name: 'cloudy', mods: {} };
+    return { name: base, mods: { cloud: .85, sunA: .3, glow: .3, stars: .3 } };
+  }
+  if (state === 'CLOUDY_PARTLY') return { name: base, mods: { cloud: .7, sunA: .8 } };
+  const month = now.getMonth();
+  const cold = (weather && weather.outsideTemp != null && weather.outsideTemp <= 2) || month === 11 || month <= 1;
+  if (base === 'day' && cold) return { name: 'wintersun', mods: {} };
+  return { name: base, mods: {} };
+}
+
+const bgCanvas = document.getElementById('bg');
+const bgCtx = bgCanvas.getContext('2d');
+const reducedMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+let bgW = 0, bgH = 0;
+const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const lerp = (a, b, t) => a + (b - a) * t;
+const lerpArr = (a, b, t) => a.map((v, i) => lerp(v, b[i], t));
+const rand = (a, b) => a + Math.random() * (b - a);
+const drops = Array.from({ length: 160 }, () => ({ x: rand(0, 1), y: rand(0, 1), l: rand(10, 22), v: rand(.9, 1.5) }));
+const flakes = Array.from({ length: 120 }, () => ({ x: rand(0, 1), y: rand(0, 1), r: rand(1.2, 3.4), v: rand(.25, .7), p: rand(0, 6.28) }));
+const stars = Array.from({ length: 110 }, () => ({ x: rand(0, 1), y: rand(0, .7), r: rand(.4, 1.5), p: rand(0, 6.28) }));
+const clouds = Array.from({ length: 9 }, (_, i) => ({ x: rand(0, 1), y: .06 + i * .05 + rand(0, .04), s: rand(.7, 1.6), v: rand(.004, .012) }));
+let bgTarget = null, bgState = null, bgSceneKey = '';
+
+function resizeBg() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  bgW = window.innerWidth; bgH = window.innerHeight;
+  bgCanvas.width = bgW * dpr; bgCanvas.height = bgH * dpr;
+  bgCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  if (reducedMotion && bgState) drawBg(0, 1);
+}
+window.addEventListener('resize', resizeBg);
+
+function updateScene() {
+  const now = new Date();
+  const { name, mods } = pickScene(now, lastWeather);
+  const sc = { ...SCENES[name], ...mods };
+  // Sonne wandert mit der Tageszeit von links (Aufgang) über den Bogen nach rechts (Untergang).
+  const { sr, ss } = sunTimes(now);
+  const m = now.getHours() * 60 + now.getMinutes();
+  const p = Math.max(0, Math.min(1, (m - sr) / (ss - sr)));
+  const T = {
+    top: hexRGB(sc.top), bot: hexRGB(sc.bot), sx: .12 + .76 * p, sy: .84 - .68 * Math.sin(Math.PI * p),
+    sunA: sc.sunA, glow: sc.glow, moon: sc.moon, stars: sc.stars, cloud: sc.cloud, cc: sc.cc, rain: sc.rain, snow: sc.snow,
+  };
+  document.body.classList.toggle('light', !!SCENES[name].light);
+  bgTarget = T;
+  if (!bgState) bgState = JSON.parse(JSON.stringify(T));
+  if (reducedMotion) { bgState = JSON.parse(JSON.stringify(T)); drawBg(0, 1); }
+  bgSceneKey = name;
+}
+
+function drawBg(t, dt) {
+  const c = bgCtx, W = bgW, H = bgH, st = bgState, T = bgTarget;
+  const k = Math.min(1, .045 * dt);
+  for (const p of ['sx', 'sy', 'sunA', 'glow', 'moon', 'stars', 'cloud', 'rain', 'snow']) st[p] = lerp(st[p], T[p], k);
+  st.top = lerpArr(st.top, T.top, k); st.bot = lerpArr(st.bot, T.bot, k); st.cc = lerpArr(st.cc, T.cc, k);
+  const gr = c.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, `rgb(${st.top.map(Math.round)})`); gr.addColorStop(1, `rgb(${st.bot.map(Math.round)})`);
+  c.fillStyle = gr; c.fillRect(0, 0, W, H);
+  if (st.stars > .01) {
+    c.fillStyle = '#fff';
+    stars.forEach((s) => { c.globalAlpha = st.stars * (.4 + .6 * Math.abs(Math.sin(t * 1.2 + s.p))); c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, 6.3); c.fill(); });
+  }
+  if (st.moon > .01) {
+    const x = .78 * W, y = .2 * H;
+    c.globalAlpha = st.moon;
+    const g = c.createRadialGradient(x, y, 10, x, y, 140);
+    g.addColorStop(0, '#fff6d8aa'); g.addColorStop(1, '#fff6d800');
+    c.fillStyle = g; c.fillRect(x - 140, y - 140, 280, 280);
+    c.fillStyle = '#fff6d8'; c.beginPath(); c.arc(x, y, 34, 0, 6.3); c.fill();
+    c.fillStyle = `rgb(${st.top.map(Math.round)})`; c.beginPath(); c.arc(x + 14, y - 6, 30, 0, 6.3); c.fill();
+  }
+  if (st.sunA > .01) {
+    const x = st.sx * W, y = st.sy * H, r = Math.min(W, H) * .075;
+    c.globalAlpha = st.sunA;
+    const g = c.createRadialGradient(x, y, r * .4, x, y, r * 5.5);
+    g.addColorStop(0, `rgba(255,226,150,${.75 * st.glow + .1})`); g.addColorStop(1, 'rgba(255,226,150,0)');
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
+    c.save(); c.translate(x, y); c.rotate(t * .05); c.strokeStyle = 'rgba(255,240,190,.28)'; c.lineWidth = 3;
+    for (let i = 0; i < 14; i++) { c.rotate(6.283 / 14); c.beginPath(); c.moveTo(r * 1.4, 0); c.lineTo(r * (2.3 + .5 * Math.sin(t + i)), 0); c.stroke(); }
+    c.restore();
+    c.fillStyle = '#ffe9a8'; c.beginPath(); c.arc(x, y, r, 0, 6.3); c.fill();
+  }
+  c.fillStyle = `rgb(${st.cc.map(Math.round)})`;
+  clouds.forEach((o) => {
+    o.x += o.v * .016 * dt; if (o.x > 1.3) o.x = -.3;
+    c.globalAlpha = Math.min(1, st.cloud * (1.15 - o.y)) * .85;
+    const x = o.x * W, y = o.y * H, s = o.s * Math.min(W, 1100) / 26;
+    [[0, 0, 1.2], [1.1, .1, 1], [-1.1, .15, .9], [.5, -.5, .9], [-.4, -.4, .8]].forEach((q) => { c.beginPath(); c.arc(x + q[0] * s, y + q[1] * s, q[2] * s, 0, 6.3); c.fill(); });
+  });
+  if (st.rain > .02) {
+    c.globalAlpha = st.rain * .55; c.strokeStyle = '#cfe3ff'; c.lineWidth = 1.4; c.beginPath();
+    drops.forEach((d) => {
+      d.y += d.v * .024 * dt; d.x -= d.v * .003 * dt;
+      if (d.y > 1) { d.y = -.05; d.x = rand(0, 1.1); }
+      if (d.x < 0) d.x += 1.1;
+      c.moveTo(d.x * W, d.y * H); c.lineTo(d.x * W - 3, d.y * H + d.l);
+    });
+    c.stroke();
+  }
+  if (st.snow > .02) {
+    c.fillStyle = '#fff'; c.globalAlpha = .9;
+    flakes.forEach((f, i) => {
+      if (i / flakes.length > st.snow) return;
+      f.y += f.v * .0035 * dt; f.p += .01 * dt;
+      if (f.y > 1.02) { f.y = -.02; f.x = rand(0, 1); }
+      c.beginPath(); c.arc((f.x + Math.sin(f.p) * .012) * W, f.y * H, f.r, 0, 6.3); c.fill();
+    });
+  }
+  c.globalAlpha = 1;
+}
+
+// ca. 30 Bilder/s, pausiert im Hintergrund-Tab; bei "Bewegung reduzieren" nur ein statisches Bild.
+let bgLast = 0;
+function bgLoop(ts) {
+  requestAnimationFrame(bgLoop);
+  if (document.hidden || !bgTarget) return;
+  const dtMs = ts - bgLast;
+  if (dtMs < 32) return;
+  bgLast = ts;
+  drawBg(ts / 1000, Math.min(dtMs, 100) / 16.67);
+}
+resizeBg();
+updateScene();
+if (!reducedMotion) requestAnimationFrame(bgLoop);
+// Uhrzeit ändert sich: Szene (Sonnenstand, Tag/Nacht) regelmäßig neu bestimmen.
+setInterval(updateScene, 60000);
+
 /* ---------- Hinweis-Leiste (statt alert) ---------- */
 const toastEl = document.getElementById('toast');
 let toastTimer = null;
@@ -801,6 +989,8 @@ function sparkSvg(values, color, height = 26) {
 }
 
 function renderWeather(weather) {
+  lastWeather = weather || null;
+  updateScene();
   if (!weather) { show(weatherTile, false); return; }
   const icon = WEATHER_ICONS[weather.state] || '🌡️';
   weatherBig.innerHTML = `<div class="big-num">${weather.outsideTemp != null ? weather.outsideTemp.toFixed(1).replace(/\.0$/, '') : '–'}<sup>°C</sup> <span style="font-size:28px;">${icon}</span></div>`;
@@ -987,6 +1177,7 @@ function average(values) {
 
 function greetingWord() {
   const h = new Date().getHours();
+  if (h < 5 || h >= 22) return 'Gute Nacht';
   return h < 11 ? 'Guten Morgen' : (h < 18 ? 'Guten Tag' : 'Guten Abend');
 }
 
