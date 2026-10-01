@@ -156,3 +156,36 @@ gibt es dort keinen Leistungsbalken und keine Betriebsstunden-Schätzung.
 Fehler stehen mit Panasonics Originalmeldung unter den Kacheln. Optional kann
 `PANASONIC_APP_VERSION` als Variable gesetzt werden, falls Panasonic eine
 neuere App-Version verlangt.
+
+## Stromverbrauch (Wiener Netze Smart Meter, in Vorbereitung)
+
+Der Worker enthält die Anbindung an die offizielle Smart-Meter-API der Wiener
+Netze (`cloudflare/smartmeter.js`), damit sich der echte Stromverbrauch der
+Wohnung später mit den Tado-Laufzeiten abgleichen lässt. Die Anbindung ist
+ausgeliefert, aber **erst nutzbar, wenn die Zugangsdaten da sind**:
+
+1. Anwendung für die `WN_SMART_METER_API` im
+   [Developer-Portal](https://api-portal.wienerstadtwerke.at/) anlegen und
+   freigeben lassen (liefert den API-Key).
+2. Den Smart-Meter-Support (`support.sm-portal@wienit.at`) bitten, die
+   Anwendung mit dem Smart-Meter-Portal-Zugang zu verbinden (1-2 Wochen). Danach
+   gibt es Client-ID und Client-Secret.
+3. Die vier Secrets setzen (siehe `cloudflare/wrangler.toml`):
+   `WN_CLIENT_ID`, `WN_CLIENT_SECRET`, `WN_API_KEY`, `WN_ZAEHLPUNKT`.
+
+Endpunkte (alle mit `X-Dashboard-Key`, nur GET):
+
+| Pfad | Inhalt |
+| --- | --- |
+| `/api/strom/status` | `configured` und die Liste fehlender Secrets |
+| `/api/strom/anlage` | Stammdaten des Zählpunkts |
+| `/api/strom/daily?von=JJJJ-MM-TT&bis=JJJJ-MM-TT` | Tageswerte (max. 366 Tage) |
+| `/api/strom/quarter-hours?von=…&bis=…` | Viertelstundenwerte (max. 31 Tage) |
+| `/api/strom/readings?von=…&bis=…` | Zählerstände (max. 366 Tage) |
+
+Ohne `von`/`bis` werden die letzten 7 Tage geliefert. Die Daten stehen beim
+Netzbetreiber erst am Folgetag bereit und müssen im Smart-Meter-Portal für
+Viertelstundenwerte freigeschaltet sein. Antworten werden eine Stunde in KV
+gecacht. Je Zählwerk (`obis`) kommt eine Liste mit `from`, `to`, `value`,
+`kwh` (aus Wh/kWh umgerechnet, sonst `null`) und `quality`. Die genaue Einheit
+und die OBIS-Codes sind nach dem ersten echten Abruf zu prüfen.
