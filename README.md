@@ -25,7 +25,10 @@ Nacht mit Sternen und Mond). Die Szene ergibt sich aus der Uhrzeit (Sonnenauf-
 und -untergang werden für Österreich näherungsweise berechnet) und dem
 Wetterzustand von Tado. Zum Ausprobieren lässt sie sich per URL erzwingen, z. B.
 `?scene=rain` (Werte: `sunrise`, `day`, `cloudy`, `rain`, `snow`, `wintersun`,
-`sunset`, `night`). Bei aktivierter Systemeinstellung „Bewegung reduzieren" gibt
+`sunset`, `night`). Der Wind (km/h, aus den Tado-Wetterdaten) verstärkt die
+Szenen: schnellere Wolken, schräger Regen, wehender Schnee, ab ca. 20 km/h
+Windlinien und ab ca. 30 km/h wirbelnde Blätter; zum Ausprobieren z. B.
+`?scene=rain&wind=45`. Bei aktivierter Systemeinstellung „Bewegung reduzieren" gibt
 es nur ein statisches Bild, im Hintergrund-Tab pausiert die Animation.
 
 Architektur wie bei [bedtimestory](https://github.com/marioaininger-bot/bedtimestory):
