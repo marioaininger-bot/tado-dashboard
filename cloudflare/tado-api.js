@@ -14,6 +14,7 @@ import {
   startPanasonicLogin, verifyPanasonicMfa,
 } from './panasonic.js';
 import { handleStrom } from './smartmeter.js';
+import { handleRuntime, recordRuntime } from './runtime-log.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
@@ -688,7 +689,15 @@ async function handleScheduled(env) {
   try {
     const { zoneList } = await fetchHomeAndZones(env, accessToken);
     const panasonic = await fetchPanasonicZones(env);
-    await recordHistory(env, zoneList.concat(panasonic.zones));
+    const zones = zoneList.concat(panasonic.zones);
+    await recordHistory(env, zones);
+    // Eigener Versuch: ein Fehler im Laufzeit-Protokoll darf den Verlauf nicht
+    // stören (und umgekehrt).
+    try {
+      await recordRuntime(env, zones);
+    } catch (err) {
+      // best effort
+    }
   } catch (err) {
     // best effort
   }
@@ -734,6 +743,9 @@ export default {
       return handlePanasonicLogin(request, env, 'verify');
     }
 
+    if (url.pathname === '/api/klima/laufzeit' && request.method === 'GET') {
+      return handleRuntime(request, env, json);
+    }
     if (url.pathname.startsWith('/api/strom/') && request.method === 'GET') {
       return handleStrom(request, env, json);
     }

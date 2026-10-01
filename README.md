@@ -189,3 +189,22 @@ Viertelstundenwerte freigeschaltet sein. Antworten werden eine Stunde in KV
 gecacht. Je Zählwerk (`obis`) kommt eine Liste mit `from`, `to`, `value`,
 `kwh` (aus Wh/kWh umgerechnet, sonst `null`) und `quality`. Die genaue Einheit
 und die OBIS-Codes sind nach dem ersten echten Abruf zu prüfen.
+
+## Laufzeit-Protokoll der Klimaanlagen
+
+Der normale Verlauf (`zone_history`) hält nur 24 Stunden und kennt bei
+Panasonic keine Leistung. Für den späteren Abgleich mit dem echten
+Stromverbrauch führt der Cron-Trigger zusätzlich ein dauerhaftes Protokoll
+(`cloudflare/runtime-log.js`, KV-Schlüssel `runtime_log`): je Anlage, Tag
+(Wiener Zeit) und Stunde, wie viele 5-Minuten-Messungen sie eingeschaltet war,
+getrennt nach Modus (Kühlen, Heizen, Entfeuchten, Lüften, Auto). Es wird nur
+geschrieben, wenn eine Anlage läuft (schont das KV-Schreiblimit), 400 Tage
+werden aufbewahrt.
+
+`GET /api/klima/laufzeit?von=JJJJ-MM-TT&bis=JJJJ-MM-TT` (mit `X-Dashboard-Key`)
+liefert je Anlage und Tag die Minuten insgesamt, je Stunde (`byHour`) und je
+Modus. Tage ohne Eintrag heißen „aus“, gelten aber erst ab `since` (Tag, an dem
+das Protokoll angelegt wurde). Fällt eine Cron-Messung aus, zählt die Zeit als
+„aus“; die Werte sind also eine Untergrenze. Tados Heizkörper-Zonen werden
+nicht protokolliert.
+
