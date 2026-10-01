@@ -939,6 +939,8 @@ function renderZones(zones) {
   // Ein gerade geöffnetes Auswahlfeld nicht durch den 60-s-Refresh schließen.
   const active = document.activeElement;
   if (active && active.tagName === 'SELECT' && (zoneGrid.contains(active) || dayChartBody.contains(active))) return;
+  // Während Temperatur-Klicks noch gesammelt oder gesendet werden, die Anzeige nicht überschreiben.
+  if (pendingTemps.size > 0 || tempRequestsInFlight > 0) return;
 
   const ac = zones.filter((z) => z.type === 'AC');
   const rooms = zones.filter((z) => z.type !== 'AC');
@@ -1281,12 +1283,59 @@ function handleControlClick(e) {
   } else if (action === 'on' || action === 'off') {
     setZoneTemp(zoneId, homeId, undefined, controlBtn, action === 'off' ? 'OFF' : 'ON');
   } else {
-    const current = parseFloat(controlBtn.dataset.temp);
-    const step = parseFloat(controlBtn.dataset.step) || 0.5;
-    const next = Math.round((action === 'inc' ? current + step : current - step) / step) * step;
-    setZoneTemp(zoneId, homeId, next, controlBtn);
+    stepZoneTemp(zoneId, homeId, action, parseFloat(controlBtn.dataset.step) || 0.5, controlBtn);
   }
   return true;
+}
+
+// +/−: Zahl sofort ändern, mehrere Klicks sammeln und erst kurz nach dem
+// letzten Klick als EIN Aufruf mit dem Endwert an den Worker schicken (der
+// Worker bekommt immer die absolute Zieltemperatur).
+const TEMP_SEND_DELAY_MS = 800;
+const pendingTemps = new Map(); // "home:zone" -> { temp, timer }
+let tempRequestsInFlight = 0;
+
+function formatTemp(temp, step) {
+  return temp.toFixed(step >= 1 ? 0 : 1) + '°';
+}
+
+function stepZoneTemp(zoneId, homeId, action, step, btn) {
+  const key = `${homeId}:${zoneId}`;
+  const entry = pendingTemps.get(key) || { temp: parseFloat(btn.dataset.temp), timer: null };
+  entry.temp = Math.round((action === 'inc' ? entry.temp + step : entry.temp - step) / step) * step;
+  pendingTemps.set(key, entry);
+
+  // Anzeige und Basiswert aller Regler dieser Zone (Kachel + Dialog) sofort aktualisieren.
+  document.querySelectorAll('.zone-controls').forEach((box) => {
+    const b = box.querySelector(`.temp-btn[data-zone-id="${zoneId}"][data-home-id="${homeId}"]`);
+    if (!b) return;
+    box.querySelectorAll('.temp-btn').forEach((x) => { x.dataset.temp = entry.temp; });
+    const display = box.querySelector('.temp-display');
+    if (display) display.textContent = formatTemp(entry.temp, step);
+  });
+
+  clearTimeout(entry.timer);
+  entry.timer = setTimeout(() => flushZoneTemp(key, zoneId, homeId), TEMP_SEND_DELAY_MS);
+}
+
+async function flushZoneTemp(key, zoneId, homeId) {
+  const entry = pendingTemps.get(key);
+  if (!entry) return;
+  pendingTemps.delete(key);
+  tempRequestsInFlight++;
+  try {
+    const res = await api('/api/zones/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zoneId, homeId, temperature: entry.temp }),
+    });
+    if (res.error) throw new Error(res.error);
+  } catch (e) {
+    alert('Konnte Temperatur nicht setzen: ' + e.message);
+  } finally {
+    tempRequestsInFlight--;
+  }
+  await loadDashboard();
 }
 
 zoneGrid.addEventListener('click', (e) => {
