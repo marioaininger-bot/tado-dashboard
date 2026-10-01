@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 3 – Command Center</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:#0f1115;color:#d7dbe4;font-size:14px}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+aside{border-right:1px solid #1e222b;padding:22px 18px;background:#12151b}
+.logo{font-weight:800;color:#fff;margin-bottom:26px}.logo i{color:#ff8a3d;font-style:normal}
+.kpi{margin-bottom:18px}.kpi small{color:#7c8494;font-size:11px;text-transform:uppercase;letter-spacing:.1em}.kpi b{display:block;font-size:26px;color:#fff;font-weight:600;margin-top:2px}
+nav a{display:block;padding:8px 10px;border-radius:8px;color:#9aa3b5;margin-bottom:2px}nav a.act{background:#1c212b;color:#fff}
+main{padding:26px 30px}
+.head{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.head h1{margin:0;font-size:20px;color:#fff}
+.alert{background:#2a1f10;border:1px solid #5a3d12;color:#ffc26b;padding:10px 14px;border-radius:10px;margin-bottom:18px;font-size:13px}
+table{width:100%;border-collapse:collapse}th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6c7586;font-weight:600;padding:8px 10px;border-bottom:1px solid #1e222b}
+td{padding:12px 10px;border-bottom:1px solid #181c24;vertical-align:middle}tr:hover td{background:#141821}
+.nm{color:#fff;font-weight:600}.mono{font-variant-numeric:tabular-nums}
+.big{font-size:18px;color:#fff;font-weight:600}
+.pbar{width:90px;height:6px;background:#1e222b;border-radius:9px;overflow:hidden}.pbar i{display:block;height:100%;background:linear-gradient(90deg,#ff8a3d,#ffc07a)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}.heat{background:#ff8a3d}.idle{background:#46c28a}.warn{background:#ffd34d}.off{background:#555c6b}
+.sec{margin:26px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:#7c8494}
+.sw{width:36px;height:20px;border-radius:99px;background:#2a2f3b;position:relative;display:inline-block}.sw::after{content:"";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff}.sw.on{background:#3a8dff}.sw.on::after{left:19px}
+@media(max-width:760px){.app{grid-template-columns:1fr}aside{display:none}}
+</style></head><body><div class="app">
+<aside><div class="logo">tado<i>°</i> · Zuhause</div>
+<div class="kpi"><small>Außen</small><b>12°</b></div><div class="kpi"><small>Räume heizen</small><b>3 / 6</b></div>
+<div class="kpi"><small>Ø Innen</small><b>20,5°</b></div><div class="kpi"><small>Ø Feuchte</small><b>52 %</b></div>
+<nav><a class="act">Übersicht</a><a>Heizung</a><a>Klima</a><a>Verlauf</a><a>Zeitpläne</a></nav></aside>
+<main><div class="head"><h1>Übersicht</h1><span style="color:#7c8494">Aktualisiert vor 20 s</span></div>
+<div class="alert">⚠ Büro: heizt seit 45 Min., Temperatur steigt nicht · 🪟 Kinderzimmer: Fenster offen</div>
+<div class="sec">Klima</div><table><tbody id="ac"></tbody></table>
+<div class="sec">Heizung</div><table><thead><tr><th>Raum</th><th>Ist</th><th>Soll</th><th>Feuchte</th><th>Leistung</th><th>24 h</th><th>Status</th></tr></thead><tbody id="g"></tbody></table>
+</main></div><script src="shared.js"></script><script>
+ac.innerHTML=AC.map(a=>`<tr><td class="nm">❄️ ${a.n}</td><td style="color:#7c8494">${a.sub}</td><td style="text-align:right"><span class="sw ${a.on?'on':''}"></span></td></tr>`).join('');
+const L={heat:'Heizt',idle:'Ruhig',warn:'Prüfen',off:'Aus'};
+g.innerHTML=ROOMS.map((r,k)=>`<tr><td class="nm">${r.i} ${r.n}</td><td class="big mono">${r.t.toFixed(1)}°</td><td class="mono">${r.s}°</td><td class="mono">${r.h}%</td>
+<td><div class="pbar"><i style="width:${r.p}%"></i></div></td><td style="width:110px">${spark(100,24,k+4,'#6aa5ff')}</td><td><span class="dot ${r.st}"></span>${L[r.st]}${r.win?' · 🪟':''}</td></tr>`).join('');
+</script></body></html>
