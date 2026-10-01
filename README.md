@@ -19,6 +19,15 @@ Zone gibt's außerdem eine grobe Betriebsstunden-Schätzung ("X,Xh aktiv") aus
 der aufgezeichneten Heiz-/Kühlleistung – keine echte kWh-/Kostenangabe, da
 Tado keine Wattzahlen oder Strompreise liefert.
 
+Hinter der Seite läuft ein dezenter animierter Hintergrund je nach Tageszeit
+und Wetter (Sonnenaufgang, Sonne, Bewölkung, Regen, Schnee, Sonnenuntergang,
+Nacht mit Sternen und Mond). Die Szene ergibt sich aus der Uhrzeit (Sonnenauf-
+und -untergang werden für Österreich näherungsweise berechnet) und dem
+Wetterzustand von Tado. Zum Ausprobieren lässt sie sich per URL erzwingen, z. B.
+`?scene=rain` (Werte: `sunrise`, `day`, `cloudy`, `rain`, `snow`, `wintersun`,
+`sunset`, `night`). Bei aktivierter Systemeinstellung „Bewegung reduzieren" gibt
+es nur ein statisches Bild, im Hintergrund-Tab pausiert die Animation.
+
 Architektur wie bei [bedtimestory](https://github.com/marioaininger-bot/bedtimestory):
 statisches Frontend (`index.html`, gehostet via GitHub Pages) + ein Cloudflare
 Worker als Proxy zur Tado-API. Der Worker übernimmt den Login (OAuth2
