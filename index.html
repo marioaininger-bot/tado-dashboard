@@ -648,6 +648,16 @@ const RAIN_STATES = ['RAIN', 'DRIZZLE', 'SCATTERED_SHOWERS', 'THUNDERSTORM'];
 const CLOUDY_STATES = ['CLOUDY', 'CLOUDY_MOSTLY', 'FOGGY'];
 let lastWeather = null;
 
+// Windstärke in km/h (Tado/Open-Meteo); zum Ausprobieren per ?wind=40 überschreibbar.
+function currentWind() {
+  const forced = new URLSearchParams(location.search).get('wind');
+  if (forced != null && forced !== '' && !isNaN(+forced)) return Math.max(0, +forced);
+  return lastWeather && lastWeather.windSpeed != null ? lastWeather.windSpeed : 0;
+}
+function windLabel(kmh) {
+  return kmh < 5 ? 'windstill' : kmh < 20 ? 'leichte Brise' : kmh < 35 ? 'windig' : kmh < 50 ? 'stürmisch' : 'Sturm';
+}
+
 // Sonnenauf-/untergang (Minuten seit Mitternacht, Ortszeit) - Näherung für
 // Österreich (48,2° N / 14,3° O), Abweichung wenige Minuten.
 function sunTimes(date, lat = 48.2, lon = 14.3) {
@@ -695,6 +705,8 @@ const hexRGB = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const lerp = (a, b, t) => a + (b - a) * t;
 const lerpArr = (a, b, t) => a.map((v, i) => lerp(v, b[i], t));
 const rand = (a, b) => a + Math.random() * (b - a);
+const streaks = Array.from({ length: 26 }, () => ({ x: rand(-.2, 1), y: rand(.05, .95), l: rand(.08, .22), v: rand(.012, .028), a: rand(.4, 1), ph: rand(0, 6) }));
+const leaves = Array.from({ length: 14 }, (_, i) => ({ x: rand(-.3, 1), y: rand(.3, .95), s: rand(5, 9), v: rand(.6, 1.2), ph: rand(0, 6), rot: rand(0, 6), col: ['#d9822b', '#b5651d', '#8fa84a', '#c9a227'][i % 4] }));
 const drops = Array.from({ length: 160 }, () => ({ x: rand(0, 1), y: rand(0, 1), l: rand(10, 22), v: rand(.9, 1.5) }));
 const flakes = Array.from({ length: 120 }, () => ({ x: rand(0, 1), y: rand(0, 1), r: rand(1.2, 3.4), v: rand(.25, .7), p: rand(0, 6.28) }));
 const stars = Array.from({ length: 110 }, () => ({ x: rand(0, 1), y: rand(0, .7), r: rand(.4, 1.5), p: rand(0, 6.28) }));
@@ -720,7 +732,7 @@ function updateScene() {
   const p = Math.max(0, Math.min(1, (m - sr) / (ss - sr)));
   const T = {
     top: hexRGB(sc.top), bot: hexRGB(sc.bot), sx: .12 + .76 * p, sy: .84 - .68 * Math.sin(Math.PI * p),
-    sunA: sc.sunA, glow: sc.glow, moon: sc.moon, stars: sc.stars, cloud: sc.cloud, cc: sc.cc, rain: sc.rain, snow: sc.snow,
+    sunA: sc.sunA, glow: sc.glow, moon: sc.moon, stars: sc.stars, cloud: sc.cloud, cc: sc.cc, rain: sc.rain, snow: sc.snow, wind: currentWind(),
   };
   document.body.classList.toggle('light', !!SCENES[name].light);
   bgTarget = T;
@@ -732,7 +744,8 @@ function updateScene() {
 function drawBg(t, dt) {
   const c = bgCtx, W = bgW, H = bgH, st = bgState, T = bgTarget;
   const k = Math.min(1, .045 * dt);
-  for (const p of ['sx', 'sy', 'sunA', 'glow', 'moon', 'stars', 'cloud', 'rain', 'snow']) st[p] = lerp(st[p], T[p], k);
+  const w = reducedMotion ? 0 : Math.max(0, st.wind || 0) / 50; // 0 = windstill, 1 = 50 km/h
+  for (const p of ['sx', 'sy', 'sunA', 'glow', 'moon', 'stars', 'cloud', 'rain', 'snow', 'wind']) st[p] = lerp(st[p], T[p], k);
   st.top = lerpArr(st.top, T.top, k); st.bot = lerpArr(st.bot, T.bot, k); st.cc = lerpArr(st.cc, T.cc, k);
   const gr = c.createLinearGradient(0, 0, 0, H);
   gr.addColorStop(0, `rgb(${st.top.map(Math.round)})`); gr.addColorStop(1, `rgb(${st.bot.map(Math.round)})`);
@@ -763,18 +776,19 @@ function drawBg(t, dt) {
   }
   c.fillStyle = `rgb(${st.cc.map(Math.round)})`;
   clouds.forEach((o) => {
-    o.x += o.v * .016 * dt; if (o.x > 1.3) o.x = -.3;
+    o.x += o.v * .016 * dt * (1 + w * 12); if (o.x > 1.3) o.x = -.3;
     c.globalAlpha = Math.min(1, st.cloud * (1.15 - o.y)) * .85;
     const x = o.x * W, y = o.y * H, s = o.s * Math.min(W, 1100) / 26;
     [[0, 0, 1.2], [1.1, .1, 1], [-1.1, .15, .9], [.5, -.5, .9], [-.4, -.4, .8]].forEach((q) => { c.beginPath(); c.arc(x + q[0] * s, y + q[1] * s, q[2] * s, 0, 6.3); c.fill(); });
   });
   if (st.rain > .02) {
     c.globalAlpha = st.rain * .55; c.strokeStyle = '#cfe3ff'; c.lineWidth = 1.4; c.beginPath();
+    const slant = 3 + w * 46; // Wind weht nach rechts: Tropfen fallen schräg
     drops.forEach((d) => {
-      d.y += d.v * .024 * dt; d.x -= d.v * .003 * dt;
-      if (d.y > 1) { d.y = -.05; d.x = rand(0, 1.1); }
-      if (d.x < 0) d.x += 1.1;
-      c.moveTo(d.x * W, d.y * H); c.lineTo(d.x * W - 3, d.y * H + d.l);
+      d.y += d.v * (.024 + w * .012) * dt; d.x += d.v * (.0008 + w * .014) * dt;
+      if (d.y > 1) { d.y = -.05; d.x = rand(-.3, 1); }
+      if (d.x > 1.1) d.x = -.1;
+      c.moveTo(d.x * W, d.y * H); c.lineTo(d.x * W + slant, d.y * H + d.l * (1 + w * .6));
     });
     c.stroke();
   }
@@ -782,9 +796,34 @@ function drawBg(t, dt) {
     c.fillStyle = '#fff'; c.globalAlpha = .9;
     flakes.forEach((f, i) => {
       if (i / flakes.length > st.snow) return;
-      f.y += f.v * .0035 * dt; f.p += .01 * dt;
-      if (f.y > 1.02) { f.y = -.02; f.x = rand(0, 1); }
-      c.beginPath(); c.arc((f.x + Math.sin(f.p) * .012) * W, f.y * H, f.r, 0, 6.3); c.fill();
+      f.y += f.v * .0035 * (1 + w * .6) * dt; f.p += .01 * (1 + w * 3) * dt; f.x += f.v * w * .006 * dt;
+      if (f.y > 1.02) { f.y = -.02; f.x = rand(-.2, 1); }
+      if (f.x > 1.05) f.x = -.05;
+      c.beginPath(); c.arc((f.x + Math.sin(f.p) * (.012 + w * .02)) * W, f.y * H, f.r, 0, 6.3); c.fill();
+    });
+  }
+  // Windlinien (ab ca. 20 km/h)
+  const lineA = Math.max(0, Math.min(1, (w - .3) / .5));
+  if (lineA > .01) {
+    const lum = (st.top[0] + st.top[1] + st.bot[0] + st.bot[1]) / 4;
+    c.strokeStyle = lum > 150 ? '#5f7fa0' : '#ffffff'; c.lineWidth = 1.6;
+    streaks.forEach((q) => {
+      q.x += q.v * (.4 + w * 1.6) * .336 * dt;
+      if (q.x > 1.1) { q.x = -q.l; q.y = rand(.05, .95); }
+      c.globalAlpha = lineA * q.a * .4;
+      const x = q.x * W, y = q.y * H, l = q.l * W;
+      c.beginPath(); c.moveTo(x, y); c.quadraticCurveTo(x + l * .5, y + Math.sin(t * 2 + q.ph) * 14, x + l, y); c.stroke();
+    });
+  }
+  // Blätter (ab ca. 30 km/h)
+  const leafA = Math.max(0, Math.min(1, (w - .45) / .4));
+  if (leafA > .01) {
+    leaves.forEach((f) => {
+      f.x += f.v * (.004 + w * .016) * dt; f.rot += .07 * (1 + w * 3) * dt;
+      if (f.x > 1.1) { f.x = -.1; f.y = rand(.3, .95); }
+      const x = f.x * W, y = f.y * H + Math.sin(t * 1.7 + f.ph) * 22 * w;
+      c.globalAlpha = leafA * .9; c.fillStyle = f.col;
+      c.save(); c.translate(x, y); c.rotate(f.rot); c.beginPath(); c.ellipse(0, 0, f.s, f.s * .45, 0, 0, 6.3); c.fill(); c.restore();
     });
   }
   c.globalAlpha = 1;
@@ -997,7 +1036,7 @@ function renderWeather(weather) {
   weatherStrip.innerHTML = `
     ${weather.solarIntensity != null ? `<span>Sonne <b>${Math.round(weather.solarIntensity)}%</b></span>` : ''}
     ${weather.humidity != null ? `<span>Luftfeuchte <b>${Math.round(weather.humidity)}%</b></span>` : ''}
-    ${weather.windSpeed != null ? `<span>Wind <b>${Math.round(weather.windSpeed)} km/h</b></span>` : ''}
+    ${weather.windSpeed != null ? `<span>Wind <b>${Math.round(weather.windSpeed)} km/h · ${windLabel(weather.windSpeed)}</b></span>` : ''}
   `;
   show(weatherTile, true, 'block');
 
