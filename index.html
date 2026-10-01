@@ -41,10 +41,11 @@
   .tado-logo .ring{color:var(--blue);font-weight:800;}
   .hero .icon-btn{justify-self:end;}
   .icon-btn{
-    background:var(--card);border:1px solid var(--card-border);color:var(--text-dim);
-    padding:9px 14px;border-radius:12px;cursor:pointer;font-family:inherit;font-size:13.5px;
+    background:var(--card);border:none;color:var(--text-dim);
+    padding:9px 16px;border-radius:999px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
-  .icon-btn:hover{color:var(--text);border-color:var(--blue);}
+  .icon-btn:hover{color:var(--text);}
 
   /* Bento-Kacheln oben */
   .bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
@@ -209,22 +210,25 @@
   /* Login-Screen */
   #loginScreen,#keyScreen{
     display:flex;flex-direction:column;align-items:center;text-align:center;
-    background:var(--card);border:1px solid var(--card-border);border-radius:20px;
-    padding:40px 24px;margin-top:40px;gap:16px;
+    background:var(--card);border-radius:28px;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);
+    padding:44px 24px;margin:40px auto 0;gap:16px;max-width:460px;
   }
-  #loginScreen h2,#keyScreen h2{margin:0;font-size:22px;}
-  #loginScreen p,#keyScreen p{color:var(--text-dim);margin:0;max-width:420px;line-height:1.5;}
+  #loginScreen h2,#keyScreen h2{margin:0;font-size:24px;letter-spacing:-.02em;}
+  #loginScreen p,#keyScreen p{color:var(--text-dim);margin:0;max-width:380px;line-height:1.5;font-size:14px;}
   #keyScreen input{
-    font:inherit;font-size:16px;padding:12px 14px;width:min(320px,100%);
-    border:1px solid var(--card-border);border-radius:12px;background:#fff;color:var(--text);
+    font:inherit;font-size:16px;padding:13px 16px;width:min(320px,100%);
+    border:1px solid var(--card-border);border-radius:16px;background:var(--bg-1);color:var(--text);
+    outline:none;transition:border-color .15s,box-shadow .15s;
   }
+  #keyScreen input:focus{border-color:var(--orange);box-shadow:0 0 0 3px #ff7a3d33;background:#fff;}
   .pw-wrap{position:relative;width:min(320px,100%);}
   .pw-wrap input{width:100%;box-sizing:border-box;padding-right:46px;}
   .pw-wrap input::-ms-reveal{display:none;}
   .pw-toggle{
     position:absolute;right:4px;top:50%;transform:translateY(-50%);
     width:40px;height:40px;display:flex;align-items:center;justify-content:center;
-    background:none;border:0;border-radius:10px;padding:0;cursor:pointer;color:var(--text-dim);
+    background:none;border:0;border-radius:12px;padding:0;cursor:pointer;color:var(--text-dim);
   }
   .pw-toggle:hover{color:var(--text);}
   .pw-toggle svg{width:22px;height:22px;}
@@ -232,15 +236,16 @@
   .pw-toggle[aria-pressed="true"] .eye{display:none;}
   .pw-toggle[aria-pressed="true"] .eye-off{display:block;}
   .code-box{
-    font-family:monospace;font-size:32px;letter-spacing:6px;
-    background:#eef1f8;border:1px solid var(--card-border);border-radius:14px;
-    padding:14px 24px;margin:6px 0;color:var(--orange);
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:32px;letter-spacing:6px;
+    background:#1b1b1f;border-radius:20px;
+    padding:16px 26px;margin:6px 0;color:var(--orange);font-weight:700;
   }
   .btn-primary{
-    background:linear-gradient(90deg,var(--orange),#ffd08a);color:#241a03;
-    border:none;padding:13px 24px;border-radius:14px;font-weight:700;font-size:15px;
-    cursor:pointer;font-family:inherit;
+    background:#1b1b1f;color:#fff;
+    border:none;padding:13px 26px;border-radius:999px;font-weight:600;font-size:15px;
+    cursor:pointer;font-family:inherit;transition:transform .15s,background .15s;
   }
+  .btn-primary:hover:not(:disabled){background:#33333a;transform:translateY(-1px);}
   .btn-primary:disabled{opacity:.5;cursor:not-allowed;}
   .btn-link{
     background:none;border:none;color:var(--blue);text-decoration:underline;
