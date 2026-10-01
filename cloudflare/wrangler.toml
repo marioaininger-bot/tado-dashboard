@@ -15,6 +15,15 @@ compatibility_date = "2024-09-01"
 # DASHBOARD_KEY (Zugriffsschutz) ist ein Secret und steht NICHT in dieser Datei:
 #   wrangler secret put DASHBOARD_KEY
 #
+# Smart Meter (Wiener Netze, offizielle API) - alles Secrets, nichts davon im Repo.
+# Erst setzen, wenn Developer-Portal-Anwendung freigegeben und vom Support mit
+# dem Smart-Meter-Portal-Zugang verbunden ist:
+#   wrangler secret put WN_CLIENT_ID
+#   wrangler secret put WN_CLIENT_SECRET
+#   wrangler secret put WN_API_KEY
+#   wrangler secret put WN_ZAEHLPUNKT    # komplette Zählpunktnummer (AT00...)
+# Prüfen: GET /api/strom/status zeigt, was noch fehlt.
+#
 # Deploy:
 #   wrangler deploy
 

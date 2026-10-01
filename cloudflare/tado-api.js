@@ -13,6 +13,7 @@ import {
   PANASONIC_HOME_ID, fetchPanasonicZones, setPanasonicDevice,
   startPanasonicLogin, verifyPanasonicMfa,
 } from './panasonic.js';
+import { handleStrom } from './smartmeter.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
@@ -731,6 +732,10 @@ export default {
     }
     if (url.pathname === '/api/panasonic/login/verify' && request.method === 'POST') {
       return handlePanasonicLogin(request, env, 'verify');
+    }
+
+    if (url.pathname.startsWith('/api/strom/') && request.method === 'GET') {
+      return handleStrom(request, env, json);
     }
 
     return json(404, { error: 'Not found' }, env);
