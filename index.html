@@ -84,7 +84,33 @@
     text-transform:uppercase;letter-spacing:.04em;
     border-left:1px dashed #ffffff40;padding:0 10px;align-self:stretch;
   }
-  .greeting{margin:2px 2px 18px;}
+  .greeting-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:2px 2px 18px;}
+  .greeting{min-width:0;margin:0;}
+  .updated{
+    flex:none;display:inline-flex;align-items:center;gap:6px;margin-top:6px;
+    background:var(--card);border:none;border-radius:999px;padding:7px 13px;
+    font:inherit;font-size:12.5px;color:var(--text-dim);cursor:pointer;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
+  }
+  .updated:hover{color:var(--text);}
+  .updated .dot{width:8px;height:8px;border-radius:50%;background:var(--green);}
+  .updated.stale{color:#c0341f;}
+  .updated.stale .dot{background:var(--red);}
+  .updated.loading .ico{display:inline-block;animation:spin .8s linear infinite;}
+  .toast{
+    position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:100;
+    max-width:min(440px,calc(100vw - 32px));background:#1b1b1f;color:#fff;
+    padding:12px 18px;border-radius:18px;font-size:14px;line-height:1.4;
+    box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;pointer-events:none;
+    transition:opacity .2s,transform .2s;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto;}
+  .toast.error{background:#c0341f;}
+  :focus-visible{outline:2px solid var(--blue);outline-offset:3px;border-radius:8px;}
+  .t.stat{display:flex;flex-direction:column;}
+  .t-extra{margin-top:auto;padding-top:16px;font-size:12.5px;line-height:1.6;opacity:.9;}
+  .t-extra div{display:flex;justify-content:space-between;gap:10px;}
+  .t-extra span:last-child{font-weight:700;white-space:nowrap;}
   .greeting h1{margin:0;font-size:26px;letter-spacing:-.02em;}
   .greeting p{margin:3px 0 0;color:var(--text-dim);font-size:14px;}
   .greeting p .warn{color:#c0341f;font-weight:600;}
@@ -357,7 +383,10 @@
   </div>
 
   <div id="dashboard" style="display:none;">
-    <div id="greeting" class="greeting"></div>
+    <div class="greeting-row">
+      <div id="greeting" class="greeting"></div>
+      <button type="button" id="updatedInfo" class="updated" aria-label="Jetzt aktualisieren"><span class="dot"></span><span class="ico">↻</span><span id="updatedText">–</span></button>
+    </div>
 
     <div class="bento">
       <div id="weatherTile" class="t dark w2" style="display:none;">
@@ -400,6 +429,7 @@
 
 </div>
 
+<div id="toast" class="toast" role="alert" aria-live="assertive"></div>
 <script>
 // URL des Cloudflare Workers (tado-api.js). Nach `wrangler deploy` hier
 // eintragen, z.B. https://tado-dashboard-api.mario-aininger.workers.dev
@@ -588,6 +618,52 @@ logoutBtn.addEventListener('click', async () => {
 /* ---------- Dashboard ---------- */
 let refreshTimer = null;
 
+/* ---------- Hinweis-Leiste (statt alert) ---------- */
+const toastEl = document.getElementById('toast');
+let toastTimer = null;
+function showToast(message, kind = 'error') {
+  toastEl.textContent = message;
+  toastEl.className = 'toast show ' + kind;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toastEl.className = 'toast'; }, 6000);
+}
+
+/* ---------- Stand der Daten + Aktualisierung ---------- */
+const updatedInfo = document.getElementById('updatedInfo');
+const updatedText = document.getElementById('updatedText');
+const STALE_AFTER_MS = 3 * 60 * 1000;
+let lastUpdate = null;
+let lastLoadFailed = false;
+let resumeOnVisible = false;
+
+function renderUpdated() {
+  if (!lastUpdate) { updatedText.textContent = '–'; return; }
+  const stale = lastLoadFailed || Date.now() - lastUpdate > STALE_AFTER_MS;
+  updatedInfo.classList.toggle('stale', stale);
+  updatedText.textContent = 'Stand ' + formatTime(lastUpdate) + (stale ? ' · veraltet' : '');
+}
+setInterval(renderUpdated, 30000);
+updatedInfo.addEventListener('click', async () => {
+  updatedInfo.classList.add('loading');
+  await loadDashboard();
+  updatedInfo.classList.remove('loading');
+});
+
+// Im Hintergrund-Tab nicht weiter laden; beim Zurückkehren sofort aktualisieren.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (refreshTimer) {
+      clearInterval(refreshTimer);
+      refreshTimer = null;
+      resumeOnVisible = true;
+    }
+  } else if (resumeOnVisible) {
+    resumeOnVisible = false;
+    loadDashboard();
+    refreshTimer = setInterval(loadDashboard, 60000);
+  }
+});
+
 function startDashboard() {
   show(loginScreen, false);
   show(logoutBtn, true, 'inline-block');
@@ -606,10 +682,20 @@ async function loadDashboard() {
     renderPanasonicNotice(data);
     renderZones(data.zones || []);
 
+    lastUpdate = Date.now();
+    lastLoadFailed = false;
+    renderUpdated();
     show(loadingState, false);
     show(dashboard, true, 'block');
   } catch (e) {
     if (e.keyRequired) return;
+    if (lastUpdate) {
+      // Es gibt schon Daten: Anzeige behalten, nur den Fehler melden.
+      lastLoadFailed = true;
+      renderUpdated();
+      showToast('Aktualisierung fehlgeschlagen: ' + e.message);
+      return;
+    }
     loadingState.innerHTML = `<p>Konnte Daten nicht laden: ${e.message}</p>`;
     show(loadingState, true, 'block');
     show(dashboard, false);
@@ -887,7 +973,7 @@ function acRowHtml(zone) {
   return `
     <div class="ac-row ${isOff ? 'off' : ''}" data-zone-key="${zone.key}">
       <div class="ic">${zoneIcon(zone)}</div>
-      <div class="mid"><div class="nm">${zone.name}</div><div class="sub">${sub}${note}</div></div>
+      <div class="mid" role="button" tabindex="0" aria-label="${zone.name} Details öffnen"><div class="nm">${zone.name}</div><div class="sub">${sub}${note}</div></div>
       <button class="sw ${isOff ? '' : 'on'}" role="switch" aria-checked="${isOff ? 'false' : 'true'}"
         aria-label="${zone.name} ${isOff ? 'einschalten' : 'ausschalten'}"
         data-action="${isOff ? 'on' : 'off'}" data-zone-id="${zone.id}" data-home-id="${zone.homeId}"></button>
@@ -917,19 +1003,37 @@ function renderStatusStrip(ac, rooms) {
     `<h1>${greetingWord()} 👋</h1><p>${parts.join(' · ') || '&nbsp;'}</p>`;
 
   const tiles = [];
+  // Raum mit kleinstem/größtem Wert (nur Räume mit Messwert).
+  const extremes = (key, fmt) => {
+    const list = rooms.filter((z) => z[key] != null);
+    if (list.length < 2) return '';
+    const lo = list.reduce((m, z) => (z[key] < m[key] ? z : m));
+    const hi = list.reduce((m, z) => (z[key] > m[key] ? z : m));
+    return { lo, hi, fmt };
+  };
+  const extraHtml = (ex, loLabel, hiLabel) => ex ? `<div class="t-extra">
+      <div><span>${hiLabel} · ${ex.hi.name}</span><span>${ex.fmt(ex.hi[ex.key])}</span></div>
+      <div><span>${loLabel} · ${ex.lo.name}</span><span>${ex.fmt(ex.lo[ex.key])}</span></div></div>` : '';
+
   const temp = average(rooms.map((z) => z.currentTemp));
   if (temp != null) {
     const tgt = average(rooms.filter((z) => z.power !== 'OFF').map((z) => z.targetTemp));
-    tiles.push(`<div class="t org"><div class="lab">Ø Innen</div>
+    const ex = extremes('currentTemp', (v) => v.toFixed(1) + '°');
+    if (ex) ex.key = 'currentTemp';
+    tiles.push(`<div class="t org stat"><div class="lab">Ø Innen</div>
       <div class="big-num">${temp.toFixed(1)}<sup>°</sup></div>
-      <div class="t-sub">${tgt != null ? 'Soll Ø ' + tgt.toFixed(1) + '°' : '&nbsp;'}</div></div>`);
+      <div class="t-sub">${tgt != null ? 'Soll Ø ' + tgt.toFixed(1) + '°' : '&nbsp;'}</div>
+      ${extraHtml(ex, 'Kältester', 'Wärmster')}</div>`);
   }
   const hum = average(rooms.map((z) => z.humidity));
   if (hum != null) {
     const note = hum < 40 ? 'Eher trocken' : (hum > 60 ? 'Eher feucht' : 'Im grünen Bereich');
-    tiles.push(`<div class="t blu"><div class="lab">Ø Luftfeuchte</div>
+    const ex = extremes('humidity', (v) => Math.round(v) + '%');
+    if (ex) ex.key = 'humidity';
+    tiles.push(`<div class="t blu stat"><div class="lab">Ø Luftfeuchte</div>
       <div class="big-num">${Math.round(hum)}<sup>%</sup></div>
-      <div class="t-sub">${note}</div></div>`);
+      <div class="t-sub">${note}</div>
+      ${extraHtml(ex, 'Trockenster', 'Feuchtester')}</div>`);
   }
   statusStrip.innerHTML = tiles.join('');
 }
@@ -1088,7 +1192,7 @@ function zoneCardHtml(zone) {
 
   return `
     <div class="zone-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${isHeating ? 'heating' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}">
-      <div class="zc-top"><span class="zc-name">${icon} ${zone.name}</span>${batteryIconHtml(zone)}</div>
+      <div class="zc-top"><span class="zc-name"${hasChart ? ` role="button" tabindex="0" aria-label="${zone.name} Details öffnen"` : ''}>${icon} ${zone.name}</span>${batteryIconHtml(zone)}</div>
       <div class="temp-row"><span class="current">${current}${isOff ? '' : zoneTrend(zone)}</span></div>
       ${subItems ? `<div class="zc-sub">${subItems}</div>` : ''}
       ${!isOff && !zone.noPowerData ? `
@@ -1245,7 +1349,7 @@ async function postZoneSet(body, el, errorLabel) {
     if (res.error) throw new Error(res.error);
     await loadDashboard();
   } catch (e) {
-    alert(errorLabel + e.message);
+    showToast(errorLabel + e.message);
     if (el) el.disabled = false;
     await loadDashboard();
   }
@@ -1266,7 +1370,7 @@ async function resumeZoneSchedule(zoneId, homeId, btn) {
     if (res.error) throw new Error(res.error);
     await loadDashboard();
   } catch (e) {
-    alert('Konnte Zeitplan nicht fortsetzen: ' + e.message);
+    showToast('Konnte Zeitplan nicht fortsetzen: ' + e.message);
     if (btn) btn.disabled = false;
   }
 }
@@ -1331,7 +1435,7 @@ async function flushZoneTemp(key, zoneId, homeId) {
     });
     if (res.error) throw new Error(res.error);
   } catch (e) {
-    alert('Konnte Temperatur nicht setzen: ' + e.message);
+    showToast('Konnte Temperatur nicht setzen: ' + e.message);
   } finally {
     tempRequestsInFlight--;
   }
@@ -1374,10 +1478,18 @@ async function setAllAc(power, btn) {
     body: JSON.stringify({ zoneId: z.id, homeId: z.homeId, power }),
   }).then((res) => { if (res.error) throw new Error(res.error); })));
   const failed = results.filter((r) => r.status === 'rejected');
-  if (failed.length) alert('Konnte nicht alle Klimaanlagen schalten: ' + failed[0].reason.message);
+  if (failed.length) showToast('Konnte nicht alle Klimaanlagen schalten: ' + failed[0].reason.message);
   btn.disabled = false;
   await loadDashboard();
 }
+// Enter/Leertaste öffnet Kacheln und Klima-Zeilen (Tastatur/Screenreader).
+[zoneGrid, acList].forEach((box) => box.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const el = e.target.closest('[role="button"][tabindex]');
+  if (!el) return;
+  e.preventDefault();
+  el.click();
+}));
 document.getElementById('acAllOff').addEventListener('click', (e) => setAllAc('OFF', e.currentTarget));
 document.getElementById('acAllOn').addEventListener('click', (e) => setAllAc('ON', e.currentTarget));
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);
