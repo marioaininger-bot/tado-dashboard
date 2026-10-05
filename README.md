@@ -208,3 +208,20 @@ das Protokoll angelegt wurde). Fällt eine Cron-Messung aus, zählt die Zeit als
 „aus“; die Werte sind also eine Untergrenze. Tados Heizkörper-Zonen werden
 nicht protokolliert.
 
+## Änderungs-Protokoll der Klimaanlagen
+
+Zusätzlich hält der Cron-Trigger fest, *wann* sich Ein/Aus, Modus,
+Solltemperatur, Lüfterstufe oder Eco-Modus einer Anlage geändert haben
+(`cloudflare/ac-changes.js`, KV-Schlüssel `ac_changes`, die letzten 500
+Änderungen). Geschrieben wird nur bei einer Änderung. Jeder Eintrag nennt
+außerdem die Herkunft: `dashboard` (Befehl über dieses Dashboard, wird kurz
+gemerkt) oder `extern` (Panasonic-App, Timer, Fernbedienung, Smart-Home-
+Routine - Panasonic liefert dazu selbst keine Angabe).
+
+`GET /api/klima/aenderungen?zone=wohnzimmer&limit=20` (mit `X-Dashboard-Key`)
+liefert die neuesten Änderungen zuerst, je Eintrag `t`, `name`, `source` und
+`changes` (z. B. `{"targetTemp": [20, 27]}`). `t` ist der Zeitpunkt der
+Erkennung; die Änderung geschah in den davor liegenden 5 Minuten. Der erste
+Lauf nach dem Deploy legt nur den Ausgangszustand an, Änderungen davor sind
+nicht rekonstruierbar.
+

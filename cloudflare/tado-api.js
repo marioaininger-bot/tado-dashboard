@@ -15,6 +15,7 @@ import {
 } from './panasonic.js';
 import { handleStrom } from './smartmeter.js';
 import { handleRuntime, recordRuntime } from './runtime-log.js';
+import { handleAcChanges, recordAcChanges, markDashboardCommand } from './ac-changes.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
@@ -520,6 +521,8 @@ async function handleSetZone(request, env) {
   try {
     if (homeId === PANASONIC_HOME_ID) {
       await setPanasonicDevice(env, zoneId, { power, temperature, mode, fanSpeed, eco, swingUD, swingLR });
+      // Merken, damit das Änderungs-Protokoll die Änderung dem Dashboard zuordnet.
+      await markDashboardCommand(env, `${PANASONIC_HOME_ID}:${zoneId}`).catch(() => {});
       return json(200, { status: 'ok' }, env);
     }
     const { homeInfos, zoneList } = await fetchHomeAndZones(env, accessToken);
@@ -698,6 +701,11 @@ async function handleScheduled(env) {
     } catch (err) {
       // best effort
     }
+    try {
+      await recordAcChanges(env, zones);
+    } catch (err) {
+      // best effort
+    }
   } catch (err) {
     // best effort
   }
@@ -745,6 +753,9 @@ export default {
 
     if (url.pathname === '/api/klima/laufzeit' && request.method === 'GET') {
       return handleRuntime(request, env, json);
+    }
+    if (url.pathname === '/api/klima/aenderungen' && request.method === 'GET') {
+      return handleAcChanges(request, env, json);
     }
     if (url.pathname.startsWith('/api/strom/') && request.method === 'GET') {
       return handleStrom(request, env, json);
