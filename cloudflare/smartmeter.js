@@ -1,7 +1,7 @@
 // Wiener Netze Smart Meter (offizielle API "WN_SMART_METER_API" der Wiener
 // Stadtwerke): liefert den echten Stromverbrauch des eigenen Zählpunkts als
 // Viertelstunden-, Tages- oder Zählerstandswerte. Endpunkte und Ablauf nach der
-// Community-Bibliothek wiener-netze-smart-meter-api (Python).
+// Community-Bibliothek wiener-netze-smart-meter-api (Python) und dem Swagger der API.
 //
 // Zugangsdaten liegen NUR als Worker-Secrets (siehe README):
 //   WN_CLIENT_ID, WN_CLIENT_SECRET, WN_API_KEY, WN_ZAEHLPUNKT
@@ -13,7 +13,10 @@
 // Daten kommen vom Netzbetreiber erst am Folgetag. Antworten werden deshalb
 // kurz in KV gecacht, um das API-Limit zu schonen.
 
-const TOKEN_URL = 'https://log.wien/auth/realms/logwien/protocol/openid-connect/token';
+// Token-Endpunkt laut Swagger der WN_SMART_METER_API (OAuth2 client_credentials,
+// Scope "profile"). Per Variable WN_TOKEN_URL überschreibbar, falls die Wiener
+// Netze den Endpunkt ändern.
+const DEFAULT_TOKEN_URL = 'https://api.wstw.at/invoke/pub.apigateway.oauth2/getAccessToken';
 const BASE_URL = 'https://api.wstw.at/gateway/WN_SMART_METER_API/1.0/';
 
 const REQUIRED_SECRETS = ['WN_CLIENT_ID', 'WN_CLIENT_SECRET', 'WN_API_KEY', 'WN_ZAEHLPUNKT'];
@@ -42,20 +45,23 @@ class SmartMeterError extends Error {
 
 async function getBearerToken(env) {
   if (tokenCache.token && Date.now() < tokenCache.expiresAt) return tokenCache.token;
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetch(env.WN_TOKEN_URL || DEFAULT_TOKEN_URL, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
     body: new URLSearchParams({
       client_id: env.WN_CLIENT_ID,
       client_secret: env.WN_CLIENT_SECRET,
       grant_type: 'client_credentials',
+      scope: 'profile',
     }),
   });
-  const data = await res.json().catch(() => ({}));
+  const raw = await res.text();
+  let data = {};
+  try { data = raw ? JSON.parse(raw) : {}; } catch (err) { /* kein JSON */ }
   if (!res.ok || !data.access_token) {
     throw new SmartMeterError(
       502,
-      `Login bei Wiener Netze fehlgeschlagen (HTTP ${res.status}): ${data.error_description || data.error || 'keine Details'}`,
+      `Login bei Wiener Netze fehlgeschlagen (HTTP ${res.status}): ${data.error_description || data.error || raw.slice(0, 200) || 'keine Details'}`,
       'WN_AUTH_FAILED',
     );
   }
@@ -151,8 +157,8 @@ export function normalizeMesswerte(raw) {
       const values = (zw.messwerte || []).map((m) => ({
         from: m.zeitVon,
         to: m.zeitBis,
-        value: m.wert,
-        kwh: toKwh(m.wert, m.einheit || zw.einheit),
+        value: m.messwert ?? m.wert,
+        kwh: toKwh(m.messwert ?? m.wert, m.einheit || zw.einheit),
         quality: m.qualitaet,
       }));
       series.push({
