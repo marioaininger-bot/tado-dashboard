@@ -170,7 +170,9 @@ ausgeliefert, aber **erst nutzbar, wenn die Zugangsdaten da sind**:
 2. Den Smart-Meter-Support (`support.sm-portal@wienit.at`) bitten, die
    Anwendung mit dem Smart-Meter-Portal-Zugang zu verbinden (1-2 Wochen). Danach
    gibt es Client-ID und Client-Secret.
-3. Die vier Secrets setzen (siehe `cloudflare/wrangler.toml`):
+3. Die vier Secrets setzen (siehe `cloudflare/wrangler.toml`; Login über den
+   Token-Endpunkt `api.wstw.at/invoke/pub.apigateway.oauth2/getAccessToken`,
+   optional per Variable `WN_TOKEN_URL` überschreibbar):
    `WN_CLIENT_ID`, `WN_CLIENT_SECRET`, `WN_API_KEY`, `WN_ZAEHLPUNKT`.
 
 Endpunkte (alle mit `X-Dashboard-Key`, nur GET):
