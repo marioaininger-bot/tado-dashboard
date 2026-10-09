@@ -568,7 +568,7 @@ async function handleSetZone(request, env) {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(
           power === 'OFF'
-            ? { setting: { type: 'HEATING', power: 'OFF' } }
+            ? { setting: { type: 'HEATING', power: 'OFF' }, termination: { type: 'MANUAL' } }
             : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination: { type: 'MANUAL' } }
         ),
       });

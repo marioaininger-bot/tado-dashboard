@@ -178,6 +178,8 @@
   }
   .temp-btn:hover{border-color:var(--orange);color:var(--orange);}
   .temp-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .power-btn{font-size:14px;margin-left:2px;}
+  .power-btn.is-off{color:var(--orange);border-color:var(--orange);}
   .temp-display{font-weight:700;font-size:14px;min-width:38px;text-align:center;font-variant-numeric:tabular-nums;}
   .resume-link{
     margin-left:auto;background:none;border:none;color:var(--blue);font-size:12px;
@@ -1344,11 +1346,22 @@ function controlsHtml(zone) {
   const base = zone.targetTemp != null
     ? zone.targetTemp
     : (zone.currentTemp != null ? Math.round(zone.currentTemp * 2) / 2 : 20);
+  const ids = `data-zone-id="${zone.id}" data-home-id="${zone.homeId}"`;
+  if (zone.power === 'OFF') {
+    return `
+    <div class="zone-controls">
+      <span class="temp-display">Aus</span>
+      <button class="temp-btn power-btn is-off" data-action="on" ${ids} data-temp="${base}" title="Einschalten" aria-label="Einschalten">⏻</button>
+      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" ${ids}>Zeitplan</button>` : ''}
+    </div>
+  `;
+  }
   return `
     <div class="zone-controls">
       <button class="temp-btn" data-action="dec" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Kälter">−</button>
       <span class="temp-display">${base.toFixed(1)}°</span>
       <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Wärmer">+</button>
+      <button class="temp-btn power-btn" data-action="off" ${ids} title="Ausschalten" aria-label="Ausschalten">⏻</button>
       ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}" data-home-id="${zone.homeId}">Zeitplan</button>` : ''}
     </div>
   `;
@@ -1623,7 +1636,9 @@ function handleControlClick(e) {
   if (action === 'resume') {
     resumeZoneSchedule(zoneId, homeId, controlBtn);
   } else if (action === 'on' || action === 'off') {
-    setZoneTemp(zoneId, homeId, undefined, controlBtn, action === 'off' ? 'OFF' : 'ON');
+    // Heizkörper brauchen beim Einschalten eine Zieltemperatur (data-temp); Klima nicht.
+    const temp = action === 'on' && controlBtn.dataset.temp ? parseFloat(controlBtn.dataset.temp) : undefined;
+    setZoneTemp(zoneId, homeId, temp, controlBtn, action === 'off' ? 'OFF' : 'ON');
   } else {
     stepZoneTemp(zoneId, homeId, action, parseFloat(controlBtn.dataset.step) || 0.5, controlBtn);
   }
