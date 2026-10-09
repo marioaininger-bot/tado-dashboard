@@ -1726,7 +1726,9 @@ dayChartBody.addEventListener('change', (e) => {
 // "Alle aus" / "Alle an" für alle Klimaanlagen bzw. Heizkörper (nur die, die den Zustand noch nicht haben).
 async function setAllZones(type, power, btn) {
   const targets = currentZones.filter((z) => (type === 'AC' ? z.type === 'AC' : z.type === 'HEATING')
-    && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF' : z.power === 'OFF'));
+    && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF'
+      // "Alle an" bei der Heizung: auch laufende, aber manuell übersteuerte Räume zurück in den Zeitplan.
+      : (z.power === 'OFF' || (type !== 'AC' && z.manualOverride))));
   if (!targets.length) return;
   btn.disabled = true;
   const post = (path, body) => api(path, {
@@ -1742,6 +1744,8 @@ async function setAllZones(type, power, btn) {
   const failed = results.filter((r) => r.status === 'rejected');
   if (failed.length) showToast(`Konnte nicht alle ${type === 'AC' ? 'Klimaanlagen' : 'Heizkörper'} schalten: ` + failed[0].reason.message);
   btn.disabled = false;
+  // Tado übernimmt den neuen Zustand mit kurzer Verzögerung - sonst zeigt der Reload noch "manuell übersteuert".
+  await new Promise((r) => setTimeout(r, 1500));
   await loadDashboard();
 }
 // Enter/Leertaste öffnet Kacheln und Klima-Zeilen (Tastatur/Screenreader).
