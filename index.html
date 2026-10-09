@@ -1729,18 +1729,15 @@ async function setAllZones(type, power, btn) {
     && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF' : z.power === 'OFF'));
   if (!targets.length) return;
   btn.disabled = true;
+  const post = (path, body) => api(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then((res) => { if (res.error) throw new Error(res.error); });
   const results = await Promise.allSettled(targets.map((z) => {
-    const body = { zoneId: z.id, homeId: z.homeId, power };
-    // Heizkörper brauchen beim Einschalten eine Zieltemperatur.
-    if (type !== 'AC' && power === 'ON') {
-      body.temperature = z.targetTemp != null ? z.targetTemp
-        : (z.currentTemp != null ? Math.round(z.currentTemp * 2) / 2 : 20);
-    }
-    return api('/api/zones/set', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }).then((res) => { if (res.error) throw new Error(res.error); });
+    // Heizkörper: "Alle an" hebt das manuelle Aus auf, die Räume folgen wieder ihrem Zeitplan.
+    if (type !== 'AC' && power === 'ON') return post('/api/zones/resume', { zoneId: z.id, homeId: z.homeId });
+    return post('/api/zones/set', { zoneId: z.id, homeId: z.homeId, power });
   }));
   const failed = results.filter((r) => r.status === 'rejected');
   if (failed.length) showToast(`Konnte nicht alle ${type === 'AC' ? 'Klimaanlagen' : 'Heizkörper'} schalten: ` + failed[0].reason.message);
