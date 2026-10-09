@@ -421,7 +421,8 @@
     </section>
 
     <section id="heizungSection">
-      <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span></h2>
+      <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span><span class="grow"></span>
+        <button class="link" id="heatAllOff">Alle aus</button><button class="link" id="heatAllOn">Alle an</button></h2>
       <div id="zoneGrid" class="zone-grid"></div>
     </section>
   </div>
@@ -1302,6 +1303,8 @@ function renderZones(zones) {
   // Heizung: kompakte Raum-Kacheln (Verlauf im Fenster per Klick)
   show(heizungSection, rooms.length > 0 || ac.length === 0, 'block');
   const heating = rooms.filter((z) => z.type === 'HEATING' && z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
+  show(document.getElementById('heatAllOff'), rooms.length > 0, 'inline');
+  show(document.getElementById('heatAllOn'), rooms.length > 0, 'inline');
   document.getElementById('heizungSum').textContent = rooms.length
     ? `${rooms.length} ${rooms.length === 1 ? 'Raum' : 'Räume'} · ${heating} heizen gerade` : '';
   zoneGrid.innerHTML = rooms.length
@@ -1720,18 +1723,27 @@ dayChartBody.addEventListener('change', (e) => {
   );
 });
 
-// "Alle aus" / "Alle an" für alle Klimaanlagen (nur die, die den Zustand noch nicht haben).
-async function setAllAc(power, btn) {
-  const targets = currentZones.filter((z) => z.type === 'AC' && !z.deviceOffline && (power === 'OFF' ? z.power === 'ON' : z.power === 'OFF'));
+// "Alle aus" / "Alle an" für alle Klimaanlagen bzw. Heizkörper (nur die, die den Zustand noch nicht haben).
+async function setAllZones(type, power, btn) {
+  const targets = currentZones.filter((z) => (type === 'AC' ? z.type === 'AC' : z.type === 'HEATING')
+    && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF' : z.power === 'OFF'));
   if (!targets.length) return;
   btn.disabled = true;
-  const results = await Promise.allSettled(targets.map((z) => api('/api/zones/set', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ zoneId: z.id, homeId: z.homeId, power }),
-  }).then((res) => { if (res.error) throw new Error(res.error); })));
+  const results = await Promise.allSettled(targets.map((z) => {
+    const body = { zoneId: z.id, homeId: z.homeId, power };
+    // Heizkörper brauchen beim Einschalten eine Zieltemperatur.
+    if (type !== 'AC' && power === 'ON') {
+      body.temperature = z.targetTemp != null ? z.targetTemp
+        : (z.currentTemp != null ? Math.round(z.currentTemp * 2) / 2 : 20);
+    }
+    return api('/api/zones/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((res) => { if (res.error) throw new Error(res.error); });
+  }));
   const failed = results.filter((r) => r.status === 'rejected');
-  if (failed.length) showToast('Konnte nicht alle Klimaanlagen schalten: ' + failed[0].reason.message);
+  if (failed.length) showToast(`Konnte nicht alle ${type === 'AC' ? 'Klimaanlagen' : 'Heizkörper'} schalten: ` + failed[0].reason.message);
   btn.disabled = false;
   await loadDashboard();
 }
@@ -1743,8 +1755,10 @@ async function setAllAc(power, btn) {
   e.preventDefault();
   el.click();
 }));
-document.getElementById('acAllOff').addEventListener('click', (e) => setAllAc('OFF', e.currentTarget));
-document.getElementById('acAllOn').addEventListener('click', (e) => setAllAc('ON', e.currentTarget));
+document.getElementById('acAllOff').addEventListener('click', (e) => setAllZones('AC', 'OFF', e.currentTarget));
+document.getElementById('acAllOn').addEventListener('click', (e) => setAllZones('AC', 'ON', e.currentTarget));
+document.getElementById('heatAllOff').addEventListener('click', (e) => setAllZones('HEATING', 'OFF', e.currentTarget));
+document.getElementById('heatAllOn').addEventListener('click', (e) => setAllZones('HEATING', 'ON', e.currentTarget));
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);
 dayChartModal.addEventListener('click', (e) => {
   if (e.target === dayChartModal) closeDayChart();
