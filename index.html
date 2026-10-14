@@ -1379,7 +1379,9 @@ const AC_FAN_OPTIONS = [['AUTO', 'Auto'], ['LOW', 'Stufe 1'], ['LOWMID', 'Stufe 
 const AC_SWING_UD_OPTIONS = [['AUTO', 'Auto'], ['UP', 'Oben'], ['UPMID', 'Oben-Mitte'], ['MID', 'Mitte'], ['DOWNMID', 'Unten-Mitte'], ['DOWN', 'Unten'], ['SWING', 'Pendeln']];
 const AC_SWING_LR_OPTIONS = [['AUTO', 'Auto'], ['LEFT', 'Links'], ['LEFTMID', 'Links-Mitte'], ['MID', 'Mitte'], ['RIGHTMID', 'Rechts-Mitte'], ['RIGHT', 'Rechts']];
 const AC_ECO_OPTIONS = [['AUTO', 'Auto'], ['QUIET', 'Leise'], ['POWERFUL', 'Turbo']];
-const AC_NANOE_OPTIONS = [['OFF', 'Aus'], ['ON', 'nanoe™ X'], ['MODEG', 'nanoe™ G'], ['ALL', 'X + G']];
+const AC_NANOE_OPTIONS = [['OFF', 'Aus'], ['ON', 'nanoe™ X']];
+// Meldet ein Gerät G oder X+G, bleibt der Wert sichtbar statt fälschlich "Aus" zu zeigen.
+const AC_NANOE_EXTRA = { MODEG: 'nanoe™ G', ALL: 'nanoe™ X+G' };
 
 function acSelectHtml(label, prop, options, current, ids) {
   return `<label>${label}</label>
@@ -1410,7 +1412,7 @@ function acControlsHtml(zone) {
         ${acSelectHtml('Modus', 'mode', AC_MODE_OPTIONS, zone.mode, ids)}
         ${acSelectHtml('Lüfter', 'fanSpeed', AC_FAN_OPTIONS, zone.fanLevel, ids)}
         ${acSelectHtml('Eco', 'eco', AC_ECO_OPTIONS, zone.ecoMode, ids)}
-        ${zone.nanoe != null ? acSelectHtml('nanoe™', 'nanoe', AC_NANOE_OPTIONS, zone.nanoe, ids) : ''}
+        ${zone.nanoe != null ? acSelectHtml('nanoe™', 'nanoe', AC_NANOE_EXTRA[zone.nanoe] ? [...AC_NANOE_OPTIONS, [zone.nanoe, AC_NANOE_EXTRA[zone.nanoe]]] : AC_NANOE_OPTIONS, zone.nanoe, ids) : ''}
         ${zone.swingUD != null ? acSelectHtml('Richtung ↕', 'swingUD', AC_SWING_UD_OPTIONS, zone.swingUD, ids) : ''}
         ${zone.swingLR != null ? acSelectHtml('Richtung ↔', 'swingLR', AC_SWING_LR_OPTIONS, zone.swingLR, ids) : ''}
       </div>

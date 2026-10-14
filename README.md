@@ -145,7 +145,7 @@ Panasonic sie widerruft - dann erscheint der Knopf wieder.
 
 Jedes Gerät erscheint als Kachel mit Ist-/Zieltemperatur und Modus, plus
 Temperatur ±1°, Ein/Aus sowie Auswahlfeldern für Modus (Auto/Kühlen/Heizen/
-Entfeuchten/Lüften), Lüfterstufe, Eco (Auto/Leise/Turbo), nanoe™ X/G (Aus/An/Mode G/Beide, nur bei Geräten mit nanoe) und - sofern das Gerät sie meldet -
+Entfeuchten/Lüften), Lüfterstufe, Eco (Auto/Leise/Turbo), nanoe™ X (Aus/An, nur bei Geräten mit nanoe) und - sofern das Gerät sie meldet -
 Luftrichtung senkrecht/waagrecht - nur bei
 eingeschaltetem Gerät; das Dashboard schaltet nie von selbst ein. „Einschalten“ startet im Modus
 Kühlen mit der Zieltemperatur aus `PANASONIC_DEFAULT_TEMP` (`wrangler.toml`,
