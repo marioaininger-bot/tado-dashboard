@@ -32,6 +32,10 @@ const PENDING_TTL_SECONDS = 600;
 const MODE_CODES = { AUTO: 0, DRY: 1, COOL: 2, HEAT: 3, FAN: 4 };
 const FAN_CODES = { AUTO: 0, LOW: 1, LOWMID: 2, MID: 3, HIGHMID: 4, HIGH: 5 };
 const ECO_CODES = { AUTO: 0, POWERFUL: 1, QUIET: 2 };
+// nanoe™ (Luftreinigung): 0 = Gerät hat es nicht, sonst Aus / An (nanoe™ X) /
+// Mode G (nanoe™ G) / Alle (beide).
+const NANOE_CODES = { OFF: 1, ON: 2, MODEG: 3, ALL: 4 };
+const NANOE_UNAVAILABLE = 0;
 // Luftrichtung: senkrecht (UD) / waagrecht (LR). "Auto" steckt bei Panasonic
 // nicht im Positionswert, sondern in fanAutoMode (0 = beide Auto, 2 = nur
 // UD Auto, 3 = nur LR Auto, 1 = keine). LR-Wert 6 heißt "nicht vorhanden".
@@ -43,6 +47,7 @@ const invert = (obj) => Object.fromEntries(Object.entries(obj).map(([k, v]) => [
 const MODE_FROM_CODE = invert(MODE_CODES);
 const FAN_FROM_CODE = invert(FAN_CODES);
 const ECO_FROM_CODE = invert(ECO_CODES);
+const NANOE_FROM_CODE = invert(NANOE_CODES);
 const SWING_UD_FROM_CODE = invert(SWING_UD_CODES);
 const SWING_LR_FROM_CODE = invert(SWING_LR_CODES);
 const MIN_TEMP = 16;
@@ -766,6 +771,7 @@ function mapDevice(device, status) {
     mode: MODE_FROM_CODE[p.operationMode] || null,
     fanLevel: FAN_FROM_CODE[p.fanSpeed] || null,
     ecoMode: ECO_FROM_CODE[p.ecoMode] || null,
+    nanoe: p.nanoe === undefined || p.nanoe === NANOE_UNAVAILABLE ? null : (NANOE_FROM_CODE[p.nanoe] || null),
     swingUD: swing.ud,
     swingLR: swing.lr,
     openWindow: false,
@@ -802,6 +808,7 @@ function offlineZone(device, err) {
     mode: null,
     fanLevel: null,
     ecoMode: null,
+    nanoe: null,
     swingUD: null,
     swingLR: null,
     openWindow: false,
@@ -852,9 +859,9 @@ export async function fetchPanasonicZones(env) {
 }
 
 // Steuert ein Gerät. Gesendet werden nur die genannten Felder (Ein/Aus,
-// Zieltemperatur, Modus, Lüfterstufe, Eco-Modus) - alles andere bleibt
+// Zieltemperatur, Modus, Lüfterstufe, Eco-Modus, nanoe) - alles andere bleibt
 // unverändert. Das Gerät wird dabei nie von selbst eingeschaltet.
-export async function setPanasonicDevice(env, deviceId, { power, temperature, mode, fanSpeed, eco, swingUD, swingLR }) {
+export async function setPanasonicDevice(env, deviceId, { power, temperature, mode, fanSpeed, eco, nanoe, swingUD, swingLR }) {
   if (!isPanasonicConfigured(env)) {
     throw new Error('Panasonic ist nicht konfiguriert (Secrets PANASONIC_USER / PANASONIC_PASS fehlen).');
   }
@@ -892,6 +899,7 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature, mo
   if (mode != null) parameters.operationMode = pick(mode, MODE_CODES, 'Modus');
   if (fanSpeed != null) parameters.fanSpeed = pick(fanSpeed, FAN_CODES, 'Lüfterstufe');
   if (eco != null) parameters.ecoMode = pick(eco, ECO_CODES, 'Eco-Modus');
+  if (nanoe != null) parameters.nanoe = pick(nanoe, NANOE_CODES, 'nanoe');
   if (swingUD != null || swingLR != null) {
     // "Auto" hängt an fanAutoMode und betrifft beide Achsen gemeinsam - deshalb
     // erst den aktuellen Zustand der anderen Achse lesen.
