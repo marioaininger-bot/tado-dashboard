@@ -1189,6 +1189,7 @@ function runtimeHtml(history) {
 }
 
 const AC_MODE_NAMES = { AUTO: 'Auto', COOL: 'Kühlen', HEAT: 'Heizen', DRY: 'Entfeuchten', FAN: 'Lüften' };
+const AC_NANOE_SHORT = { ON: 'nanoe™ X', MODEG: 'nanoe™ G', ALL: 'nanoe™ X+G' };
 const klimaSection = document.getElementById('klimaSection');
 const heizungSection = document.getElementById('heizungSection');
 const acList = document.getElementById('acList');
@@ -1208,7 +1209,7 @@ function acRowHtml(zone) {
   const hasTemp = !isOff && zone.mode !== 'DRY' && zone.mode !== 'FAN' && zone.targetTemp != null;
   const sub = isOff
     ? `${cur} · aus`
-    : `${cur} · ${AC_MODE_NAMES[zone.mode] || 'an'}${hasTemp ? ' → ' + zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0) + '°' : ''}`;
+    : `${cur} · ${AC_MODE_NAMES[zone.mode] || 'an'}${hasTemp ? ' → ' + zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0) + '°' : ''}${AC_NANOE_SHORT[zone.nanoe] ? ' · 🌿 ' + AC_NANOE_SHORT[zone.nanoe] : ''}`;
   const note = zone.cachedState ? ' · Stand evtl. veraltet' : '';
   return `
     <div class="ac-row ${isOff ? 'off' : ''}" data-zone-key="${zone.key}">
