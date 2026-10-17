@@ -8,7 +8,7 @@ Das Dashboard ist als helles Kachel-Layout (Bento-Stil) aufgebaut: oben eine
 Begrüßung mit Kurzstatus (Räume heizen, Klima an, Hinweise), eine Außen-Kachel
 mit Wetter und Stunden-Vorschau sowie Kacheln für Ø Innentemperatur und Ø
 Luftfeuchte, darunter den Bereich „Klima“ (eine
-Zeile mit Schalter je Klimaanlage, „Alle aus/an“) und den Bereich „Heizung“ (mit „Alle aus“ und „↺ Alle auf Zeitplan“, das alle manuell übersteuerten oder ausgeschalteten Räume zurück in den Zeitplan setzt; erscheint nur bei Abweichungen, auch als Hinweis in der Begrüßung)
+Zeile mit Schalter je Klimaanlage, „Alle aus/an“) und den Bereich „Heizung“ (mit „Alle aus“ und „↺ Alle auf Zeitplan“, das alle manuell übersteuerten oder ausgeschalteten Räume zurück in den Zeitplan setzt; erscheint nur bei Abweichungen, auch als Hinweis in der Begrüßung; zusätzlich öffnet sich beim Laden und bei neuen Abweichungen ein Popup mit den betroffenen Räumen, je Raum mit „Zeitplan“ und „Später“ – „Später“ pausiert den Raum 4 Stunden)
 mit kompakten Raum-Kacheln. Ein Klick auf eine Kachel oder Klima-Zeile öffnet
 ein Fenster: bei Räumen der Tages-Chart für Temperatur und Luftfeuchte plus
 eine Tabelle der letzten 2 Stunden (alle 15 Min.), bei Klimaanlagen zusätzlich
