@@ -125,6 +125,8 @@
   .greeting h1{margin:0;font-size:26px;letter-spacing:-.02em;}
   .greeting p{margin:3px 0 0;color:var(--text-dim);font-size:14px;}
   .greeting p .warn{color:#c0341f;font-weight:600;}
+  .greeting p .sched-link{font:inherit;font-weight:600;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted;}
+  .greeting p .sched-link:disabled{opacity:.5;cursor:not-allowed;}
 
   .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
   .zone-card{
@@ -422,7 +424,7 @@
 
     <section id="heizungSection">
       <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span><span class="grow"></span>
-        <button class="link" id="heatAllOff">Alle aus</button><button class="link" id="heatAllOn">Alle an</button></h2>
+        <button class="link" id="heatAllOff">Alle aus</button><button class="link" id="heatAllSchedule" title="Alle Heizkörper zurück in den Zeitplan">↺ Alle auf Zeitplan</button></h2>
       <div id="zoneGrid" class="zone-grid"></div>
     </section>
   </div>
@@ -1232,6 +1234,11 @@ function greetingWord() {
   return h < 11 ? 'Guten Morgen' : (h < 18 ? 'Guten Tag' : 'Guten Abend');
 }
 
+// Heizkörper, die vom Zeitplan abweichen (manuell übersteuert oder aus) und erreichbar sind.
+function offScheduleHeaters(zones) {
+  return zones.filter((z) => z.type === 'HEATING' && !z.deviceOffline && (z.power === 'OFF' || z.manualOverride));
+}
+
 function renderStatusStrip(ac, rooms) {
   const heatRooms = rooms.filter((z) => z.type === 'HEATING');
   const heating = heatRooms.filter((z) => z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
@@ -1239,6 +1246,10 @@ function renderStatusStrip(ac, rooms) {
 
   const parts = [];
   if (heatRooms.length) parts.push(`${heating} von ${heatRooms.length} ${heating === 1 ? 'Raum heizt' : 'Räume heizen'}`);
+  const offSchedule = offScheduleHeaters(rooms).length;
+  if (offSchedule) {
+    parts.push(`<button class="sched-link" id="greetingSchedule" title="Alle Heizkörper zurück in den Zeitplan">↺ ${offSchedule} ${offSchedule === 1 ? 'Raum' : 'Räume'} nicht im Zeitplan</button>`);
+  }
   if (ac.length) parts.push(`❄️ Klima ${ac.filter((z) => z.power === 'ON').length} von ${ac.length} an`);
   if (warnings) parts.push(`<span class="warn">⚠️ ${warnings} ${warnings === 1 ? 'Hinweis' : 'Hinweise'}</span>`);
   document.getElementById('greeting').innerHTML =
@@ -1305,7 +1316,10 @@ function renderZones(zones) {
   show(heizungSection, rooms.length > 0 || ac.length === 0, 'block');
   const heating = rooms.filter((z) => z.type === 'HEATING' && z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
   show(document.getElementById('heatAllOff'), rooms.length > 0, 'inline');
-  show(document.getElementById('heatAllOn'), rooms.length > 0, 'inline');
+  const offSchedule = offScheduleHeaters(rooms).length;
+  const schedBtn = document.getElementById('heatAllSchedule');
+  show(schedBtn, offSchedule > 0, 'inline');
+  schedBtn.textContent = `↺ Alle auf Zeitplan (${offSchedule})`;
   document.getElementById('heizungSum').textContent = rooms.length
     ? `${rooms.length} ${rooms.length === 1 ? 'Raum' : 'Räume'} · ${heating} heizen gerade` : '';
   zoneGrid.innerHTML = rooms.length
@@ -1731,12 +1745,13 @@ dayChartBody.addEventListener('change', (e) => {
   );
 });
 
-// "Alle aus" / "Alle an" für alle Klimaanlagen bzw. Heizkörper (nur die, die den Zustand noch nicht haben).
+// "Alle aus" / "Alle an" (Klima) bzw. "Alle aus" / "Alle auf Zeitplan" (Heizung) - nur für Zonen, die den Zustand noch nicht haben.
 async function setAllZones(type, power, btn) {
-  const targets = currentZones.filter((z) => (type === 'AC' ? z.type === 'AC' : z.type === 'HEATING')
-    && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF'
-      // "Alle an" bei der Heizung: auch laufende, aber manuell übersteuerte Räume zurück in den Zeitplan.
-      : (z.power === 'OFF' || (type !== 'AC' && z.manualOverride))));
+  const targets = type === 'AC'
+    ? currentZones.filter((z) => z.type === 'AC' && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF' : z.power === 'OFF'))
+    : (power === 'OFF'
+      ? currentZones.filter((z) => z.type === 'HEATING' && !z.deviceOffline && z.power !== 'OFF')
+      : offScheduleHeaters(currentZones));
   if (!targets.length) return;
   btn.disabled = true;
   const post = (path, body) => api(path, {
@@ -1745,7 +1760,7 @@ async function setAllZones(type, power, btn) {
     body: JSON.stringify(body),
   }).then((res) => { if (res.error) throw new Error(res.error); });
   const results = await Promise.allSettled(targets.map((z) => {
-    // Heizkörper: "Alle an" hebt das manuelle Aus auf, die Räume folgen wieder ihrem Zeitplan.
+    // Heizkörper: "Alle auf Zeitplan" hebt manuelles Aus bzw. Übersteuern auf.
     if (type !== 'AC' && power === 'ON') return post('/api/zones/resume', { zoneId: z.id, homeId: z.homeId });
     return post('/api/zones/set', { zoneId: z.id, homeId: z.homeId, power });
   }));
@@ -1767,7 +1782,12 @@ async function setAllZones(type, power, btn) {
 document.getElementById('acAllOff').addEventListener('click', (e) => setAllZones('AC', 'OFF', e.currentTarget));
 document.getElementById('acAllOn').addEventListener('click', (e) => setAllZones('AC', 'ON', e.currentTarget));
 document.getElementById('heatAllOff').addEventListener('click', (e) => setAllZones('HEATING', 'OFF', e.currentTarget));
-document.getElementById('heatAllOn').addEventListener('click', (e) => setAllZones('HEATING', 'ON', e.currentTarget));
+document.getElementById('heatAllSchedule').addEventListener('click', (e) => setAllZones('HEATING', 'ON', e.currentTarget));
+// Hinweis in der Begrüßung (wird bei jedem Rendern neu erzeugt, daher Delegation).
+document.getElementById('greeting').addEventListener('click', (e) => {
+  const btn = e.target.closest('#greetingSchedule');
+  if (btn) setAllZones('HEATING', 'ON', btn);
+});
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);
 dayChartModal.addEventListener('click', (e) => {
   if (e.target === dayChartModal) closeDayChart();
