@@ -343,7 +343,8 @@
   .sched-row .mid{flex:1;min-width:0;}
   .sched-row .nm{font-weight:600;}
   .sched-row .why{font-size:13px;color:var(--text-dim);}
-  .sched-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
+  .sched-row .resume-link{margin-left:0;min-width:56px;text-align:right;}
+  .sched-all{border-top:2px solid rgba(0,0,0,.1);margin-top:4px;}
   .m-tile{background:var(--card);border-radius:22px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.04);}
   .m-tile:last-child{margin-bottom:0;}
   .m-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px;margin-bottom:12px;}
@@ -457,9 +458,10 @@
         <button class="modal-close" id="schedClose" aria-label="Schließen">✕</button>
       </div>
       <div id="schedBody"></div>
-      <div class="sched-foot">
-        <button class="link" id="schedLater">Später</button>
-        <button class="link" id="schedAll">↺ Alle auf Zeitplan</button>
+      <div class="sched-row sched-all" id="schedAllRow">
+        <div class="mid"><div class="nm" id="schedAllLabel">Alle</div></div>
+        <button class="resume-link" id="schedLater">Später</button>
+        <button class="resume-link" id="schedAll">Zeitplan</button>
       </div>
     </div>
   </div>
@@ -1315,6 +1317,9 @@ function updateSchedPopup(rooms) {
   } else if (isOpen || (fresh && !otherDialogOpen)) {
     document.getElementById('schedTitle').textContent =
       `${schedListed.length} ${schedListed.length === 1 ? 'Raum' : 'Räume'} nicht im Zeitplan`;
+    // Mit nur einem Raum wäre die Sammelzeile doppelt.
+    document.getElementById('schedAllRow').style.display = schedListed.length > 1 ? 'flex' : 'none';
+    document.getElementById('schedAllLabel').textContent = `Alle ${schedListed.length} Räume`;
     document.getElementById('schedBody').innerHTML = schedListed.map((z) => `
       <div class="sched-row">
         <div class="mid"><div class="nm">${z.name}</div><div class="why">${schedReason(z)}</div></div>
