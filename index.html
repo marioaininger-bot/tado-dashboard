@@ -338,6 +338,12 @@
     box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
   .modal-close:hover{color:var(--text);}
+  .sched-row{display:flex;align-items:center;gap:8px;padding:10px 0;border-top:1px solid rgba(0,0,0,.06);}
+  .sched-row:first-child{border-top:0;}
+  .sched-row .mid{flex:1;min-width:0;}
+  .sched-row .nm{font-weight:600;}
+  .sched-row .why{font-size:13px;color:var(--text-dim);}
+  .sched-foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;}
   .m-tile{background:var(--card);border-radius:22px;padding:16px 18px;margin-bottom:12px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 18px rgba(0,0,0,.04);}
   .m-tile:last-child{margin-bottom:0;}
   .m-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:10px;margin-bottom:12px;}
@@ -441,6 +447,20 @@
         <button class="modal-close" id="dayChartClose" aria-label="Schließen">✕</button>
       </div>
       <div id="dayChartBody"></div>
+    </div>
+  </div>
+
+  <div id="schedModal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h3 id="schedTitle">Nicht im Zeitplan</h3>
+        <button class="modal-close" id="schedClose" aria-label="Schließen">✕</button>
+      </div>
+      <div id="schedBody"></div>
+      <div class="sched-foot">
+        <button class="link" id="schedLater">Später</button>
+        <button class="link" id="schedAll">↺ Alle auf Zeitplan</button>
+      </div>
     </div>
   </div>
 
@@ -1239,6 +1259,74 @@ function offScheduleHeaters(zones) {
   return zones.filter((z) => z.type === 'HEATING' && !z.deviceOffline && (z.power === 'OFF' || z.manualOverride));
 }
 
+// Popup "nicht im Zeitplan": öffnet beim Laden und danach nur bei neuen Abweichungen.
+// "Später" pausiert einen Raum für 4 Stunden (localStorage, gilt auch nach Neuladen).
+const SCHED_SNOOZE_MS = 4 * 60 * 60 * 1000;
+const SCHED_SNOOZE_KEY = 'schedSnooze';
+const SCHED_SHOWN_KEY = 'schedShown';
+const zoneKey = (z) => `${z.homeId}:${z.id}`;
+
+function readStore(storage, key, fallback) {
+  try { return JSON.parse(storage.getItem(key)) ?? fallback; } catch (e) { return fallback; }
+}
+function writeStore(storage, key, value) {
+  try { storage.setItem(key, JSON.stringify(value)); } catch (e) { /* Speicher gesperrt: Popup erscheint dann ggf. öfter */ }
+}
+
+function schedSnoozes() {
+  const now = Date.now();
+  const all = readStore(localStorage, SCHED_SNOOZE_KEY, {});
+  const live = Object.fromEntries(Object.entries(all).filter(([, until]) => until > now));
+  if (Object.keys(live).length !== Object.keys(all).length) writeStore(localStorage, SCHED_SNOOZE_KEY, live);
+  return live;
+}
+
+function snoozeRooms(keys) {
+  const snoozes = schedSnoozes();
+  keys.forEach((k) => { snoozes[k] = Date.now() + SCHED_SNOOZE_MS; });
+  writeStore(localStorage, SCHED_SNOOZE_KEY, snoozes);
+}
+
+function schedReason(z) {
+  if (z.power === 'OFF') return 'Aus';
+  return z.targetTemp != null ? `Manuell ${z.targetTemp.toFixed(z.targetTemp % 1 ? 1 : 0)}°` : 'Manuell übersteuert';
+}
+
+const schedModal = document.getElementById('schedModal');
+let schedListed = []; // aktuell im Popup gezeigte Räume
+
+function closeSchedPopup() {
+  schedModal.style.display = 'none';
+}
+
+function updateSchedPopup(rooms) {
+  const off = offScheduleHeaters(rooms);
+  const offKeys = new Set(off.map(zoneKey));
+  // Räume, die wieder im Zeitplan sind, vergessen - bei erneuter Abweichung meldet das Popup sich wieder.
+  const shown = new Set(readStore(sessionStorage, SCHED_SHOWN_KEY, []).filter((k) => offKeys.has(k)));
+  const snoozes = schedSnoozes();
+  schedListed = off.filter((z) => !snoozes[zoneKey(z)]);
+
+  const isOpen = schedModal.style.display === 'flex';
+  const fresh = schedListed.some((z) => !shown.has(zoneKey(z)));
+  const otherDialogOpen = dayChartModal.style.display === 'flex';
+  if (!schedListed.length) {
+    closeSchedPopup();
+  } else if (isOpen || (fresh && !otherDialogOpen)) {
+    document.getElementById('schedTitle').textContent =
+      `${schedListed.length} ${schedListed.length === 1 ? 'Raum' : 'Räume'} nicht im Zeitplan`;
+    document.getElementById('schedBody').innerHTML = schedListed.map((z) => `
+      <div class="sched-row">
+        <div class="mid"><div class="nm">${z.name}</div><div class="why">${schedReason(z)}</div></div>
+        <button class="resume-link" data-sched="later" data-key="${zoneKey(z)}">Später</button>
+        <button class="resume-link" data-sched="resume" data-zone-id="${z.id}" data-home-id="${z.homeId}">Zeitplan</button>
+      </div>`).join('');
+    schedModal.style.display = 'flex';
+    schedListed.forEach((z) => shown.add(zoneKey(z)));
+  }
+  writeStore(sessionStorage, SCHED_SHOWN_KEY, [...shown]);
+}
+
 function renderStatusStrip(ac, rooms) {
   const heatRooms = rooms.filter((z) => z.type === 'HEATING');
   const heating = heatRooms.filter((z) => z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
@@ -1327,6 +1415,7 @@ function renderZones(zones) {
     : (ac.length ? '' : '<div class="empty-state">Keine Zonen gefunden.</div>');
 
   refreshZoneModal();
+  updateSchedPopup(rooms);
 }
 
 function formatTime(iso) {
@@ -1746,12 +1835,12 @@ dayChartBody.addEventListener('change', (e) => {
 });
 
 // "Alle aus" / "Alle an" (Klima) bzw. "Alle aus" / "Alle auf Zeitplan" (Heizung) - nur für Zonen, die den Zustand noch nicht haben.
-async function setAllZones(type, power, btn) {
+async function setAllZones(type, power, btn, only) {
   const targets = type === 'AC'
     ? currentZones.filter((z) => z.type === 'AC' && !z.deviceOffline && (power === 'OFF' ? z.power !== 'OFF' : z.power === 'OFF'))
     : (power === 'OFF'
       ? currentZones.filter((z) => z.type === 'HEATING' && !z.deviceOffline && z.power !== 'OFF')
-      : offScheduleHeaters(currentZones));
+      : (only || offScheduleHeaters(currentZones)));
   if (!targets.length) return;
   btn.disabled = true;
   const post = (path, body) => api(path, {
@@ -1783,6 +1872,28 @@ document.getElementById('acAllOff').addEventListener('click', (e) => setAllZones
 document.getElementById('acAllOn').addEventListener('click', (e) => setAllZones('AC', 'ON', e.currentTarget));
 document.getElementById('heatAllOff').addEventListener('click', (e) => setAllZones('HEATING', 'OFF', e.currentTarget));
 document.getElementById('heatAllSchedule').addEventListener('click', (e) => setAllZones('HEATING', 'ON', e.currentTarget));
+// Popup "nicht im Zeitplan": je Raum "Zeitplan"/"Später", unten für alle gelisteten Räume.
+document.getElementById('schedBody').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-sched]');
+  if (!btn) return;
+  if (btn.dataset.sched === 'later') {
+    snoozeRooms([btn.dataset.key]);
+    updateSchedPopup(currentZones.filter((z) => z.type !== 'AC'));
+  } else {
+    resumeZoneSchedule(btn.dataset.zoneId, btn.dataset.homeId, btn);
+  }
+});
+document.getElementById('schedAll').addEventListener('click', async (e) => {
+  await setAllZones('HEATING', 'ON', e.currentTarget, schedListed);
+});
+document.getElementById('schedLater').addEventListener('click', () => {
+  snoozeRooms(schedListed.map(zoneKey));
+  closeSchedPopup();
+});
+document.getElementById('schedClose').addEventListener('click', closeSchedPopup);
+schedModal.addEventListener('click', (e) => {
+  if (e.target === schedModal) closeSchedPopup();
+});
 // Hinweis in der Begrüßung (wird bei jedem Rendern neu erzeugt, daher Delegation).
 document.getElementById('greeting').addEventListener('click', (e) => {
   const btn = e.target.closest('#greetingSchedule');
