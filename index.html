@@ -1212,6 +1212,13 @@ function runtimeHtml(history) {
   return `<span class="runtime-label">🔥 ${stats.hours.toFixed(1)}h aktiv (letzte ${period})</span>`;
 }
 
+// Zieltemperatur: Panasonic kennt sie auch beim Entfeuchten, Tado nur bei
+// Kühlen/Heizen/Auto. Beim Lüften gibt es bei beiden keine.
+function acHasTargetTemp(zone) {
+  if (zone.targetTemp == null || zone.mode === 'FAN') return false;
+  return zone.mode !== 'DRY' || zone.homeId === 'panasonic';
+}
+
 const AC_MODE_NAMES = { AUTO: 'Auto', COOL: 'Kühlen', HEAT: 'Heizen', DRY: 'Entfeuchten', FAN: 'Lüften' };
 const AC_NANOE_SHORT = { ON: 'nanoe™ X', MODEG: 'nanoe™ G', ALL: 'nanoe™ X+G' };
 const klimaSection = document.getElementById('klimaSection');
@@ -1230,7 +1237,7 @@ function acRowHtml(zone) {
   }
   const isOff = zone.power !== 'ON';
   const cur = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
-  const hasTemp = !isOff && zone.mode !== 'DRY' && zone.mode !== 'FAN' && zone.targetTemp != null;
+  const hasTemp = !isOff && acHasTargetTemp(zone);
   const sub = isOff
     ? `${cur} · aus`
     : `${cur} · ${AC_MODE_NAMES[zone.mode] || 'an'}${hasTemp ? ' → ' + zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0) + '°' : ''}${AC_NANOE_SHORT[zone.nanoe] ? ' · 🌿 ' + AC_NANOE_SHORT[zone.nanoe] : ''}`;
@@ -1500,11 +1507,11 @@ function acSelectHtml(label, prop, options, current, ids) {
 }
 
 // Klimaanlage: 1°-Schritte, Ein/Aus, Zeitplan fortsetzen. In den Modi
-// Entfeuchten/Lüften gibt es keine Zieltemperatur, dort nur Ein/Aus.
+// Lüften (bei Tado auch Entfeuchten) gibt es keine Zieltemperatur, dort nur Ein/Aus.
 function acControlsHtml(zone) {
   const ids = `data-zone-id="${zone.id}" data-home-id="${zone.homeId}"`;
   const isOff = zone.power === 'OFF';
-  const hasTemp = !isOff && zone.mode !== 'DRY' && zone.mode !== 'FAN' && zone.targetTemp != null;
+  const hasTemp = !isOff && acHasTargetTemp(zone);
   return `
     <div class="zone-controls">
       ${hasTemp ? `
