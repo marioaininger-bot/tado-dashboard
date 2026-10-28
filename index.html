@@ -374,6 +374,7 @@
   <div class="hero">
     <a class="icon-btn" href="strom.html" style="justify-self:start;text-decoration:none;">⚡ Strom</a>
     <div class="tado-logo"><b>tado</b><span class="ring">°</span></div>
+    <button class="icon-btn" id="untilBtn" style="display:none;"></button>
     <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
   </div>
 
@@ -498,10 +499,26 @@ const loadingState = document.getElementById('loadingState');
 const weatherStrip = document.getElementById('weatherStrip');
 const forecastRow = document.getElementById('forecastRow');
 const logoutBtn = document.getElementById('logoutBtn');
+const untilBtn = document.getElementById('untilBtn');
 const zoneGrid = document.getElementById('zoneGrid');
 
 /* ---------- Zugriffsschlüssel ---------- */
 const KEY_STORAGE = 'dashboardKey';
+const UNTIL_STORAGE = 'overlayUntil';
+// Dauer manueller Eingriffe: 'schedule' = bis zum nächsten Zeitplanwechsel,
+// 'manual' = bis zum nächsten Eingriff.
+let overlayUntil = 'schedule';
+try { if (localStorage.getItem(UNTIL_STORAGE) === 'manual') overlayUntil = 'manual'; } catch (e) { /* Standard */ }
+function renderUntilBtn() {
+  untilBtn.textContent = overlayUntil === 'manual' ? 'Eingriffe: dauerhaft' : 'Eingriffe: bis Zeitplan';
+  untilBtn.title = 'Dauer manueller Eingriffe umschalten';
+}
+untilBtn.addEventListener('click', () => {
+  overlayUntil = overlayUntil === 'manual' ? 'schedule' : 'manual';
+  try { localStorage.setItem(UNTIL_STORAGE, overlayUntil); } catch (e) { /* nur im Speicher */ }
+  renderUntilBtn();
+});
+renderUntilBtn();
 let memoryKey = ''; // Rückfall, falls der Browser localStorage sperrt
 function getKey() {
   try { return localStorage.getItem(KEY_STORAGE) || memoryKey; } catch (e) { return memoryKey; }
@@ -537,7 +554,7 @@ async function api(path, options = {}) {
 function showKeyScreen(wasWrong) {
   if (typeof refreshTimer !== 'undefined' && refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   if (typeof pollTimer !== 'undefined' && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  [dashboard, weatherStrip, forecastRow, logoutBtn, loadingState, loginScreen].forEach((el) => show(el, false));
+  [dashboard, weatherStrip, forecastRow, logoutBtn, untilBtn, loadingState, loginScreen].forEach((el) => show(el, false));
   if (wasWrong) clearKey();
   document.getElementById('keyMsg').textContent = wasWrong ? 'Hmm, das war nicht das Zauberwort. Tippfehler? Heizung und Klimaanlage schauen skeptisch. 🧐' : '';
   show(keyScreen, true, 'flex');
@@ -649,6 +666,7 @@ logoutBtn.addEventListener('click', async () => {
   show(dashboard, false);
   show(weatherTile, false);
   show(logoutBtn, false);
+  show(untilBtn, false);
   show(loginScreen, true, 'flex');
   document.getElementById('deviceCodeBox').style.display = 'none';
   document.getElementById('connectBtn').disabled = false;
@@ -929,6 +947,7 @@ document.addEventListener('visibilitychange', () => {
 function startDashboard() {
   show(loginScreen, false);
   show(logoutBtn, true, 'inline-block');
+  show(untilBtn, true, 'inline-block');
   show(loadingState, true, 'block');
   loadDashboard();
   if (refreshTimer) clearInterval(refreshTimer);
@@ -1721,7 +1740,7 @@ async function postZoneSet(body, el, errorLabel) {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, until: overlayUntil }),
     });
     if (res.error) throw new Error(res.error);
     await loadDashboard();
@@ -1810,7 +1829,7 @@ async function flushZoneTemp(key, zoneId, homeId) {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zoneId, homeId, temperature: entry.temp }),
+      body: JSON.stringify({ zoneId, homeId, temperature: entry.temp, until: overlayUntil }),
     });
     if (res.error) throw new Error(res.error);
   } catch (e) {
@@ -1863,7 +1882,7 @@ async function setAllZones(type, power, btn, only) {
   const results = await Promise.allSettled(targets.map((z) => {
     // Heizkörper: "Alle auf Zeitplan" hebt manuelles Aus bzw. Übersteuern auf.
     if (type !== 'AC' && power === 'ON') return post('/api/zones/resume', { zoneId: z.id, homeId: z.homeId });
-    return post('/api/zones/set', { zoneId: z.id, homeId: z.homeId, power });
+    return post('/api/zones/set', { zoneId: z.id, homeId: z.homeId, power, until: overlayUntil });
   }));
   const failed = results.filter((r) => r.status === 'rejected');
   if (failed.length) showToast(`Konnte nicht alle ${type === 'AC' ? 'Klimaanlagen' : 'Heizkörper'} schalten: ` + failed[0].reason.message);
