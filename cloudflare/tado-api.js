@@ -494,6 +494,17 @@ async function handleDashboard(env) {
   }
 }
 
+// Endet ein manueller Eingriff erst mit dem nächsten Zeitplanwechsel (Standard)
+// oder bleibt er bis zum nächsten Eingriff bestehen? Der Standard lässt sich
+// per Request-Feld `until` ('schedule' | 'manual') oder Worker-Variable
+// OVERLAY_UNTIL überschreiben. tado X nennt den Typ NEXT_TIME_BLOCK, die
+// klassische API TADO_MODE.
+function overlayTermination(until, env, isTadoX) {
+  const mode = until || (env && env.OVERLAY_UNTIL) || 'schedule';
+  if (mode === 'manual') return { type: 'MANUAL' };
+  return { type: isTadoX ? 'NEXT_TIME_BLOCK' : 'TADO_MODE' };
+}
+
 // Setzt eine Zone manuell auf eine Zieltemperatur (oder AUS). Nur für
 // HEATING-Zonen unterstützt (Klimaanlage/Warmwasser bräuchten eine andere
 // Setting-Struktur - bewusst nicht implementiert, um dort nichts Falsches
@@ -513,7 +524,7 @@ async function handleSetZone(request, env) {
   } catch (e) {
     return json(400, { error: 'Ungültiger Request-Body.' }, env);
   }
-  const { zoneId, homeId, temperature, power, mode, fanSpeed, eco, nanoe, swingUD, swingLR } = body;
+  const { zoneId, homeId, temperature, power, mode, fanSpeed, eco, nanoe, swingUD, swingLR, until } = body;
   if (zoneId == null) {
     return json(400, { error: 'zoneId fehlt.' }, env);
   }
@@ -553,7 +564,7 @@ async function handleSetZone(request, env) {
       const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ setting, termination: { type: 'MANUAL' } }),
+        body: JSON.stringify({ setting, termination: overlayTermination(until, env, false) }),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
@@ -568,8 +579,8 @@ async function handleSetZone(request, env) {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(
           power === 'OFF'
-            ? { setting: { type: 'HEATING', power: 'OFF' }, termination: { type: 'MANUAL' } }
-            : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination: { type: 'MANUAL' } }
+            ? { setting: { type: 'HEATING', power: 'OFF' }, termination: overlayTermination(until, env, true) }
+            : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination: overlayTermination(until, env, true) }
         ),
       });
       if (!res.ok) {
@@ -584,7 +595,7 @@ async function handleSetZone(request, env) {
           setting: power === 'OFF'
             ? { type: 'HEATING', power: 'OFF' }
             : { type: 'HEATING', power: 'ON', temperature: { celsius: temperature } },
-          termination: { type: 'MANUAL' },
+          termination: overlayTermination(until, env, false),
         }),
       });
       if (!res.ok) {
