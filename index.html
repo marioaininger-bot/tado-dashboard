@@ -40,7 +40,7 @@
   }
   .tado-logo b{color:var(--text);font-weight:800;}
   .tado-logo .ring{color:var(--blue);font-weight:800;}
-  .hero .icon-btn{justify-self:end;}
+  .hero-actions{justify-self:end;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;}
   .icon-btn{
     background:var(--card);border:none;color:var(--text-dim);
     padding:9px 16px;border-radius:999px;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;
@@ -149,6 +149,12 @@
   .power-bar-fill{height:100%;border-radius:999px;background:var(--orange);transition:width .4s ease;}
   .zone-card.type-AC .power-bar-fill{background:var(--blue);}
   .power-label{color:var(--text-dim);font-size:12px;margin-top:6px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;}
+  .hum-ar{font-weight:700;font-size:12px;margin-left:3px;}
+  .hum-ar.up{color:var(--blue);}
+  .hum-ar.down{color:var(--orange);}
+  .hum-ar.flat{color:var(--text-dim);}
+  .hum-spark{display:inline-block;width:44px;vertical-align:middle;margin-left:6px;}
+  .hum-spark svg{display:block;}
   .zc-spark{margin:8px 0 2px;}
   .zc-spark svg{display:block;}
   .off-chip,.pill{
@@ -308,6 +314,9 @@
   }
   @media (max-width:480px){
     .wrap{padding:24px 16px 50px;}
+    .hero{grid-template-columns:auto 1fr;row-gap:10px;}
+    .hero .tado-logo{grid-column:1 / -1;grid-row:1;}
+    .icon-btn{padding:8px 12px;font-size:12px;}
     .code-box{font-size:24px;letter-spacing:4px;padding:12px 16px;}
     #loginScreen,#keyScreen{padding:32px 18px;}
     .zone-grid{grid-template-columns:1fr 1fr;gap:10px;}
@@ -374,8 +383,10 @@
   <div class="hero">
     <a class="icon-btn" href="strom.html" style="justify-self:start;text-decoration:none;">⚡ Strom</a>
     <div class="tado-logo"><b>tado</b><span class="ring">°</span></div>
-    <button class="icon-btn" id="untilBtn" style="display:none;"></button>
-    <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
+    <div class="hero-actions">
+      <button class="icon-btn" id="untilBtn" style="display:none;"></button>
+      <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
+    </div>
   </div>
 
 
@@ -1068,11 +1079,11 @@ const weatherTile = document.getElementById('weatherTile');
 const weatherBig = document.getElementById('weatherBig');
 const outsideSpark = document.getElementById('outsideSpark');
 
-function sparkSvg(values, color, height = 26) {
+function sparkSvg(values, color, height = 26, minSpan = 0.5) {
   const vals = values.filter((v) => v != null);
   if (vals.length < 2) return '';
   const min = Math.min(...vals), max = Math.max(...vals);
-  const span = Math.max(max - min, 0.5);
+  const span = Math.max(max - min, minSpan);
   const w = 200;
   const pts = vals.map((v, i) =>
     `${((i / (vals.length - 1)) * w).toFixed(1)},${(height - 2 - ((v - min) / span) * (height - 4)).toFixed(1)}`
@@ -1565,6 +1576,27 @@ function zoneTrend(zone) {
   return trendArrow(last.temp - ref.temp);
 }
 
+// Luftfeuchte-Trend der letzten ~30 Minuten: Live-Wert gegen einen Messpunkt
+// des Crons. Erst ab 2 Prozentpunkten Änderung ein Pfeil (Sensor rauscht um ±1).
+function humidityTrend(zone) {
+  const h = zone.history;
+  if (zone.humidity == null || !h || h.length < 2) return '';
+  const lastT = new Date(h[h.length - 1].t).getTime();
+  const ref = h.find((p) => p.humidity != null && lastT - new Date(p.t).getTime() <= 30 * 60 * 1000);
+  if (!ref || lastT - new Date(ref.t).getTime() < 15 * 60 * 1000) return '';
+  const diff = zone.humidity - ref.humidity;
+  if (diff >= 2) return '<span class="hum-ar up" title="Luftfeuchte steigt">↑</span>';
+  if (diff <= -2) return '<span class="hum-ar down" title="Luftfeuchte fällt">↓</span>';
+  return '<span class="hum-ar flat" title="Luftfeuchte stabil">→</span>';
+}
+
+// Kurve der Luftfeuchte der letzten 3 Stunden (36 Messpunkte à 5 Min.).
+function humiditySpark(zone) {
+  const vals = (zone.history || []).slice(-36).map((p) => p.humidity);
+  const svg = sparkSvg(vals, 'var(--blue)', 16, 6);
+  return svg ? `<span class="hum-spark" title="Luftfeuchte der letzten 3 Stunden">${svg}</span>` : '';
+}
+
 function zoneCardHtml(zone) {
   const icon = zoneIcon(zone);
   const isOff = zone.power === 'OFF';
@@ -1575,7 +1607,7 @@ function zoneCardHtml(zone) {
 
   const current = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
   const target = zone.targetTemp != null ? 'Soll ' + zone.targetTemp.toFixed(1) + '°' : '';
-  const humidity = zone.humidity != null ? '💧 ' + Math.round(zone.humidity) + '%' : '';
+  const humidity = zone.humidity != null ? `💧 ${Math.round(zone.humidity)}%${humidityTrend(zone)}${humiditySpark(zone)}` : '';
   const hasChart = zone.history && zone.history.length >= 2;
 
   const subItems = [
