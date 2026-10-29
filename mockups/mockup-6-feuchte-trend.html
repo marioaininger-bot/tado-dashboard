@@ -1,0 +1,109 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 6 – Luftfeuchte-Trend in der Heizungs-Kachel</title>
+<style>
+:root{--bg-1:#f7f6f2;--bg-2:#f2f1ed;--card:#fff;--card-border:#e6e3dc;--text:#1b1b1f;--text-dim:#76767f;--orange:#ff7a3d;--blue:#2c8fd6;--green:#3ea86a;--red:#e04f38}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);background:linear-gradient(180deg,var(--bg-1),var(--bg-2));min-height:100vh}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 20px 70px}
+h1{font-size:26px;letter-spacing:-.02em;margin:0 0 4px}
+.lead{color:var(--text-dim);font-size:14px;margin:0 0 26px;max-width:720px;line-height:1.5}
+h2{font-size:16px;margin:34px 0 4px}
+.desc{font-size:13.5px;color:var(--text-dim);margin:0 0 14px;max-width:760px;line-height:1.5}
+.row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+@media(max-width:760px){.row{grid-template-columns:1fr 1fr}}
+@media(max-width:480px){.row{grid-template-columns:1fr}}
+
+/* Kachel wie im echten Dashboard */
+.zone-card{background:var(--card);border:1px solid var(--card-border);border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:6px;box-shadow:0 1px 0 #0000000a,0 8px 24px #0000000a}
+.zone-card.heating{box-shadow:0 0 0 1.5px #ff7a3d55,0 8px 24px #ff7a3d14}
+.zc-name{font-weight:600;font-size:15px}
+.current{font-size:38px;font-weight:700;letter-spacing:-.03em;line-height:1.1}
+.trend{font-size:16px;margin-left:4px}.trend.up{color:var(--orange)}.trend.down{color:var(--blue)}.trend.flat{color:var(--text-dim)}
+.zc-sub{font-size:13px;color:var(--text-dim);display:flex;flex-wrap:wrap;gap:2px 10px;align-items:center}
+.bar{height:6px;border-radius:9px;background:#0000000f;margin-top:8px}.bar i{display:block;height:100%;border-radius:9px;background:var(--orange)}
+.pl{font-size:12px;color:var(--text-dim)}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:99px;background:#ffe9dd;color:#c4501c;margin-top:4px}
+
+/* Variante A: Pfeil direkt hinter dem Wert */
+.hum-a .ar{font-weight:700;margin-left:3px;font-size:12px}
+.ar.up{color:var(--blue)}.ar.down{color:var(--orange)}.ar.flat{color:var(--text-dim)}
+
+/* Variante B: Pfeil als farbiger Chip mit Delta */
+.hum-b{display:inline-flex;align-items:center;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:2px;font-size:11.5px;font-weight:700;padding:1px 7px;border-radius:99px}
+.chip.up{background:#dff0ff;color:#1f6fa8}.chip.down{background:#ffe9dd;color:#b4491a}.chip.flat{background:#0000000a;color:var(--text-dim)}
+.chip.warn{background:#fde3df;color:#b3321f}
+
+/* Variante C: Mini-Verlauf + Pfeil */
+.hum-c{display:flex;align-items:center;gap:8px;width:100%}
+.hum-c svg{width:54px;height:18px;flex:none}
+.hum-c .ar{font-size:12px;font-weight:700}
+.note{font-size:12.5px;color:var(--text-dim);margin-top:8px;line-height:1.45}
+.box{background:#fff;border:1px dashed var(--card-border);border-radius:18px;padding:16px 18px;font-size:13.5px;line-height:1.55;margin-top:30px}
+.box h3{margin:0 0 6px;font-size:15px}.box code{background:#0000000a;padding:1px 5px;border-radius:5px;font-size:12.5px}
+.box li{margin:3px 0}
+</style></head><body><div class="wrap">
+<h1>Luftfeuchte-Trend in der Heizungs-Kachel</h1>
+<p class="lead">Drei Varianten, wie ein Pfeil neben der Raumfeuchtigkeit zeigen könnte, ob sie steigt oder fällt. Jeweils drei Zustände: <b>steigt</b>, <b>fällt</b>, <b>stabil</b>. Die Temperatur hat bereits einen ▲/▼-Pfeil (30 Min.), die Feuchte-Pfeile sind bewusst anders gestaltet, damit man sie nicht verwechselt.</p>
+
+<h2>A · Dezenter Pfeil hinter dem Wert</h2>
+<p class="desc">Minimal: ein kleiner Pfeil direkt hinter „💧 58%“. Fügt sich in die bestehende Zeile ein, braucht kein Extra-Platz. Farbe: Blau = feuchter, Orange = trockener, Grau = stabil.</p>
+<div class="row">
+  <div class="zone-card heating"><div class="zc-name">🛋️ Wohnzimmer</div><div class="current">21.4°<span class="trend up">▲</span></div>
+    <div class="zc-sub"><span>Soll 22.0°</span><span class="hum-a">💧 58%<span class="ar up">↑</span></span></div>
+    <div class="bar"><i style="width:40%"></i></div><div class="pl">40% Leistung</div><span class="pill">🔥 heizt</span>
+    <div class="note">steigt (+4 Pkt / 30 Min.)</div></div>
+  <div class="zone-card"><div class="zc-name">🛏️ Schlafzimmer</div><div class="current">19.2°<span class="trend flat">–</span></div>
+    <div class="zc-sub"><span>Soll 19.0°</span><span class="hum-a">💧 47%<span class="ar down">↓</span></span></div>
+    <div class="note">fällt (−3 Pkt / 30 Min.)</div></div>
+  <div class="zone-card"><div class="zc-name">🍳 Küche</div><div class="current">20.8°<span class="trend flat">–</span></div>
+    <div class="zc-sub"><span>Soll 20.0°</span><span class="hum-a">💧 52%<span class="ar flat">→</span></span></div>
+    <div class="note">stabil (±1 Pkt)</div></div>
+</div>
+
+<h2>B · Chip mit Delta und Warnfarbe</h2>
+<p class="desc">Informativer: Pfeil + Veränderung in Prozentpunkten (z. B. „↑ 4“) als kleiner Chip. Bei Schimmel-Risiko (&gt; 65 % und steigend) färbt sich der Chip rot – praktisch im Bad/Schlafzimmer, um Lüften rechtzeitig zu merken.</p>
+<div class="row">
+  <div class="zone-card"><div class="zc-name">🛁 Bad</div><div class="current">23.1°<span class="trend up">▲</span></div>
+    <div class="zc-sub"><span>Soll 23.0°</span><span class="hum-b">💧 71% <span class="chip warn">↑ 9 · lüften?</span></span></div>
+    <div class="note">steigt stark + über 65 %</div></div>
+  <div class="zone-card"><div class="zc-name">🛋️ Wohnzimmer</div><div class="current">21.4°<span class="trend up">▲</span></div>
+    <div class="zc-sub"><span>Soll 22.0°</span><span class="hum-b">💧 58% <span class="chip up">↑ 4</span></span></div>
+    <div class="note">steigt</div></div>
+  <div class="zone-card"><div class="zc-name">🛏️ Schlafzimmer</div><div class="current">19.2°<span class="trend flat">–</span></div>
+    <div class="zc-sub"><span>Soll 19.0°</span><span class="hum-b">💧 47% <span class="chip down">↓ 3</span></span></div>
+    <div class="note">fällt</div></div>
+</div>
+
+<h2>C · Mini-Verlauf (Sparkline) + Pfeil</h2>
+<p class="desc">Eigene Zeile unter den Werten: kleine Linie der letzten 3 Stunden plus Pfeil. Man sieht auf einen Blick, ob es ein kurzer Peak (Duschen, Kochen) oder ein Dauertrend ist. Die Daten (<code>zone.history</code>) liegen bereits im Frontend.</p>
+<div class="row">
+  <div class="zone-card"><div class="zc-name">🍳 Küche</div><div class="current">20.8°<span class="trend flat">–</span></div>
+    <div class="zc-sub"><span>Soll 20.0°</span></div>
+    <div class="zc-sub hum-c"><span>💧 63%</span>
+      <svg viewBox="0 0 54 18"><polyline fill="none" stroke="#2c8fd6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="1,15 9,14 17,13 25,11 33,9 41,5 53,3"/></svg><span class="ar up">↑</span></div>
+    <div class="note">steigt über 3 h</div></div>
+  <div class="zone-card"><div class="zc-name">🛏️ Schlafzimmer</div><div class="current">19.2°<span class="trend flat">–</span></div>
+    <div class="zc-sub"><span>Soll 19.0°</span></div>
+    <div class="zc-sub hum-c"><span>💧 47%</span>
+      <svg viewBox="0 0 54 18"><polyline fill="none" stroke="#ff7a3d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="1,3 9,4 17,6 25,9 33,11 41,13 53,15"/></svg><span class="ar down">↓</span></div>
+    <div class="note">fällt über 3 h</div></div>
+  <div class="zone-card"><div class="zc-name">🛋️ Wohnzimmer</div><div class="current">21.4°<span class="trend up">▲</span></div>
+    <div class="zc-sub"><span>Soll 22.0°</span></div>
+    <div class="zc-sub hum-c"><span>💧 52%</span>
+      <svg viewBox="0 0 54 18"><polyline fill="none" stroke="#76767f" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" points="1,9 9,10 17,8 25,9 33,10 41,9 53,9"/></svg><span class="ar flat">→</span></div>
+    <div class="note">stabil</div></div>
+</div>
+
+<div class="box">
+  <h3>Abfragehäufigkeit / Worker – kurz gesagt: kein Mehraufwand nötig</h3>
+  <ul>
+    <li><b>Daten liegen schon vor:</b> Der Cron-Worker schreibt alle 5 Min. Temperatur, <b>Luftfeuchte</b> und Leistung je Zone in KV (<code>zone_history</code>, 288 Punkte = 24 h). Der Trend wird im Frontend aus diesen Punkten berechnet – genau wie der bestehende Temperatur-Pfeil (<code>zoneTrend()</code>, Vergleich mit dem Punkt ~30 Min. davor).</li>
+    <li><b>Keine zusätzlichen Tado-Abfragen, keine zusätzlichen KV-Writes:</b> Das Dashboard lädt weiter alle 60 s (Live-Wert), der Cron bleibt bei <code>*/5</code> (~288 Writes/Tag, Free-Plan-Limit 1000). Ein kürzeres Raster würde das KV-Limit sprengen und bringt hier nichts.</li>
+    <li><b>Wie oft ändert sich der Pfeil?</b> Der Verlauf bewegt sich nur alle 5 Min., der Live-Wert alle 60 s – der Pfeil wechselt also realistisch höchstens alle paar Minuten. Das ist für Luftfeuchte ideal, sie ändert sich ohnehin langsam.</li>
+    <li><b>Schwellwert gegen Flackern:</b> Der Tado-Sensor liefert ganze Prozent und rauscht um ±1. Vorschlag: Pfeil erst ab <b>±2 Prozentpunkten</b> in 30 Min. (darunter „stabil“); bei Variante C optional über 60–90 Min. glätten. So wechselt der Pfeil nicht ständig zwischen ↑ und →.</li>
+    <li><b>Randfälle:</b> Weniger als 2 Messpunkte, Lücke &gt; 30 Min. (Worker war down) oder Raum ausgeschaltet/ohne Feuchte-Sensor (z. B. Klima-Kacheln) → kein Pfeil.</li>
+    <li><b>Aufwand:</b> nur <code>index.html</code> (eine Funktion analog <code>zoneTrend()</code> + 3–5 Zeilen CSS) – kein Worker-Deploy.</li>
+  </ul>
+</div>
+</div></body></html>
