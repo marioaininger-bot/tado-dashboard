@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 10 – Zifferblätter für Klimaanlagen</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: gleiche Zifferblätter wie bei der Heizung. Bogenfarbe = Modus, Strich = Soll, Schalter unten rechts */
+:root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--track:rgba(0,0,0,.08);
+--heat:#ff7a3d;--cool:#2c8fd6;--auto:#3ea86a;--dry:#16a3a3;--fan:#8a8d99;--red:#e04f38}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);font-variant-numeric:tabular-nums}
+.wrap{max-width:1040px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left)) 60px}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.lead{color:var(--dim);font-size:14px;margin:6px 0 22px;max-width:720px;line-height:1.5}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:26px 2px 10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.stage{border-radius:30px;padding:18px}
+.stage.dark{--card:#232a38;--line:#323b4d;--text:#eef1f6;--dim:#8f9bb0;--track:#2e3748;--heat:#ff8a4c;--cool:#5db4f0;--auto:#59c58b;--dry:#3cc7c7;--fan:#a2a8b8;--red:#ff6b57;background:#171b24;color:var(--text)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:18px;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;color:var(--text)}
+.card.on{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--c) 40%,transparent)}
+.card.off{opacity:.92}
+.top{display:flex;justify-content:space-between;align-items:center;width:100%}
+.nm{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;font-size:12px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.08em}
+.mode{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c)}
+.mode.none{background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--dim)}
+.dial{position:relative;width:100%;max-width:200px}
+.dial svg{display:block;width:100%;height:auto}
+.tr{stroke:var(--track)}.tk{stroke:var(--text)}.lim{font-size:10px;fill:var(--dim)}
+.ctr{position:absolute;left:0;right:0;top:34%;display:flex;flex-direction:column;align-items:center;gap:2px}
+.ctr b{font-size:32px;letter-spacing:-.03em;line-height:1.1}.ctr span{font-size:12px;color:var(--dim)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;font-size:12.5px;color:var(--dim)}
+.chips span{background:color-mix(in srgb,var(--text) 7%,transparent);border-radius:99px;padding:3px 9px}
+.ctl{display:flex;align-items:center;gap:8px;margin-top:4px}
+.b{width:28px;height:28px;border-radius:50%;border:1px solid var(--line);background:var(--card);color:var(--text);font:700 16px Inter;display:flex;align-items:center;justify-content:center}
+.t{font-weight:700;font-size:14px;min-width:40px;text-align:center}
+.sw{width:44px;height:26px;border-radius:99px;background:var(--track);position:relative;margin-left:6px}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0004}
+.sw.on{background:var(--c)}.sw.on::after{left:21px}
+.note{margin-top:22px;background:var(--card);border:1px dashed var(--line);border-radius:18px;padding:14px 18px;font-size:13.5px;line-height:1.55}
+.note li{margin:3px 0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px;color:var(--dim);margin:0 2px 4px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:50%;vertical-align:-1px;margin-right:5px}
+</style></head><body><div class="wrap">
+<h1>Zifferblätter für Klimaanlagen</h1>
+<p class="lead">Gleiche Form wie bei der Heizung, aber der Bogen zeigt den Modus statt „heizt“. Ein Schalter ersetzt das ⏻, Lüfterstufe und nanoe™ stehen als kleine Chips darunter. Beim Lüften gibt es keine Solltemperatur, dort fehlt der Strich.</p>
+<div class="legend"><span><i style="background:var(--heat)"></i>Heizen</span><span><i style="background:var(--cool)"></i>Kühlen</span><span><i style="background:var(--auto)"></i>Auto</span><span><i style="background:var(--dry)"></i>Entfeuchten</span><span><i style="background:var(--fan)"></i>Lüften</span></div>
+
+<h2>Hell</h2><div class="stage" id="l"><div class="grid"></div></div>
+<h2>Dunkel</h2><div class="stage dark" id="d"><div class="grid"></div></div>
+
+<div class="note"><b>Was sich gegenüber der Heizung ändert</b><ul>
+<li>Die Farbe kommt vom Modus. Heizen ist orange, Kühlen blau, Auto grün, Entfeuchten türkis, Lüften grau.</li>
+<li>Ausgeschaltete Anlagen haben nur den grauen Bogen und den Schalter in „aus“. Die Raumtemperatur bleibt sichtbar.</li>
+<li>Ein Klick auf das Zifferblatt öffnet wie heute das Detailfenster mit Modus, Lüfter, Eco, nanoe™ und Richtung.</li>
+<li>Bei „Gerät nicht erreichbar“ ersetzt ein 📡-Hinweis den Bogen.</li>
+</ul></div>
+</div>
+<script>
+const MIN=16,MAX=30,A0=135,A1=405,R=76;
+const P=(a,r=R)=>[100+r*Math.cos(a*Math.PI/180),100+r*Math.sin(a*Math.PI/180)];
+const ang=v=>A0+(Math.min(MAX,Math.max(MIN,v))-MIN)/(MAX-MIN)*(A1-A0);
+const arc=(a,b)=>{const p=P(a),q=P(b);return `M${p[0].toFixed(1)} ${p[1].toFixed(1)}A${R} ${R} 0 ${b-a>180?1:0} 1 ${q[0].toFixed(1)} ${q[1].toFixed(1)}`};
+const COL={Heizen:'var(--heat)',Kühlen:'var(--cool)',Auto:'var(--auto)',Entfeuchten:'var(--dry)',Lüften:'var(--fan)'};
+const Z=[
+ {n:'❄️ Wohnzimmer',t:21.6,s:23,m:'Heizen',fan:'Stufe 2',nano:true,on:1},
+ {n:'❄️ Schlafzimmer',t:26.4,s:24,m:'Kühlen',fan:'Auto',on:1},
+ {n:'❄️ Büro',t:23.1,s:23,m:'Auto',fan:'Leise',nano:true,on:1},
+ {n:'❄️ Kinder',t:24.8,m:'Entfeuchten',fan:'Stufe 1',on:1,hum:'62%'},
+ {n:'❄️ Flur',t:20.2,on:0}];
+const card=z=>{const c=z.on?COL[z.m]:'var(--fan)';
+ let s=`<path class="tr" d="${arc(A0,A1)}" fill="none" stroke-width="12" stroke-linecap="round"/>`;
+ if(z.on)s+=`<path d="${arc(A0,Math.max(A0+1,ang(z.t)))}" fill="none" stroke="${c}" stroke-width="12" stroke-linecap="round"/>`;
+ if(z.on&&z.s){const a=ang(z.s),p=P(a,R-11),q=P(a,R+11);s+=`<line class="tk" x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke-width="3" stroke-linecap="round"/>`}
+ s+=`<text class="lim" x="38" y="164" text-anchor="middle">${MIN}°</text><text class="lim" x="162" y="164" text-anchor="middle">${MAX}°</text>`;
+ const chips=z.on?`<div class="chips"><span>🌀 ${z.fan}</span>${z.nano?'<span>🌿 nanoe™</span>':''}${z.hum?`<span>💧 ${z.hum}</span>`:''}</div>`:'<div class="chips"><span>Aus</span></div>';
+ const ctl=z.on&&z.s?`<div class="ctl"><span class="b">−</span><span class="t">${z.s.toFixed(1)}°</span><span class="b">+</span><span class="sw on"></span></div>`:`<div class="ctl"><span class="sw ${z.on?'on':''}"></span></div>`;
+ return `<div class="card ${z.on?'on':'off'}" style="--c:${c}"><div class="top"><span class="nm">${z.n}</span><span class="mode ${z.on?'':'none'}">${z.on?z.m:'aus'}</span></div>
+ <div class="dial"><svg viewBox="0 0 200 170" aria-hidden="true">${s}</svg><div class="ctr"><b>${z.t.toFixed(1)}°</b><span>${z.on&&z.s?'Soll '+z.s.toFixed(1)+'°':(z.on?'ohne Soll':'Raum')}</span></div></div>${chips}${ctl}</div>`};
+['l','d'].forEach(id=>document.querySelector('#'+id+' .grid').innerHTML=Z.map(card).join(''));
+</script></body></html>
