@@ -1,0 +1,52 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 7 – Grundriss</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Layout: Wohnung als Grundriss, jeder Raum ist eine Fläche, Farbe = Abstand zur Solltemperatur */
+:root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--orange:#ff7a3d;--blue:#2c8fd6;--green:#3ea86a;--red:#e04f38;
+--cold:#e3effa;--ok:#eef3ea;--warm:#fdeadd;--wall:#2a2a30}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);font-variant-numeric:tabular-nums}
+.wrap{max-width:900px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left)) 60px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}
+.sub{color:var(--dim);font-size:14px;margin-top:4px}
+.out{display:flex;gap:10px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:10px 14px;font-size:13px}
+.out b{font-size:20px}
+.plan{background:var(--card);border:1px solid var(--line);border-radius:28px;padding:16px;box-shadow:0 8px 24px #0000000a}
+.house{display:grid;grid-template-columns:1.1fr 1.1fr 1fr;grid-template-rows:repeat(3,minmax(120px,1fr));gap:0;border:5px solid var(--wall);border-radius:6px;
+grid-template-areas:"wz wz kue" "wz wz flur" "sz bad az"}
+.room{position:relative;padding:12px 14px;display:flex;flex-direction:column;gap:2px;border:1.5px solid var(--wall);margin:-1.5px;min-width:0}
+.room.cold{background:var(--cold)}.room.ok{background:var(--ok)}.room.warm{background:var(--warm)}
+.room.heat::after{content:"";position:absolute;inset:0;background:radial-gradient(circle at 85% 90%,#ff7a3d40,transparent 60%);pointer-events:none}
+.n{font-size:13px;font-weight:600;overflow-wrap:anywhere}
+.t{font-size:clamp(24px,5vw,38px);font-weight:700;letter-spacing:-.03em;line-height:1.05}
+.m{font-size:12px;color:var(--dim);display:flex;gap:4px 8px;flex-wrap:wrap}
+.tag{margin-top:auto;font-size:11.5px;font-weight:700;padding:3px 8px;border-radius:99px;align-self:flex-start;position:relative;z-index:1}
+.tag.h{background:#ffe0cf;color:#b4491a}.tag.w{background:#fde3df;color:#b3321f}.tag.a{background:#0000000d;color:var(--dim)}
+.door{position:absolute;width:26px;height:7px;background:var(--card);border:1.5px solid var(--wall);z-index:2}
+.wz{grid-area:wz}.kue{grid-area:kue}.flur{grid-area:flur}.sz{grid-area:sz}.bad{grid-area:bad}.az{grid-area:az}
+.win{position:absolute;background:#9cc9ea;border:1.5px solid var(--wall);z-index:2}
+.win.top{top:-5px;left:30%;width:40%;height:6px}.win.right{right:-5px;top:30%;height:40%;width:6px}.win.open{background:var(--red)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:12.5px;color:var(--dim)}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:4px;border:1px solid var(--line);vertical-align:-2px;margin-right:6px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin-top:18px}
+.note{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px 16px;font-size:13.5px;line-height:1.5}
+.note b{display:block;margin-bottom:2px}
+</style></head><body><div class="wrap">
+<header><div><h1>Zuhause</h1><div class="sub">Grundriss-Ansicht · Farbe zeigt, wie nah jeder Raum an seiner Solltemperatur ist</div></div>
+<div class="out"><span>☁️ Draußen</span><b>6.0°</b><span>Wind 14 km/h</span></div></header>
+<div class="plan"><div class="house">
+ <div class="room warm heat wz"><div class="n">🛋️ Wohnzimmer</div><div class="t">21.4°</div><div class="m"><span>Soll 22.0</span><span>💧 58%</span></div><span class="tag h">🔥 heizt 40%</span><i class="win top"></i><i class="win right"></i></div>
+ <div class="room ok kue"><div class="n">🍳 Küche</div><div class="t">20.8°</div><div class="m"><span>Soll 20.0</span><span>💧 52%</span></div><span class="tag a">Zeitplan</span><i class="win top"></i></div>
+ <div class="room ok flur"><div class="n">🚪 Flur</div><div class="t">19.8°</div><div class="m"><span>Soll 19.0</span><span>💧 49%</span></div><span class="tag a">Zeitplan</span></div>
+ <div class="room ok sz"><div class="n">🛏️ Schlafzimmer</div><div class="t">19.2°</div><div class="m"><span>Soll 19.0</span><span>💧 47%</span></div><span class="tag a">Zeitplan</span></div>
+ <div class="room warm heat bad"><div class="n">🛁 Bad</div><div class="t">22.6°</div><div class="m"><span>Soll 23.0</span><span>💧 64%</span></div><span class="tag h">🔥 heizt 70%</span></div>
+ <div class="room cold az"><div class="n">💻 Arbeitszimmer</div><div class="t">18.1°</div><div class="m"><span>Soll 21.0</span><span>💧 44%</span></div><span class="tag w">🪟 Fenster offen</span><i class="win right open"></i></div>
+</div>
+<div class="legend"><span><i style="background:var(--cold)"></i>kühler als Soll</span><span><i style="background:var(--ok)"></i>im Zielbereich</span><span><i style="background:var(--warm)"></i>heizt gerade</span><span><i style="background:var(--red)"></i>Fenster offen</span></div></div>
+<div class="notes">
+<div class="note"><b>Auf einen Blick</b>Wer die Wohnung kennt, findet jeden Raum sofort an seinem Platz. Probleme zeigen sich als Farbfläche statt als Zahl.</div>
+<div class="note"><b>Offene Frage</b>Der Grundriss müsste einmal von Hand festgelegt werden (Raum → Position). Auf dem Handy bleibt er als kompaktes Raster erhalten.</div>
+<div class="note"><b>Interaktion</b>Ein Klick auf einen Raum öffnet wie heute das Detailfenster mit Tages-Chart und Tabelle.</div>
+</div></div></body></html>
