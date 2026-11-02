@@ -154,6 +154,26 @@
   .zone-grid.dials.dark .pill.red,.zone-grid.dials.dark .warn-chip{background:#ff6b5730;color:#ff9a8a;}
   .zone-grid.dials.dark .stagnant-chip{background:#ffcc4d26;color:#ffd978;}
   .zone-grid.dials.dark .zc-next{border-top-color:#ffffff1f;}
+  .zone-grid.dials{--m-heat:var(--orange);--m-cool:var(--blue);--m-auto:var(--green);--m-dry:#16a3a3;--m-fan:#8a8d99;}
+  .zone-grid.dials.dark{--m-auto:#59c58b;--m-dry:#3cc7c7;--m-fan:#a2a8b8;--red:#ff6b57;}
+  .ac-dial.on{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--c) 40%,transparent),0 8px 24px rgba(0,0,0,.05);}
+  .zone-grid.dials.dark .ac-dial.on{box-shadow:0 0 0 1.5px color-mix(in srgb,var(--c) 45%,transparent);}
+  .ac-dial .sw.on{background:var(--c);}
+  .zone-grid.dials.dark .sw{background:#ffffff2a;}
+  .zone-grid.dials.dark .sw.on{background:var(--c);}
+  .zone-grid.dials.dark .temp-btn{background:var(--card);}
+  .mode-chip{font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;white-space:nowrap;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--c);}
+  .mode-chip.none{background:color-mix(in srgb,var(--text) 8%,transparent);color:var(--text-dim);}
+  .ac-dial .zc-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .dial-chips span{background:color-mix(in srgb,var(--text) 7%,transparent);border-radius:999px;padding:3px 9px;font-size:12.5px;}
+  .dial-offline{display:flex;flex-direction:column;align-items:center;gap:6px;padding:40px 0;font-size:34px;}
+  .dial-offline span{font-size:13px;color:var(--text-dim);}
+  /* Klima im Zifferblatt-Modus: ohne eigene Kachel, Kopf wie bei "Heizung" */
+  #klimaSection.dials{background:none;box-shadow:none;padding:0;overflow:visible;}
+  #klimaSection.dials h2.sec{margin:26px 2px 12px;font-size:15px;opacity:1;text-transform:none;letter-spacing:0;}
+  body.light #klimaSection.dials h2.sec{color:#fff;text-shadow:0 1px 10px rgba(0,0,0,.35);}
+  body.light #klimaSection.dials h2.sec .sum{color:#ffffffb3;}
+  #klimaSection.dials .status-line{background:var(--card);border-radius:18px;padding:10px 14px;margin:0 0 12px !important;}
   .dial-card{align-items:center;text-align:center;}
   .dial-card .zc-top{width:100%;}
   .dial-wrap{position:relative;width:100%;max-width:210px;margin:6px auto 0;}
@@ -1472,28 +1492,76 @@ function dialPoint(angle, r = DIAL_R) {
   const rad = (angle * Math.PI) / 180;
   return [100 + r * Math.cos(rad), 100 + r * Math.sin(rad)];
 }
-function dialAngle(v) {
-  const c = Math.min(DIAL_MAX, Math.max(DIAL_MIN, v));
-  return DIAL_A0 + ((c - DIAL_MIN) / (DIAL_MAX - DIAL_MIN)) * (DIAL_A1 - DIAL_A0);
+function dialAngle(v, min = DIAL_MIN, max = DIAL_MAX) {
+  const c = Math.min(max, Math.max(min, v));
+  return DIAL_A0 + ((c - min) / (max - min)) * (DIAL_A1 - DIAL_A0);
 }
 function dialArc(a, b) {
   const [p, q] = [dialPoint(a), dialPoint(b)];
   return `M${p[0].toFixed(1)} ${p[1].toFixed(1)}A${DIAL_R} ${DIAL_R} 0 ${b - a > 180 ? 1 : 0} 1 ${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
 }
 
-function dialSvg(zone, isOff, isHeating) {
-  const color = zone.openWindow ? 'var(--red)' : (isHeating ? 'var(--orange)' : 'var(--blue)');
+// Bogen (Ist) und Strich (Soll) auf einer Skala von min bis max °C.
+function dialSvgMarks(cur, target, color, min, max) {
   let marks = `<path class="dial-track" d="${dialArc(DIAL_A0, DIAL_A1)}" fill="none" stroke-width="12" stroke-linecap="round"/>`;
-  if (zone.currentTemp != null) {
-    marks += `<path d="${dialArc(DIAL_A0, Math.max(DIAL_A0 + 1, dialAngle(zone.currentTemp)))}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>`;
+  if (cur != null) {
+    marks += `<path d="${dialArc(DIAL_A0, Math.max(DIAL_A0 + 1, dialAngle(cur, min, max)))}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>`;
   }
-  if (!isOff && zone.targetTemp != null) {
-    const a = dialAngle(zone.targetTemp);
+  if (target != null) {
+    const a = dialAngle(target, min, max);
     const [p, q] = [dialPoint(a, DIAL_R - 11), dialPoint(a, DIAL_R + 11)];
     marks += `<line class="dial-tick" x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke-width="3" stroke-linecap="round"/>`;
   }
-  marks += `<text class="dial-lim" x="38" y="164" text-anchor="middle">${DIAL_MIN}°</text><text class="dial-lim" x="162" y="164" text-anchor="middle">${DIAL_MAX}°</text>`;
+  marks += `<text class="dial-lim" x="38" y="164" text-anchor="middle">${min}°</text><text class="dial-lim" x="162" y="164" text-anchor="middle">${max}°</text>`;
   return `<svg viewBox="0 0 200 170" aria-hidden="true">${marks}</svg>`;
+}
+
+function dialSvg(zone, isOff, isHeating) {
+  const color = zone.openWindow ? 'var(--red)' : (isHeating ? 'var(--orange)' : 'var(--blue)');
+  return dialSvgMarks(zone.currentTemp, !isOff && zone.targetTemp != null ? zone.targetTemp : null, color, DIAL_MIN, DIAL_MAX);
+}
+
+// Klimaanlage als Zifferblatt: Bogenfarbe = Modus, Strich = Soll, Schalter statt ⏻.
+const AC_DIAL_MIN = 16, AC_DIAL_MAX = 30;
+const AC_MODE_COLORS = { HEAT: 'var(--m-heat)', COOL: 'var(--m-cool)', AUTO: 'var(--m-auto)', DRY: 'var(--m-dry)', FAN: 'var(--m-fan)' };
+function acDialHtml(zone) {
+  const name = `${zoneIcon(zone)} ${zone.name}`;
+  if (zone.deviceOffline) {
+    return `
+    <div class="zone-card dial-card ac-dial offline" data-zone-key="${zone.key}" style="--c:var(--m-fan)">
+      <div class="zc-top"><span class="zc-name">${name}</span></div>
+      <div class="dial-offline">📡<span>nicht erreichbar</span></div>
+    </div>`;
+  }
+  const isOff = zone.power !== 'ON';
+  const ids = `data-zone-id="${zone.id}" data-home-id="${zone.homeId}"`;
+  const hasTemp = !isOff && acHasTargetTemp(zone);
+  const color = isOff ? 'var(--m-fan)' : (AC_MODE_COLORS[zone.mode] || 'var(--m-fan)');
+  const cur = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
+  const caption = isOff ? 'Raum' : (hasTemp ? 'Soll ' + zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0) + '°' : 'ohne Soll');
+  const fan = (AC_FAN_OPTIONS.find(([v]) => v === zone.fanLevel) || [])[1];
+  const chips = isOff ? '<span>Aus</span>' : [
+    fan ? `<span>🌀 ${fan}</span>` : '',
+    AC_NANOE_SHORT[zone.nanoe] ? `<span>🌿 ${AC_NANOE_SHORT[zone.nanoe]}</span>` : '',
+    zone.humidity != null ? `<span>💧 ${Math.round(zone.humidity)}%</span>` : '',
+    zone.cachedState ? '<span>Stand evtl. veraltet</span>' : '',
+  ].join('');
+  const tempBtns = hasTemp ? `
+    <button class="temp-btn" data-action="dec" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Kälter">−</button>
+    <span class="temp-display">${zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0)}°</span>
+    <button class="temp-btn" data-action="inc" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Wärmer">+</button>` : '';
+  return `
+    <div class="zone-card dial-card ac-dial ${isOff ? 'off' : 'on'} clickable" data-zone-key="${zone.key}" style="--c:${color}">
+      <div class="zc-top"><span class="zc-name" role="button" tabindex="0" aria-label="${zone.name} Details öffnen">${name}</span>
+        <span class="mode-chip ${isOff ? 'none' : ''}">${isOff ? 'aus' : (AC_MODE_NAMES[zone.mode] || 'an')}</span></div>
+      <div class="dial-wrap">${dialSvgMarks(zone.currentTemp, hasTemp ? zone.targetTemp : null, isOff ? 'transparent' : color, AC_DIAL_MIN, AC_DIAL_MAX)}
+        <div class="dial-center"><span class="current">${cur}</span><span class="target">${caption}</span></div></div>
+      <div class="dial-chips">${chips}</div>
+      <div class="zone-controls">${tempBtns}
+        <button class="sw ${isOff ? '' : 'on'}" role="switch" aria-checked="${isOff ? 'false' : 'true'}"
+          aria-label="${zone.name} ${isOff ? 'einschalten' : 'ausschalten'}"
+          data-action="${isOff ? 'on' : 'off'}" ${ids}></button></div>
+    </div>`;
 }
 
 function dialCardHtml(zone) {
@@ -1527,6 +1595,8 @@ function applyHeatView() {
   const dials = heatView === 'dials';
   zoneGrid.classList.toggle('dials', dials);
   zoneGrid.classList.toggle('dark', dials && dialDark);
+  acList.className = dials ? `zone-grid dials${dialDark ? ' dark' : ''}` : 'acrow';
+  document.getElementById('klimaSection').classList.toggle('dials', dials);
   document.getElementById('viewTiles').setAttribute('aria-pressed', String(!dials));
   document.getElementById('viewDials').setAttribute('aria-pressed', String(dials));
   const themeBtn = document.getElementById('dialTheme');
@@ -1538,12 +1608,17 @@ function applyHeatView() {
 function roomCardsHtml(rooms) {
   return rooms.map(heatView === 'dials' ? dialCardHtml : zoneCardHtml).join('');
 }
+function acCardsHtml(ac) {
+  return ac.map(heatView === 'dials' ? acDialHtml : acRowHtml).join('');
+}
 function setHeatView(view) {
   heatView = view;
   try { localStorage.setItem(VIEW_STORAGE, view); } catch (e) { /* nur im Speicher */ }
   applyHeatView();
   const rooms = currentZones.filter((z) => z.type !== 'AC');
   if (rooms.length) zoneGrid.innerHTML = roomCardsHtml(rooms);
+  const ac = currentZones.filter((z) => z.type === 'AC');
+  if (ac.length) acList.innerHTML = acCardsHtml(ac);
 }
 document.getElementById('viewTiles').addEventListener('click', () => setHeatView('tiles'));
 document.getElementById('viewDials').addEventListener('click', () => setHeatView('dials'));
@@ -1572,7 +1647,7 @@ function renderZones(zones) {
     ? `${ac.filter((z) => z.power === 'ON').length} von ${ac.length} an` : '';
   show(document.getElementById('acAllOff'), ac.length > 0, 'inline');
   show(document.getElementById('acAllOn'), ac.length > 0, 'inline');
-  acList.innerHTML = ac.map(acRowHtml).join('');
+  acList.innerHTML = acCardsHtml(ac);
 
   // Heizung: kompakte Raum-Kacheln (Verlauf im Fenster per Klick)
   show(heizungSection, rooms.length > 0 || ac.length === 0, 'block');
@@ -2013,7 +2088,7 @@ zoneGrid.addEventListener('click', (e) => {
 });
 acList.addEventListener('click', (e) => {
   if (handleControlClick(e)) return;
-  const row = e.target.closest('.ac-row');
+  const row = e.target.closest('.ac-row, .ac-dial');
   if (!row) return;
   const zone = currentZones.find((z) => z.key === row.dataset.zoneKey);
   if (zone) openZoneModal(zone);
