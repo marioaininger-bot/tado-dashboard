@@ -138,6 +138,37 @@
   .zone-card.open-window{box-shadow:0 0 0 1.5px #e0452e88,0 8px 24px rgba(0,0,0,.05);}
   .zone-card.clickable{cursor:pointer;transition:transform .15s;}
   .zone-card.clickable:hover{transform:translateY(-2px);}
+
+  /* Ansicht "Zifferblätter" (Heizung): Bogen = Ist, Strich = Soll; hell oder dunkel */
+  .view-seg{display:inline-flex;align-items:center;gap:2px;background:var(--card);border:1px solid var(--card-border);border-radius:999px;padding:2px;margin-left:4px;}
+  .view-seg button{font:inherit;font-size:12px;font-weight:600;color:var(--text-dim);background:none;border:0;border-radius:999px;padding:4px 10px;cursor:pointer;}
+  .view-seg button[aria-pressed="true"]{background:var(--text);color:var(--card);}
+  .zone-grid.dials{--dial-track:rgba(0,0,0,.08);}
+  .zone-grid.dials.dark{
+    --card:#232a38;--card-border:#323b4d;--text:#eef1f6;--text-dim:#8f9bb0;--dial-track:#2e3748;--blue:#5db4f0;--orange:#ff8a4c;
+  }
+  .zone-grid.dials.dark .zone-card{background:var(--card);color:var(--text);box-shadow:0 0 0 1px var(--card-border);}
+  .zone-grid.dials.dark .zone-card.heating{box-shadow:0 0 0 1.5px #ff8a4c66,0 0 24px #ff8a4c1f;}
+  .zone-grid.dials.dark .zone-card.open-window{box-shadow:0 0 0 1.5px #ff6b5799;}
+  .zone-grid.dials.dark .off-chip,.zone-grid.dials.dark .pill{background:#ffffff14;}
+  .zone-grid.dials.dark .pill.red,.zone-grid.dials.dark .warn-chip{background:#ff6b5730;color:#ff9a8a;}
+  .zone-grid.dials.dark .stagnant-chip{background:#ffcc4d26;color:#ffd978;}
+  .zone-grid.dials.dark .zc-next{border-top-color:#ffffff1f;}
+  .dial-card{align-items:center;text-align:center;}
+  .dial-card .zc-top{width:100%;}
+  .dial-wrap{position:relative;width:100%;max-width:210px;margin:6px auto 0;}
+  .dial-wrap svg{display:block;width:100%;height:auto;}
+  .dial-track{stroke:var(--dial-track);}
+  .dial-tick{stroke:var(--text);}
+  .dial-lim{font-size:10px;fill:var(--text-dim);}
+  .dial-center{position:absolute;left:0;right:0;top:34%;display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;}
+  .dial-center .current{font-size:32px;font-weight:700;letter-spacing:-.03em;line-height:1.1;font-variant-numeric:tabular-nums;}
+  .dial-center .current .trend{font-size:13px;}
+  .dial-center .target{font-size:12px;color:var(--text-dim);}
+  .dial-chips{display:flex;flex-wrap:wrap;gap:4px 10px;justify-content:center;font-size:13px;color:var(--text-dim);margin-top:8px;}
+  .dial-card .zone-controls{justify-content:center;}
+  .dial-card .resume-link{margin-left:6px;}
+  .dial-card .power-label{justify-content:center;width:100%;}
   .zc-top{display:flex;justify-content:space-between;align-items:center;}
   .zc-name{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
   .temp-row{display:flex;align-items:baseline;gap:8px;margin:10px 0 2px;}
@@ -443,6 +474,11 @@
 
     <section id="heizungSection">
       <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span><span class="grow"></span>
+        <span class="view-seg" role="group" aria-label="Ansicht der Heizung">
+          <button type="button" id="viewTiles" aria-pressed="true">Kacheln</button>
+          <button type="button" id="viewDials" aria-pressed="false">Zifferblätter</button>
+          <button type="button" id="dialTheme" aria-pressed="false" title="Zifferblätter dunkel darstellen" hidden>🌙</button>
+        </span>
         <button class="link" id="heatAllOff">Alle aus</button><button class="link" id="heatAllSchedule" title="Alle Heizkörper zurück in den Zeitplan">↺ Alle auf Zeitplan</button></h2>
       <div id="zoneGrid" class="zone-grid"></div>
     </section>
@@ -1421,6 +1457,102 @@ function renderStatusStrip(ac, rooms) {
   statusStrip.innerHTML = tiles.join('');
 }
 
+/* ---------- Heizung: Ansicht Kacheln / Zifferblätter ---------- */
+const VIEW_STORAGE = 'heatView';
+const DIAL_THEME_STORAGE = 'dialTheme';
+let heatView = 'tiles';
+let dialDark = false;
+try {
+  heatView = localStorage.getItem(VIEW_STORAGE) === 'dials' ? 'dials' : 'tiles';
+  dialDark = localStorage.getItem(DIAL_THEME_STORAGE) === 'dark';
+} catch (e) { /* Standard */ }
+
+const DIAL_MIN = 10, DIAL_MAX = 28, DIAL_A0 = 135, DIAL_A1 = 405, DIAL_R = 76;
+function dialPoint(angle, r = DIAL_R) {
+  const rad = (angle * Math.PI) / 180;
+  return [100 + r * Math.cos(rad), 100 + r * Math.sin(rad)];
+}
+function dialAngle(v) {
+  const c = Math.min(DIAL_MAX, Math.max(DIAL_MIN, v));
+  return DIAL_A0 + ((c - DIAL_MIN) / (DIAL_MAX - DIAL_MIN)) * (DIAL_A1 - DIAL_A0);
+}
+function dialArc(a, b) {
+  const [p, q] = [dialPoint(a), dialPoint(b)];
+  return `M${p[0].toFixed(1)} ${p[1].toFixed(1)}A${DIAL_R} ${DIAL_R} 0 ${b - a > 180 ? 1 : 0} 1 ${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
+}
+
+function dialSvg(zone, isOff, isHeating) {
+  const color = zone.openWindow ? 'var(--red)' : (isHeating ? 'var(--orange)' : 'var(--blue)');
+  let marks = `<path class="dial-track" d="${dialArc(DIAL_A0, DIAL_A1)}" fill="none" stroke-width="12" stroke-linecap="round"/>`;
+  if (zone.currentTemp != null) {
+    marks += `<path d="${dialArc(DIAL_A0, Math.max(DIAL_A0 + 1, dialAngle(zone.currentTemp)))}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>`;
+  }
+  if (!isOff && zone.targetTemp != null) {
+    const a = dialAngle(zone.targetTemp);
+    const [p, q] = [dialPoint(a, DIAL_R - 11), dialPoint(a, DIAL_R + 11)];
+    marks += `<line class="dial-tick" x1="${p[0].toFixed(1)}" y1="${p[1].toFixed(1)}" x2="${q[0].toFixed(1)}" y2="${q[1].toFixed(1)}" stroke-width="3" stroke-linecap="round"/>`;
+  }
+  marks += `<text class="dial-lim" x="38" y="164" text-anchor="middle">${DIAL_MIN}°</text><text class="dial-lim" x="162" y="164" text-anchor="middle">${DIAL_MAX}°</text>`;
+  return `<svg viewBox="0 0 200 170" aria-hidden="true">${marks}</svg>`;
+}
+
+function dialCardHtml(zone) {
+  const isOff = zone.power === 'OFF';
+  const powerPct = zone.heatingPower || 0;
+  const isHeating = !isOff && zone.type === 'HEATING' && powerPct > 0;
+  const hasChart = zone.history && zone.history.length >= 2;
+  const current = zone.currentTemp != null ? zone.currentTemp.toFixed(1) + '°' : '–';
+  const caption = isOff ? 'Aus' : (zone.targetTemp != null ? 'Soll ' + zone.targetTemp.toFixed(1) + '°' : '');
+  const humidity = zone.humidity != null ? `<span>💧 ${Math.round(zone.humidity)}%${humidityTrend(zone)}${humiditySpark(zone)}</span>` : '';
+  const power = !isOff && !zone.noPowerData ? `<span>${Math.round(powerPct)}% Leistung</span>` : '';
+  return `
+    <div class="zone-card dial-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${isHeating ? 'heating' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}">
+      <div class="zc-top"><span class="zc-name"${hasChart ? ` role="button" tabindex="0" aria-label="${zone.name} Details öffnen"` : ''}>${zoneIcon(zone)} ${zone.name}</span>${batteryIconHtml(zone)}</div>
+      <div class="dial-wrap">${dialSvg(zone, isOff, isHeating)}
+        <div class="dial-center"><span class="current">${current}${isOff ? '' : zoneTrend(zone)}</span><span class="target">${caption}</span></div></div>
+      <div class="dial-chips">${humidity}${power}</div>
+      <div>
+        ${isOff ? '<span class="off-chip">Ausgeschaltet</span>' : (isHeating ? '<span class="pill">🔥 heizt</span>' : '')}
+        ${zone.openWindow ? '<span class="warn-chip">🪟 Fenster offen erkannt</span>' : ''}
+        ${zone.deviceOffline ? '<span class="warn-chip">📡 Gerät offline</span>' : ''}
+        ${isStagnant(zone) ? '<span class="stagnant-chip">⚠️ Reagiert nicht wie erwartet</span>' : ''}
+      </div>
+      ${controlsHtml(zone)}
+      ${nextChangeHtml(zone) ? `<div style="margin-top:auto;padding-top:12px;">${nextChangeHtml(zone)}</div>` : ''}
+    </div>
+  `;
+}
+
+function applyHeatView() {
+  const dials = heatView === 'dials';
+  zoneGrid.classList.toggle('dials', dials);
+  zoneGrid.classList.toggle('dark', dials && dialDark);
+  document.getElementById('viewTiles').setAttribute('aria-pressed', String(!dials));
+  document.getElementById('viewDials').setAttribute('aria-pressed', String(dials));
+  const themeBtn = document.getElementById('dialTheme');
+  themeBtn.hidden = !dials;
+  themeBtn.setAttribute('aria-pressed', String(dialDark));
+  themeBtn.textContent = dialDark ? '☀️' : '🌙';
+  themeBtn.title = dialDark ? 'Zifferblätter hell darstellen' : 'Zifferblätter dunkel darstellen';
+}
+function roomCardsHtml(rooms) {
+  return rooms.map(heatView === 'dials' ? dialCardHtml : zoneCardHtml).join('');
+}
+function setHeatView(view) {
+  heatView = view;
+  try { localStorage.setItem(VIEW_STORAGE, view); } catch (e) { /* nur im Speicher */ }
+  applyHeatView();
+  const rooms = currentZones.filter((z) => z.type !== 'AC');
+  if (rooms.length) zoneGrid.innerHTML = roomCardsHtml(rooms);
+}
+document.getElementById('viewTiles').addEventListener('click', () => setHeatView('tiles'));
+document.getElementById('viewDials').addEventListener('click', () => setHeatView('dials'));
+document.getElementById('dialTheme').addEventListener('click', () => {
+  dialDark = !dialDark;
+  try { localStorage.setItem(DIAL_THEME_STORAGE, dialDark ? 'dark' : 'light'); } catch (e) { /* nur im Speicher */ }
+  applyHeatView();
+});
+
 function renderZones(zones) {
   currentZones = zones;
   // Ein gerade geöffnetes Auswahlfeld nicht durch den 60-s-Refresh schließen.
@@ -1453,7 +1585,7 @@ function renderZones(zones) {
   document.getElementById('heizungSum').textContent = rooms.length
     ? `${rooms.length} ${rooms.length === 1 ? 'Raum' : 'Räume'} · ${heating} heizen gerade` : '';
   zoneGrid.innerHTML = rooms.length
-    ? rooms.map(zoneCardHtml).join('')
+    ? roomCardsHtml(rooms)
     : (ac.length ? '' : '<div class="empty-state">Keine Zonen gefunden.</div>');
 
   refreshZoneModal();
@@ -1931,6 +2063,7 @@ async function setAllZones(type, power, btn, only) {
   e.preventDefault();
   el.click();
 }));
+applyHeatView();
 document.getElementById('acAllOff').addEventListener('click', (e) => setAllZones('AC', 'OFF', e.currentTarget));
 document.getElementById('acAllOn').addEventListener('click', (e) => setAllZones('AC', 'ON', e.currentTarget));
 document.getElementById('heatAllOff').addEventListener('click', (e) => setAllZones('HEATING', 'OFF', e.currentTarget));
