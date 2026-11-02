@@ -1,0 +1,56 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 8 – Zifferblätter</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: Thermostat-Zifferblatt pro Raum, Bogen 10–28 °C, Strich = Soll, gefüllter Bogen = Ist */
+:root{--bg:#171b24;--bg2:#1f2430;--card:#232a38;--line:#323b4d;--text:#eef1f6;--dim:#8f9bb0;--orange:#ff8a4c;--blue:#5db4f0;--green:#59c58b;--red:#ff6b57;--track:#2e3748}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:radial-gradient(1200px 600px at 50% -10%,var(--bg2),var(--bg));background-color:var(--bg);color:var(--text);min-height:100vh}
+.wrap{max-width:980px;margin:0 auto;padding:28px max(16px,env(safe-area-inset-left)) 60px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}.sub{color:var(--dim);font-size:14px;margin-top:4px}
+.stats{display:flex;gap:10px;flex-wrap:wrap}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:9px 14px;font-size:12px;color:var(--dim)}
+.stat b{display:block;color:var(--text);font:700 18px 'JetBrains Mono',monospace}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.dial{background:var(--card);border:1px solid var(--line);border-radius:26px;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:0}
+.dial.heat{border-color:#ff8a4c66;box-shadow:0 0 28px #ff8a4c1f}
+.dial.alert{border-color:#ff6b5799}
+.name{font-weight:600;font-size:14px;align-self:flex-start}
+svg{width:100%;max-width:210px;height:auto;display:block}
+.num{font:700 30px 'JetBrains Mono',monospace;fill:var(--text)}.cap{font:500 11px Inter;fill:var(--dim)}
+.foot{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:-6px}
+.chip{font-size:12px;padding:4px 10px;border-radius:99px;background:#ffffff0f;color:var(--dim)}
+.chip.h{background:#ff8a4c26;color:var(--orange)}.chip.w{background:#ff6b5726;color:var(--red)}
+.panel{margin-top:22px;background:var(--card);border:1px dashed var(--line);border-radius:18px;padding:14px 18px;color:var(--dim);font-size:13.5px;line-height:1.55}
+.panel b{color:var(--text)}
+</style></head><body><div class="wrap">
+<header><div><h1>Zuhause</h1><div class="sub">Zifferblatt-Ansicht · Bogen = Ist, Strich = Soll</div></div>
+<div class="stats"><div class="stat">Draußen<b>6.0°</b></div><div class="stat">Ø Innen<b>20.3°</b></div><div class="stat">Ø Feuchte<b>52%</b></div><div class="stat">Heizt<b>2 / 6</b></div></div></header>
+<div class="grid" id="g"></div>
+<div class="panel"><b>Idee:</b> Die Lücke zwischen Bogenende und Strich zeigt sofort, welcher Raum noch Wärme braucht. Der Bogen färbt sich orange, solange geheizt wird, und rot bei offenem Fenster. Ein Tipp auf das Zifferblatt öffnet das Detailfenster, +/− ändert die Solltemperatur.</div>
+</div>
+<script>
+const R=[
+ {n:'🛋️ Wohnzimmer',t:21.4,s:22,h:58,p:40},
+ {n:'🍳 Küche',t:20.8,s:20,h:52},
+ {n:'🛏️ Schlafzimmer',t:19.2,s:19,h:47},
+ {n:'🛁 Bad',t:22.6,s:23,h:64,p:70},
+ {n:'💻 Arbeitszimmer',t:18.1,s:21,h:44,w:1},
+ {n:'🚪 Flur',t:19.8,s:19,h:49}];
+const MIN=10,MAX=28,A0=135,A1=405,cx=100,cy=100,r=76;
+const pt=(a,rr=r)=>[cx+rr*Math.cos(a*Math.PI/180),cy+rr*Math.sin(a*Math.PI/180)];
+const ang=v=>A0+(Math.min(MAX,Math.max(MIN,v))-MIN)/(MAX-MIN)*(A1-A0);
+function arc(a,b){const[p,q]=[pt(a),pt(b)];return `M${p[0]} ${p[1]}A${r} ${r} 0 ${b-a>180?1:0} 1 ${q[0]} ${q[1]}`}
+document.getElementById('g').innerHTML=R.map(x=>{
+ const col=x.w?'var(--red)':x.p?'var(--orange)':'var(--blue)';
+ const [s1,s2]=[pt(ang(x.s),r-11),pt(ang(x.s),r+11)];
+ return `<div class="dial ${x.p?'heat':''} ${x.w?'alert':''}"><div class="name">${x.n}</div>
+ <svg viewBox="0 0 200 180"><path d="${arc(A0,A1)}" fill="none" stroke="var(--track)" stroke-width="12" stroke-linecap="round"/>
+ <path d="${arc(A0,ang(x.t))}" fill="none" stroke="${col}" stroke-width="12" stroke-linecap="round"/>
+ <line x1="${s1[0]}" y1="${s1[1]}" x2="${s2[0]}" y2="${s2[1]}" stroke="var(--text)" stroke-width="3" stroke-linecap="round"/>
+ <text class="num" x="100" y="106" text-anchor="middle">${x.t.toFixed(1)}°</text>
+ <text class="cap" x="100" y="126" text-anchor="middle">Soll ${x.s.toFixed(1)}°</text>
+ <text class="cap" x="38" y="172" text-anchor="middle">${MIN}°</text><text class="cap" x="162" y="172" text-anchor="middle">${MAX}°</text></svg>
+ <div class="foot"><span class="chip">💧 ${x.h}%</span>${x.p?`<span class="chip h">🔥 ${x.p}%</span>`:''}${x.w?'<span class="chip w">🪟 Fenster offen</span>':''}${!x.p&&!x.w?'<span class="chip">Zeitplan</span>':''}</div></div>`}).join('');
+</script></body></html>
