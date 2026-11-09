@@ -1,0 +1,98 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard Thermografie</title><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=DM+Sans:wght@400;500;700&display=swap"><style>
+/* Layout: Infrarot-Kamera – dunkle Kacheln, Wärmeglühen je Temperatur, gemeinsame Wärmeskala oben */
+:root{
+  --bg:#0b0a10; --card:#15131d; --line:#262232; --fg:#f2eef8; --dim:#8d86a0;
+  --cold:#3b3bb0; --mid:#b02a8c; --warm:#ee5a36; --hot:#ffb03a; --ok:#4fd1a0; --warn:#ffd34d;
+  --display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif; --body:'DM Sans',system-ui,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 var(--body);
+  padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1040px;margin:0 auto;display:grid;gap:22px}
+header{display:flex;flex-wrap:wrap;gap:14px 28px;align-items:flex-end;justify-content:space-between}
+.hello small{display:block;color:var(--dim);letter-spacing:.14em;text-transform:uppercase;font-size:11px}
+.hello h1{margin:2px 0 0;font:800 clamp(34px,6vw,54px)/1 var(--display);letter-spacing:.01em;text-transform:uppercase;text-wrap:balance}
+.facts{display:flex;gap:26px;flex-wrap:wrap}
+.facts div small{display:block;color:var(--dim);font-size:11px;letter-spacing:.12em;text-transform:uppercase}
+.facts div b{font:600 30px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.scale{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 16px 12px}
+.scale h2{margin:0 0 30px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:500;display:flex;justify-content:space-between;gap:10px}
+.ribbon{position:relative;height:14px;border-radius:99px;background:linear-gradient(90deg,#2a2a8a 0%,#3b3bb0 15%,#8a2fa0 38%,#d2345f 58%,#ee5a36 76%,#ffb03a 100%)}
+.pin{position:absolute;top:-6px;width:2px;height:26px;background:var(--fg);transform:translateX(-1px);border-radius:2px}
+.pin span{position:absolute;top:30px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--dim);white-space:nowrap}
+.pin.a span{top:-18px}
+.ticks{display:flex;justify-content:space-between;margin-top:34px;font-size:11px;color:var(--dim);font-variant-numeric:tabular-nums}
+.note{background:#2a2110;border:1px solid #5a4313;color:var(--warn);padding:10px 14px;border-radius:12px;font-size:13px}
+h3{margin:0 0 10px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+.tile{--g:var(--warm);position:relative;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;min-height:178px;display:flex;flex-direction:column;justify-content:space-between;isolation:isolate}
+.tile::before{content:"";position:absolute;z-index:-1;inset:auto -30% -55% -30%;height:120%;background:radial-gradient(closest-side,var(--g),transparent 72%);opacity:calc(.25 + var(--k,.5)*.55);filter:blur(6px)}
+.tile.off::before{opacity:.08}
+.top{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.top b{font-weight:700;font-size:15px}.top em{font-style:normal;font-size:11px;color:var(--dim);text-align:right}
+.temp{font:800 76px/.9 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.temp sup{font-size:.42em;vertical-align:top;position:relative;top:.1em;font-weight:600}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:#cfc8e0;font-variant-numeric:tabular-nums}
+.chip{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#ffffff14}
+.chip.heat{background:#ee5a3633;color:#ff9a7a}.chip.warn{background:#ffd34d26;color:var(--warn)}.chip.win{background:#3b8dff2e;color:#8fc0ff}
+.pw{height:4px;background:#ffffff14;border-radius:9px;overflow:hidden;margin:2px 0 6px}.pw i{display:block;height:100%;background:var(--g)}
+.ac{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.acr{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+.acr .n{flex:1;min-width:0}.acr .n b{display:block}.acr .n small{color:var(--dim)}
+.sw{width:42px;height:24px;border-radius:99px;background:#2d2a3a;position:relative;flex:none}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s}
+.sw.on{background:#3b8dff}.sw.on::after{left:21px}
+footer{color:var(--dim);font-size:12px}
+</style></head><body>
+
+<div class="wrap">
+  <header>
+    <div class="hello"><small>Montag, 9. November · Zuhause</small><h1>Drei Räume heizen</h1></div>
+    <div class="facts">
+      <div><small>Außen</small><b>6°</b></div>
+      <div><small>Ø Innen</small><b id="avgT">20,5°</b></div>
+      <div><small>Ø Feuchte</small><b>52 %</b></div>
+    </div>
+  </header>
+
+  <section class="scale">
+    <h2><span>Wärmeskala · alle Räume</span><span>Strich = aktuelle Temperatur</span></h2>
+    <div class="ribbon" id="ribbon"></div>
+    <div class="ticks" id="ticks"></div>
+  </section>
+
+  <div class="note">Büro heizt seit 45 Min. und wird nicht wärmer · Kinderzimmer: Fenster offen</div>
+
+  <section><h3>Klima</h3><div class="ac" id="ac"></div></section>
+  <section><h3>Heizung</h3><div class="grid" id="grid"></div></section>
+  <footer>Beispieldaten für das Mockup. Die Kachelfarbe folgt der Raumtemperatur, die Helligkeit der Heizleistung.</footer>
+</div>
+
+<script>
+const ROOMS=[
+ {n:'Wohnzimmer',t:21.4,s:22,h:48,p:70,st:'heat'},
+ {n:'Schlafzimmer',t:18.9,s:19,h:55,p:0,st:'idle'},
+ {n:'Küche',t:20.2,s:21,h:51,p:40,st:'heat'},
+ {n:'Bad',t:23.1,s:23,h:67,p:0,st:'idle'},
+ {n:'Büro',t:19.4,s:21,h:44,p:90,st:'warn'},
+ {n:'Kinderzimmer',t:20.0,s:20,h:49,p:0,st:'off',win:true}];
+const AC=[{n:'Klima Wohnzimmer',on:true,sub:'Kühlen · 24° · Auto'},{n:'Klima Schlafzimmer',on:false,sub:'Aus'}];
+const MIN=16,MAX=24,pos=v=>Math.max(0,Math.min(1,(v-MIN)/(MAX-MIN)));
+const stops=[[0,[59,59,176]],[.35,[138,47,160]],[.6,[210,52,95]],[.8,[238,90,54]],[1,[255,176,58]]];
+function col(k){for(let i=1;i<stops.length;i++){if(k<=stops[i][0]){const[a,A]=stops[i-1],[b,B]=stops[i],f=(k-a)/(b-a);return `rgb(${A.map((x,j)=>Math.round(x+(B[j]-x)*f)).join(',')})`}}return 'rgb(255,176,58)'}
+const f=v=>v.toFixed(1).replace('.',',');
+ticks.innerHTML=[16,18,20,22,24].map(v=>`<span>${v}°</span>`).join('');
+ribbon.innerHTML=ROOMS.map((r,i)=>`<div class="pin ${i%2?'a':''}" style="left:${pos(r.t)*100}%"><span>${r.n} ${f(r.t)}°</span></div>`).join('');
+const L={heat:'Heizt',idle:'Ruhig',warn:'Prüfen',off:'Aus'};
+grid.innerHTML=ROOMS.map(r=>{const [i,d]=f(r.t).split(',');return `
+<div class="tile ${r.st==='off'?'off':''}" style="--g:${col(pos(r.t))};--k:${Math.max(.15,r.p/100)}">
+ <div class="top"><b>${r.n}</b><em>Soll ${r.s}°</em></div>
+ <div class="temp">${i}<sup>,${d}°</sup></div>
+ <div><div class="pw"><i style="width:${r.p}%"></i></div>
+ <div class="row"><span>${r.h} % Feuchte</span><span class="chip ${r.st==='heat'?'heat':r.st==='warn'?'warn':''}">${L[r.st]}</span>${r.win?'<span class="chip win">Fenster offen</span>':''}</div></div>
+</div>`}).join('');
+ac.innerHTML=AC.map(a=>`<div class="acr"><div class="n"><b>${a.n}</b><small>${a.sub}</small></div><span class="sw ${a.on?'on':''}"></span></div>`).join('');
+</script>
+</body></html>
