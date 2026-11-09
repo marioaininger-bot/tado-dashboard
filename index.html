@@ -607,8 +607,8 @@
     <section id="heizungSection">
       <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span><span class="grow"></span>
         <span class="view-seg" role="group" aria-label="Ansicht der Heizung">
-          <button type="button" id="viewTiles" aria-pressed="true">Kacheln</button>
-          <button type="button" id="viewDials" aria-pressed="false">Zifferblätter</button>
+          <button type="button" id="viewTiles" aria-pressed="false">Kacheln</button>
+          <button type="button" id="viewDials" aria-pressed="true">Zifferblätter</button>
           <button type="button" id="viewThermo" aria-pressed="false">Thermo</button>
           <button type="button" id="dialTheme" aria-pressed="false" title="Ansicht dunkel darstellen" hidden>🌙</button>
         </span>
@@ -1575,11 +1575,11 @@ function renderStatusStrip(ac, rooms) {
 /* ---------- Heizung: Ansicht Kacheln / Zifferblätter ---------- */
 const VIEW_STORAGE = 'heatView';
 const DIAL_THEME_STORAGE = 'dialTheme';
-let heatView = 'tiles';
+let heatView = 'dials';
 let dialDark = false;
 try {
   const savedView = localStorage.getItem(VIEW_STORAGE);
-  heatView = savedView === 'dials' || savedView === 'thermo' ? savedView : 'tiles';
+  heatView = savedView === 'tiles' || savedView === 'thermo' ? savedView : 'dials';
   dialDark = localStorage.getItem(DIAL_THEME_STORAGE) === 'dark';
 } catch (e) { /* Standard */ }
 
