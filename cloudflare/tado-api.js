@@ -356,6 +356,9 @@ async function fetchZonesForHome(env, accessToken, home) {
         openWindow: Boolean(room.openWindow),
         link: room.connection ? room.connection.state : null,
         manualOverride: Boolean(room.manualControlTermination),
+        // Diagnose: Typ, mit dem tado X die manuelle Steuerung tatsächlich
+        // gespeichert hat (MANUAL | NEXT_TIME_BLOCK | TIMER).
+        overrideType: room.manualControlTermination ? (room.manualControlTermination.type || null) : null,
         nextScheduleChange: extractScheduleChange(room.nextScheduleChange, 'value'),
         ...deviceStatusRoomsAndDevices(devicesByRoom[String(room.id)]),
       };
@@ -574,19 +577,21 @@ async function handleSetZone(request, env) {
     }
 
     if (isTadoX) {
+      const termination = overlayTermination(until, env, true);
       const res = await fetch(`${HOPS_API_BASE}/homes/${home.id}/rooms/${zoneId}/manualControl`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(
           power === 'OFF'
-            ? { setting: { type: 'HEATING', power: 'OFF' }, termination: overlayTermination(until, env, true) }
-            : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination: overlayTermination(until, env, true) }
+            ? { setting: { type: 'HEATING', power: 'OFF' }, termination }
+            : { setting: { type: 'HEATING', power: 'ON', temperature: { value: temperature } }, termination }
         ),
       });
       if (!res.ok) {
         const detail = await res.text().catch(() => '');
         throw new Error(`tado X Zone konnte nicht gesetzt werden (Status ${res.status})${detail ? ' - ' + detail : ''}`);
       }
+      return json(200, { status: 'ok', sentTermination: termination.type }, env);
     } else {
       const res = await fetch(`${API_BASE}/homes/${home.id}/zones/${zoneId}/overlay`, {
         method: 'PUT',

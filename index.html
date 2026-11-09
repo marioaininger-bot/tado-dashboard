@@ -1675,7 +1675,10 @@ function nextChangeHtml(zone) {
   // Bei aktiver manueller Übersteuerung greift der Zeitplan nicht
   // automatisch wieder - die nächste geplante Änderung wäre daher
   // irreführend (siehe Kommentar zu extractScheduleChange im Worker).
-  if (zone.manualOverride) return '<div class="zc-next">✋ Manuell übersteuert</div>';
+  if (zone.manualOverride) {
+    const t = { MANUAL: ' (dauerhaft)', NEXT_TIME_BLOCK: ' (bis Zeitplan)', TIMER: ' (Timer)' }[zone.overrideType] || '';
+    return `<div class="zc-next">✋ Manuell übersteuert${t}</div>`;
+  }
   const next = zone.nextScheduleChange;
   if (!next || !next.start) return '';
   const value = next.power === 'OFF' ? 'Aus' : (next.temperature != null ? next.temperature.toFixed(1) + '°' : '–');
