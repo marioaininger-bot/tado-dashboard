@@ -7,7 +7,7 @@
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Big+Shoulders+Display:wght@800&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg-1:#f2f1ed;
@@ -232,6 +232,43 @@
   .dial-card .zone-controls{justify-content:center;}
   .dial-card .resume-link{margin-left:6px;}
   .dial-card .power-label{justify-content:center;width:100%;}
+
+  /* Ansicht "Thermo": Raumtemperatur als große Zahl, Kachelfarbe und Wärmeglühen nach Temperatur (hell oder dunkel) */
+  .zone-grid.thermo.dark{--card:#15131d;--card-border:#262232;--text:#f2eef8;--text-dim:#8d86a0;--dial-track:#2d2a3a;}
+  .zone-grid.thermo .dial-card{align-items:stretch;text-align:left;}
+  .zone-grid.thermo .dial-chips,.zone-grid.thermo .dial-card .zone-controls{justify-content:flex-start;}
+  .thermo-card{isolation:isolate;min-height:210px;}
+  .thermo-card::before{
+    content:"";position:absolute;z-index:-1;inset:auto -30% -55% -30%;height:120%;pointer-events:none;
+    background:radial-gradient(closest-side,var(--g,var(--blue)),transparent 72%);
+    opacity:calc(.3 + var(--k,.3)*.6);filter:blur(5px);
+  }
+  .zone-grid.thermo.dark .thermo-card::before{opacity:calc(.25 + var(--k,.3)*.55);}
+  .thermo-card.off::before{opacity:.1;}
+  .thermo-num{
+    font-family:'Big Shoulders Display','Arial Narrow',Inter,sans-serif;font-weight:800;font-size:76px;line-height:.9;
+    letter-spacing:-.01em;font-variant-numeric:tabular-nums;margin:14px 0 6px;color:var(--text);
+  }
+  .thermo-num sup{font-size:.42em;font-weight:800;vertical-align:top;position:relative;top:.1em;}
+  .thermo-num .trend{font-family:Inter,system-ui,sans-serif;font-size:18px;margin-left:6px;vertical-align:top;}
+  .thermo-sub{font-size:13px;color:var(--text-dim);}
+  .thermo-bar{height:4px;border-radius:99px;background:color-mix(in srgb,var(--text) 12%,transparent);overflow:hidden;margin-top:12px;}
+  .thermo-bar i{display:block;height:100%;border-radius:99px;background:var(--g);}
+  .thermo-scale{
+    grid-column:1/-1;background:var(--card);border-radius:26px;padding:18px 22px 12px;
+    box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);color:var(--text);
+  }
+  .zone-grid.dark .thermo-scale{box-shadow:0 0 0 1px var(--card-border);}
+  .thermo-scale h3{margin:0 0 50px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-dim);display:flex;justify-content:space-between;gap:10px;}
+  .ts-ribbon{position:relative;height:14px;border-radius:99px;margin:0 6px;}
+  .ts-pin{position:absolute;top:-6px;width:2px;height:26px;margin-left:-1px;background:var(--text);border-radius:2px;}
+  .ts-pin>span{position:absolute;top:30px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--text-dim);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .ts-pin.l1>span{top:-20px;}
+  .ts-pin.l2>span{top:48px;}
+  .ts-pin.l3>span{top:-38px;}
+  .ts-ticks{position:relative;height:16px;margin:56px 6px 4px;font-size:11px;color:var(--text-dim);font-variant-numeric:tabular-nums;}
+  .ts-ticks span{position:absolute;transform:translateX(-50%);}
+  @media (max-width:560px){.ts-pin .pn{display:none;}}
   .zc-top{display:flex;justify-content:space-between;align-items:center;}
   .zc-name{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
   .temp-row{display:flex;align-items:baseline;gap:8px;margin:10px 0 2px;}
@@ -570,9 +607,10 @@
     <section id="heizungSection">
       <h2 class="sec">🔥 Heizung <span class="sum" id="heizungSum"></span><span class="grow"></span>
         <span class="view-seg" role="group" aria-label="Ansicht der Heizung">
-          <button type="button" id="viewTiles" aria-pressed="true">Kacheln</button>
-          <button type="button" id="viewDials" aria-pressed="false">Zifferblätter</button>
-          <button type="button" id="dialTheme" aria-pressed="false" title="Zifferblätter dunkel darstellen" hidden>🌙</button>
+          <button type="button" id="viewTiles" aria-pressed="false">Kacheln</button>
+          <button type="button" id="viewDials" aria-pressed="true">Zifferblätter</button>
+          <button type="button" id="viewThermo" aria-pressed="false">Thermo</button>
+          <button type="button" id="dialTheme" aria-pressed="false" title="Ansicht dunkel darstellen" hidden>🌙</button>
         </span>
         <span class="bulk"><button class="round-btn" id="heatAllOff" data-tip="Alle aus" aria-label="Alle Heizkörper aus">⏻</button><button class="round-btn" id="heatAllSchedule" data-tip="Alle auf Zeitplan" aria-label="Alle Heizkörper zurück in den Zeitplan">↺</button></span></h2>
       <div id="zoneGrid" class="zone-grid"></div>
@@ -1537,10 +1575,11 @@ function renderStatusStrip(ac, rooms) {
 /* ---------- Heizung: Ansicht Kacheln / Zifferblätter ---------- */
 const VIEW_STORAGE = 'heatView';
 const DIAL_THEME_STORAGE = 'dialTheme';
-let heatView = 'tiles';
+let heatView = 'dials';
 let dialDark = false;
 try {
-  heatView = localStorage.getItem(VIEW_STORAGE) === 'dials' ? 'dials' : 'tiles';
+  const savedView = localStorage.getItem(VIEW_STORAGE);
+  heatView = savedView === 'tiles' || savedView === 'thermo' ? savedView : 'dials';
   dialDark = localStorage.getItem(DIAL_THEME_STORAGE) === 'dark';
 } catch (e) { /* Standard */ }
 
@@ -1578,10 +1617,40 @@ function dialSvg(zone, isOff, isHeating) {
   return dialSvgMarks(zone.currentTemp, !isOff && zone.targetTemp != null ? zone.targetTemp : null, color, DIAL_MIN, DIAL_MAX);
 }
 
+// Ansicht "Thermo": Farbe und Wärmeglühen aus der Raumtemperatur (15 bis 25 °C).
+const THERMO_MIN = 15, THERMO_MAX = 25;
+const THERMO_STOPS = [[0, [59, 59, 176]], [.35, [138, 47, 160]], [.6, [210, 52, 95]], [.8, [238, 90, 54]], [1, [255, 176, 58]]];
+function thermoPos(t) { return Math.min(1, Math.max(0, (t - THERMO_MIN) / (THERMO_MAX - THERMO_MIN))); }
+function thermoColor(t) {
+  const k = thermoPos(t);
+  for (let i = 1; i < THERMO_STOPS.length; i++) {
+    if (k <= THERMO_STOPS[i][0]) {
+      const [a, A] = THERMO_STOPS[i - 1], [b, B] = THERMO_STOPS[i], f = (k - a) / (b - a);
+      return `rgb(${A.map((x, j) => Math.round(x + (B[j] - x) * f)).join(',')})`;
+    }
+  }
+  return 'rgb(255,176,58)';
+}
+function thermoNumHtml(v, trend) {
+  if (v == null) return '<div class="thermo-num">–</div>';
+  const [i, d] = v.toFixed(1).split('.');
+  return `<div class="thermo-num">${i}<sup>.${d}°</sup>${trend || ''}</div>`;
+}
+function thermoScaleHtml(rooms) {
+  const pts = rooms.filter((z) => z.currentTemp != null).sort((a, b) => a.currentTemp - b.currentTemp);
+  if (!pts.length) return '';
+  const grad = THERMO_STOPS.map(([p, c]) => `rgb(${c}) ${p * 100}%`).join(',');
+  const pins = pts.map((z, i) => `<div class="ts-pin l${i % 4}" style="left:${thermoPos(z.currentTemp) * 100}%"><span><span class="pn">${z.name} </span>${z.currentTemp.toFixed(1)}°</span></div>`).join('');
+  const ticks = [16, 18, 20, 22, 24].map((v) => `<span style="left:${thermoPos(v) * 100}%">${v}°</span>`).join('');
+  return `<div class="thermo-scale"><h3><span>Wärmeskala · alle Räume</span><span>Strich = aktuelle Temperatur</span></h3>
+    <div class="ts-ribbon" style="background:linear-gradient(90deg,${grad})">${pins}</div><div class="ts-ticks">${ticks}</div></div>`;
+}
+
 // Klimaanlage als Zifferblatt: Bogenfarbe = Modus, Strich = Soll, Schalter statt ⏻.
 const AC_DIAL_MIN = 16, AC_DIAL_MAX = 30;
 const AC_MODE_COLORS = { HEAT: 'var(--m-heat)', COOL: 'var(--m-cool)', AUTO: 'var(--m-auto)', DRY: 'var(--m-dry)', FAN: 'var(--m-fan)' };
 function acDialHtml(zone) {
+  const thermo = heatView === 'thermo';
   const name = `${zoneIcon(zone)} ${zone.name}`;
   if (zone.deviceOffline) {
     return `
@@ -1608,11 +1677,11 @@ function acDialHtml(zone) {
     <span class="temp-display">${zone.targetTemp.toFixed(zone.targetTemp % 1 ? 1 : 0)}°</span>
     <button class="temp-btn" data-action="inc" ${ids} data-temp="${zone.targetTemp}" data-step="1" aria-label="Wärmer">+</button>` : '';
   return `
-    <div class="zone-card dial-card ac-dial ${isOff ? 'off' : 'on'} clickable" data-zone-key="${zone.key}" style="--c:${color}">
+    <div class="zone-card dial-card ac-dial ${thermo ? 'thermo-card ' : ''}${isOff ? 'off' : 'on'} clickable" data-zone-key="${zone.key}" style="--c:${color};--g:${color};--k:.6">
       <div class="zc-top"><span class="zc-name" role="button" tabindex="0" aria-label="${zone.name} Details öffnen">${name}</span>
         <span class="mode-chip ${isOff ? 'none' : ''}">${isOff ? 'aus' : (AC_MODE_NAMES[zone.mode] || 'an')}</span></div>
-      <div class="dial-wrap">${dialSvgMarks(zone.currentTemp, hasTemp ? zone.targetTemp : null, isOff ? 'transparent' : color, AC_DIAL_MIN, AC_DIAL_MAX)}
-        <div class="dial-center"><span class="current">${cur}</span><span class="target">${caption}</span></div></div>
+      ${thermo ? `${thermoNumHtml(zone.currentTemp)}<div class="thermo-sub">${caption}</div>` : `<div class="dial-wrap">${dialSvgMarks(zone.currentTemp, hasTemp ? zone.targetTemp : null, isOff ? 'transparent' : color, AC_DIAL_MIN, AC_DIAL_MAX)}
+        <div class="dial-center"><span class="current">${cur}</span><span class="target">${caption}</span></div></div>`}
       <div class="dial-chips">${chips}</div>
       <div class="zone-controls">${tempBtns}
         <button class="sw ${isOff ? '' : 'on'}" role="switch" aria-checked="${isOff ? 'false' : 'true'}"
@@ -1622,6 +1691,7 @@ function acDialHtml(zone) {
 }
 
 function dialCardHtml(zone) {
+  const thermo = heatView === 'thermo';
   const isOff = zone.power === 'OFF';
   const powerPct = zone.heatingPower || 0;
   const isHeating = !isOff && zone.type === 'HEATING' && powerPct > 0;
@@ -1631,10 +1701,10 @@ function dialCardHtml(zone) {
   const humidity = zone.humidity != null ? `<span>💧 ${Math.round(zone.humidity)}%${humidityTrend(zone)}${humiditySpark(zone)}</span>` : '';
   const power = !isOff && !zone.noPowerData ? `<span>${Math.round(powerPct)}% Leistung</span>` : '';
   return `
-    <div class="zone-card dial-card type-${zone.type || ''} ${zone.openWindow ? 'open-window' : ''} ${isHeating ? 'heating' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}">
+    <div class="zone-card dial-card ${thermo ? 'thermo-card ' : ''}type-${zone.type || ''} ${isOff ? 'off' : ''} ${zone.openWindow ? 'open-window' : ''} ${isHeating ? 'heating' : ''} ${hasChart ? 'clickable' : ''}" data-zone-key="${zone.key}"${thermo ? ` style="--g:${zone.currentTemp != null ? thermoColor(zone.currentTemp) : 'var(--text-dim)'};--k:${Math.max(.15, powerPct / 100)}"` : ''}>
       <div class="zc-top"><span class="zc-name"${hasChart ? ` role="button" tabindex="0" aria-label="${zone.name} Details öffnen"` : ''}>${zoneIcon(zone)} ${zone.name}</span>${batteryIconHtml(zone)}</div>
-      <div class="dial-wrap">${dialSvg(zone, isOff, isHeating)}
-        <div class="dial-center"><span class="current">${current}${isOff ? '' : zoneTrend(zone)}</span><span class="target">${caption}</span></div></div>
+      ${thermo ? `${thermoNumHtml(zone.currentTemp, isOff ? '' : zoneTrend(zone))}<div class="thermo-sub">${caption}</div>${!isOff && !zone.noPowerData ? `<div class="thermo-bar"><i style="width:${Math.min(100, powerPct)}%"></i></div>` : ''}` : `<div class="dial-wrap">${dialSvg(zone, isOff, isHeating)}
+        <div class="dial-center"><span class="current">${current}${isOff ? '' : zoneTrend(zone)}</span><span class="target">${caption}</span></div></div>`}
       <div class="dial-chips">${humidity}${power}</div>
       <div>
         ${isOff ? '<span class="off-chip">Ausgeschaltet</span>' : (isHeating ? '<span class="pill">🔥 heizt</span>' : '')}
@@ -1649,24 +1719,27 @@ function dialCardHtml(zone) {
 }
 
 function applyHeatView() {
-  const dials = heatView === 'dials';
+  const dials = heatView !== 'tiles';
   zoneGrid.classList.toggle('dials', dials);
+  zoneGrid.classList.toggle('thermo', heatView === 'thermo');
   zoneGrid.classList.toggle('dark', dials && dialDark);
-  acList.className = dials ? `zone-grid dials${dialDark ? ' dark' : ''}` : 'acrow';
+  acList.className = dials ? `zone-grid dials${heatView === 'thermo' ? ' thermo' : ''}${dialDark ? ' dark' : ''}` : 'acrow';
   document.getElementById('klimaSection').classList.toggle('dials', dials);
   document.getElementById('viewTiles').setAttribute('aria-pressed', String(!dials));
-  document.getElementById('viewDials').setAttribute('aria-pressed', String(dials));
+  document.getElementById('viewDials').setAttribute('aria-pressed', String(heatView === 'dials'));
+  document.getElementById('viewThermo').setAttribute('aria-pressed', String(heatView === 'thermo'));
   const themeBtn = document.getElementById('dialTheme');
   themeBtn.hidden = !dials;
   themeBtn.setAttribute('aria-pressed', String(dialDark));
   themeBtn.textContent = dialDark ? '☀️' : '🌙';
-  themeBtn.title = dialDark ? 'Zifferblätter hell darstellen' : 'Zifferblätter dunkel darstellen';
+  themeBtn.title = dialDark ? 'Ansicht hell darstellen' : 'Ansicht dunkel darstellen';
 }
 function roomCardsHtml(rooms) {
-  return rooms.map(heatView === 'dials' ? dialCardHtml : zoneCardHtml).join('');
+  const cards = rooms.map(heatView === 'tiles' ? zoneCardHtml : dialCardHtml).join('');
+  return heatView === 'thermo' ? thermoScaleHtml(rooms) + cards : cards;
 }
 function acCardsHtml(ac) {
-  return ac.map(heatView === 'dials' ? acDialHtml : acRowHtml).join('');
+  return ac.map(heatView === 'tiles' ? acRowHtml : acDialHtml).join('');
 }
 function setHeatView(view) {
   heatView = view;
@@ -1679,6 +1752,7 @@ function setHeatView(view) {
 }
 document.getElementById('viewTiles').addEventListener('click', () => setHeatView('tiles'));
 document.getElementById('viewDials').addEventListener('click', () => setHeatView('dials'));
+document.getElementById('viewThermo').addEventListener('click', () => setHeatView('thermo'));
 document.getElementById('dialTheme').addEventListener('click', () => {
   dialDark = !dialDark;
   try { localStorage.setItem(DIAL_THEME_STORAGE, dialDark ? 'dark' : 'light'); } catch (e) { /* nur im Speicher */ }

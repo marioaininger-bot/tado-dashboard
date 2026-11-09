@@ -9,7 +9,7 @@ Begrüßung mit Kurzstatus (Räume heizen, Klima an, Hinweise), eine Außen-Kach
 mit Wetter und Stunden-Vorschau sowie Kacheln für Ø Innentemperatur und Ø
 Luftfeuchte, darunter den Bereich „Klima“ (eine
 Zeile mit Schalter je Klimaanlage, „Alle aus/an“) und den Bereich „Heizung“ (mit „Alle aus“ und „↺ Alle auf Zeitplan“, das alle manuell übersteuerten oder ausgeschalteten Räume zurück in den Zeitplan setzt; erscheint nur bei Abweichungen, auch als Hinweis in der Begrüßung; zusätzlich öffnet sich beim Laden und bei neuen Abweichungen ein Popup mit den betroffenen Räumen, je Raum mit „Zeitplan“ und „Später“ – „Später“ pausiert den Raum 4 Stunden)
-mit kompakten Raum-Kacheln, die sich per Umschalter (Kacheln / Zifferblätter) als Thermostat-Zifferblätter darstellen lassen – auch die Klimaanlagen, dort färbt der Modus den Bogen (Bogen = Ist, Strich = Soll; hell oder dunkel, die Auswahl wird im Browser gemerkt). Ein Klick auf eine Kachel oder Klima-Zeile öffnet
+mit kompakten Raum-Kacheln, die sich per Umschalter (Zifferblätter [Standard] / Kacheln / Thermo) als Thermostat-Zifferblätter oder als „Thermografie“-Kacheln darstellen lassen (Thermo: große Temperaturzahl, Kachelfarbe und Wärmeglühen nach Raumtemperatur, dazu oben eine gemeinsame Wärmeskala aller Räume) – auch die Klimaanlagen, dort färbt der Modus den Bogen (Bogen = Ist, Strich = Soll; hell oder dunkel – gilt für Zifferblätter und Thermo; die Auswahl wird im Browser gemerkt). Ein Klick auf eine Kachel oder Klima-Zeile öffnet
 ein Fenster: bei Räumen der Tages-Chart für Temperatur und Luftfeuchte plus
 eine Tabelle der letzten 2 Stunden (alle 15 Min.), bei Klimaanlagen zusätzlich
 die volle Steuerung (Modus, Lüfter, Eco, Richtung). Zonen, die trotz aktivem
