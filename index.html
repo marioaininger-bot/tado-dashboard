@@ -260,6 +260,9 @@
   @keyframes holdRing{to{--hold:360deg;}}
   @media (prefers-reduced-motion:reduce){.power-btn[data-action="off"].holding::after{animation-duration:1ms;}}
   .power-btn.is-off{color:var(--orange);border-color:var(--orange);}
+  .power-btn.flash{animation:holdFlash .6s ease-out;}
+  @keyframes holdFlash{0%{background:var(--orange);color:#fff;border-color:var(--orange);transform:scale(1.12);}100%{transform:scale(1);}}
+  @media (prefers-reduced-motion:reduce){.power-btn.flash{animation:none;background:var(--orange);color:#fff;}}
   .temp-display{font-weight:700;font-size:14px;min-width:38px;text-align:center;font-variant-numeric:tabular-nums;}
   .resume-link{
     margin-left:auto;background:none;border:none;color:var(--blue);font-size:12px;
@@ -2038,7 +2041,11 @@ document.addEventListener('pointerdown', (e) => {
   holdTimer = setTimeout(() => {
     holdFired = true;
     btn.classList.remove('holding');
-    try { if (navigator.vibrate) navigator.vibrate(40); } catch (err) { /* optional */ }
+    try { if (navigator.vibrate) navigator.vibrate(40); } catch (err) { /* iOS kennt keine Vibration */ }
+    // Sichtbare Rückmeldung (iPhone vibriert nicht): Knopf blitzt orange, Meldung erscheint.
+    btn.classList.add('flash');
+    const roomName = (currentZones.find((z) => String(z.id) === String(btn.dataset.zoneId) && String(z.homeId) === String(btn.dataset.homeId)) || {}).name;
+    showToast(`${roomName ? roomName + ': ' : ''}Dauerhaft ausgeschaltet`, 'info');
     postZoneSet({ zoneId: btn.dataset.zoneId, homeId: btn.dataset.homeId, power: 'OFF', until: 'manual' },
       btn, 'Konnte Heizkörper nicht ausschalten: ');
   }, HOLD_MS);
