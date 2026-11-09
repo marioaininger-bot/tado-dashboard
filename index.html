@@ -1033,10 +1033,10 @@ function renderUpdated() {
   const stale = lastLoadFailed || age > STALE_AFTER_MS;
   updatedInfo.classList.toggle('stale', stale);
   // Ring leert sich mit dem Alter der Daten (voll = frisch, leer = veraltet).
-  updatedInfo.querySelector('.ring').style.setProperty('--p', stale ? 100 : Math.round(100 - age / STALE_AFTER_MS * 100));
+  updatedInfo.querySelector('.ring').style.setProperty('--p', stale ? 100 : (100 - age / STALE_AFTER_MS * 100).toFixed(1));
   updatedText.innerHTML = 'Stand <b>' + formatTime(lastUpdate) + '</b>' + (stale ? ' · veraltet' : '');
 }
-setInterval(renderUpdated, 30000);
+setInterval(renderUpdated, 1000); // jede Sekunde, damit der Ring stufenlos läuft
 updatedInfo.addEventListener('click', async () => {
   updatedInfo.classList.add('loading');
   await loadDashboard();
