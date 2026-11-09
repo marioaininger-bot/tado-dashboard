@@ -1022,7 +1022,8 @@ function showToast(message, kind = 'error') {
 /* ---------- Stand der Daten + Aktualisierung ---------- */
 const updatedInfo = document.getElementById('updatedInfo');
 const updatedText = document.getElementById('updatedText');
-const STALE_AFTER_MS = 3 * 60 * 1000;
+const REFRESH_MS = 60 * 1000;                 // Aktualisierungstakt; der Ring läuft genau über diese Zeit
+const STALE_AFTER_MS = REFRESH_MS + 20 * 1000; // 20 s Toleranz, dann gilt der Stand als veraltet (rot)
 let lastUpdate = null;
 let lastLoadFailed = false;
 let resumeOnVisible = false;
@@ -1032,8 +1033,8 @@ function renderUpdated() {
   const age = Date.now() - lastUpdate;
   const stale = lastLoadFailed || age > STALE_AFTER_MS;
   updatedInfo.classList.toggle('stale', stale);
-  // Ring leert sich mit dem Alter der Daten (voll = frisch, leer = veraltet).
-  updatedInfo.querySelector('.ring').style.setProperty('--p', stale ? 100 : (100 - age / STALE_AFTER_MS * 100).toFixed(1));
+  // Ring leert sich über eine Minute (voll = gerade aktualisiert); klappt die nächste Aktualisierung nicht, wird er rot.
+  updatedInfo.querySelector('.ring').style.setProperty('--p', stale ? 100 : Math.max(0, 100 - age / REFRESH_MS * 100).toFixed(1));
   updatedText.innerHTML = 'Stand <b>' + formatTime(lastUpdate) + '</b>' + (stale ? ' · veraltet' : '');
 }
 setInterval(renderUpdated, 1000); // jede Sekunde, damit der Ring stufenlos läuft
@@ -1054,7 +1055,7 @@ document.addEventListener('visibilitychange', () => {
   } else if (resumeOnVisible) {
     resumeOnVisible = false;
     loadDashboard();
-    refreshTimer = setInterval(loadDashboard, 60000);
+    refreshTimer = setInterval(loadDashboard, REFRESH_MS);
   }
 });
 
@@ -1064,7 +1065,7 @@ function startDashboard() {
   show(loadingState, true, 'block');
   loadDashboard();
   if (refreshTimer) clearInterval(refreshTimer);
-  refreshTimer = setInterval(loadDashboard, 60000);
+  refreshTimer = setInterval(loadDashboard, REFRESH_MS);
 }
 
 async function loadDashboard() {
