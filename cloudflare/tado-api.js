@@ -140,7 +140,7 @@ async function hopsFetch(env, accessToken, path) {
 async function fetchExtraWeather(lat, lon) {
   // forecast_days=2, damit auch spätabends noch genug Stunden für die
   // Vorhersage übrig sind (nicht nur bis Mitternacht des aktuellen Tages).
-  const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}&current=relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&forecast_days=2&timezone=auto`;
+  const url = `${OPEN_METEO_BASE}?latitude=${lat}&longitude=${lon}&current=relative_humidity_2m,wind_speed_10m&hourly=temperature_2m,precipitation_probability&daily=sunrise,sunset&forecast_days=2&timezone=auto`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Open-Meteo -> ${res.status}`);
@@ -177,9 +177,16 @@ async function fetchExtraWeather(lat, lon) {
     };
   });
 
+  // Sonnenauf-/-untergang von heute in der lokalen Zeitzone des Hauses
+  // ("YYYY-MM-DDTHH:MM"), dazu die lokale Uhrzeit - das Frontend zeichnet
+  // daraus den Sonnenbogen, ohne auf die Zeitzone des Geräts angewiesen zu sein.
+  const daily = data.daily || {};
   return {
     humidity: data.current ? data.current.relative_humidity_2m : null,
     windSpeed: data.current ? data.current.wind_speed_10m : null,
+    sunrise: daily.sunrise && daily.sunrise[0] ? daily.sunrise[0] : null,
+    sunset: daily.sunset && daily.sunset[0] ? daily.sunset[0] : null,
+    localTime: data.current && data.current.time ? data.current.time : null,
     hourly,
   };
 }
@@ -489,6 +496,9 @@ async function handleDashboard(env) {
         state: weather && weather.weatherState ? weather.weatherState.value : null,
         humidity: extraWeather ? extraWeather.humidity : null,
         windSpeed: extraWeather ? extraWeather.windSpeed : null,
+        sunrise: extraWeather ? extraWeather.sunrise : null,
+        sunset: extraWeather ? extraWeather.sunset : null,
+        localTime: extraWeather ? extraWeather.localTime : null,
         hourly: extraWeather ? extraWeather.hourly : [],
       } : null,
     }, env);

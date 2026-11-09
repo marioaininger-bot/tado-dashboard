@@ -63,6 +63,42 @@
   .big-num{font-size:44px;font-weight:700;letter-spacing:-.03em;margin:6px 0 2px;line-height:1.1;}
   .big-num sup{font-size:20px;font-weight:600;vertical-align:top;position:relative;top:4px;}
   .t-sub{font-size:13px;opacity:.75;}
+
+  /* Wetterkachel: Sonnenbogen + Tagesband, Farbe und Animation nach Wetter */
+  .t.wx{--sky1:#6f87a0;--sky2:#b4c3d3;--chip:#ffffff26;position:relative;overflow:hidden;color:#fff;background:linear-gradient(180deg,var(--sky1),var(--sky2));isolation:isolate;}
+  .t.wx[data-s="sun"]{--sky1:#3d9be9;--sky2:#8cc8f5;}
+  .t.wx[data-s="rain"]{--sky1:#2f3d52;--sky2:#5d6f87;}
+  .t.wx[data-s="night"]{--sky1:#0d1530;--sky2:#2a3a66;}
+  .wx-body{position:relative;z-index:2;}
+  .wx-fx{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+  .wx-fx .cl{position:absolute;border-radius:99px;background:#fff;filter:blur(14px);opacity:0;animation:wxdrift 38s linear infinite;}
+  .wx[data-s="cloud"] .cl,.wx[data-s="rain"] .cl{opacity:.32;}
+  .wx[data-s="sun"] .cl{opacity:.14;}.wx[data-s="night"] .cl{opacity:.05;}
+  @keyframes wxdrift{from{transform:translateX(-30%)}to{transform:translateX(130%)}}
+  .wx-fx .stars{position:absolute;inset:0;opacity:0;background-image:radial-gradient(1.5px 1.5px at 20% 30%,#fff,#0000),radial-gradient(1px 1px at 60% 12%,#fff,#0000),radial-gradient(1.5px 1.5px at 85% 40%,#fff,#0000),radial-gradient(1px 1px at 35% 62%,#fff,#0000),radial-gradient(1px 1px at 92% 10%,#fff,#0000);}
+  .wx[data-s="night"] .stars{opacity:.9;}
+  .wx-fx .drop{position:absolute;top:-20px;width:2px;height:16px;background:linear-gradient(#fff0,#cfe3ff);opacity:0;animation:wxfall linear infinite;}
+  .wx[data-s="rain"] .drop{opacity:.6;}
+  @keyframes wxfall{to{transform:translateY(520px)}}
+  @media (prefers-reduced-motion:reduce){.wx-fx .cl,.wx-fx .drop{animation:none;}}
+  .wx .cap{font-size:12px;opacity:.85;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
+  .wx .arc{display:block;width:100%;height:auto;max-width:520px;margin:0 auto;}
+  .wx .mid{text-align:center;margin-top:-100px;}
+  .wx .mid.noarc{margin-top:8px;}
+  .wx .big{font-size:60px;font-weight:800;letter-spacing:-.04em;line-height:1;}
+  .wx .big sup{font-size:24px;font-weight:600;vertical-align:top;margin-left:2px;}
+  .wx .cond{font-size:15px;font-weight:600;margin-top:4px;}
+  .wx .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:34px;justify-content:center;}
+  .wx .chips.noarc{margin-top:14px;}
+  .wx .chip{background:var(--chip);backdrop-filter:blur(6px);border-radius:99px;padding:5px 11px;font-size:12.5px;font-weight:600;white-space:nowrap;}
+  .wx .sec{margin-top:18px;padding-top:14px;border-top:1px solid #ffffff2e;}
+  .wx .band{position:relative;display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:30px;border-radius:9px;margin-top:8px;overflow:hidden;touch-action:pan-y;}
+  .wx .band i{display:block;}
+  .wx .rainbars{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;height:26px;align-items:end;gap:1px;margin-top:6px;}
+  .wx .rainbars i{display:block;background:#bfe0ff;border-radius:2px 2px 0 0;min-height:2px;}
+  .wx .axis{display:flex;justify-content:space-between;font-size:11px;opacity:.85;margin-top:4px;}
+  .wx .tip{min-height:20px;font-size:12.5px;font-weight:600;margin-top:8px;text-align:center;}
+  .wx svg text{font-family:inherit;}
   .weather-strip{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;opacity:.85;margin-top:2px;}
   .weather-strip b{font-weight:600;}
   .outside-spark{margin-top:10px;}
@@ -310,6 +346,13 @@
   h2.sec .sum{font-weight:600;color:var(--text-dim);font-size:13px;}
   h2.sec .grow{flex:1;}
   .link{background:none;border:none;color:var(--blue);text-decoration:underline;font:inherit;font-size:12.5px;cursor:pointer;padding:0 0 0 6px;}
+  .bulk{display:inline-flex;gap:8px;margin-left:8px;}
+  .round-btn{position:relative;width:36px;height:36px;border-radius:50%;border:1px solid var(--card-border);background:var(--card);color:var(--text);font-size:16px;font-family:inherit;line-height:1;cursor:pointer;display:inline-grid;place-items:center;padding:0;}
+  .round-btn:hover{border-color:var(--orange);color:var(--orange);}
+  .round-btn:disabled{opacity:.5;cursor:not-allowed;}
+  .round-btn::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 6px);right:0;background:#1b1b1f;color:#fff;font-size:12px;font-weight:600;padding:5px 9px;border-radius:8px;white-space:nowrap;opacity:0;pointer-events:none;transition:opacity .15s;z-index:5;}
+  .round-btn:hover::after,.round-btn:focus-visible::after{opacity:1;}
+  .round-btn .n{position:absolute;top:-4px;right:-4px;background:var(--orange);color:#fff;border-radius:99px;font-size:10.5px;font-weight:700;min-width:17px;height:17px;display:grid;place-items:center;padding:0 4px;line-height:1;}
   .link:disabled{opacity:.5;cursor:not-allowed;}
 
   /* Klima-Zeilen mit Schalter */
@@ -501,19 +544,16 @@
     </div>
 
     <div class="bento">
-      <div id="weatherTile" class="t dark w2" style="display:none;">
-        <div class="lab">Außen</div>
-        <div id="weatherBig"></div>
-        <div id="weatherStrip" class="weather-strip"></div>
-        <div id="outsideSpark" class="outside-spark"></div>
-        <div id="forecastRow" class="forecast-row" style="display:none;"></div>
+      <div id="weatherTile" class="t wx w2" data-s="cloud" style="display:none;">
+        <div class="wx-fx" aria-hidden="true"></div>
+        <div id="weatherBody" class="wx-body"></div>
       </div>
       <div id="statusStrip" class="tiles"></div>
     </div>
 
     <section id="klimaSection" class="t w4" style="display:none;margin-bottom:14px;">
       <h2 class="sec">❄️ Klima <span class="sum" id="klimaSum"></span><span class="grow"></span>
-        <button class="link" id="acAllOff">Alle aus</button><button class="link" id="acAllOn">Alle an</button></h2>
+        <span class="bulk"><button class="round-btn" id="acAllOff" data-tip="Alle aus" aria-label="Alle Klimaanlagen aus">⏻</button><button class="round-btn" id="acAllOn" data-tip="Alle an" aria-label="Alle Klimaanlagen an">▶</button></span></h2>
       <div id="panasonicNotice" class="status-line" style="display:none;margin:0 0 6px;"></div>
       <div id="acList" class="acrow"></div>
     </section>
@@ -525,7 +565,7 @@
           <button type="button" id="viewDials" aria-pressed="false">Zifferblätter</button>
           <button type="button" id="dialTheme" aria-pressed="false" title="Zifferblätter dunkel darstellen" hidden>🌙</button>
         </span>
-        <button class="link" id="heatAllOff">Alle aus</button><button class="link" id="heatAllSchedule" title="Alle Heizkörper zurück in den Zeitplan">↺ Alle auf Zeitplan</button></h2>
+        <span class="bulk"><button class="round-btn" id="heatAllOff" data-tip="Alle aus" aria-label="Alle Heizkörper aus">⏻</button><button class="round-btn" id="heatAllSchedule" data-tip="Alle auf Zeitplan" aria-label="Alle Heizkörper zurück in den Zeitplan">↺</button></span></h2>
       <div id="zoneGrid" class="zone-grid"></div>
     </section>
   </div>
@@ -574,8 +614,6 @@ const WEATHER_ICONS = {
 const loginScreen = document.getElementById('loginScreen');
 const dashboard = document.getElementById('dashboard');
 const loadingState = document.getElementById('loadingState');
-const weatherStrip = document.getElementById('weatherStrip');
-const forecastRow = document.getElementById('forecastRow');
 const logoutBtn = document.getElementById('logoutBtn');
 const zoneGrid = document.getElementById('zoneGrid');
 
@@ -619,7 +657,7 @@ async function api(path, options = {}) {
 function showKeyScreen(wasWrong) {
   if (typeof refreshTimer !== 'undefined' && refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   if (typeof pollTimer !== 'undefined' && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  [dashboard, weatherStrip, forecastRow, logoutBtn, loadingState, loginScreen].forEach((el) => show(el, false));
+  [dashboard, logoutBtn, loadingState, loginScreen].forEach((el) => show(el, false));
   if (wasWrong) clearKey();
   document.getElementById('keyMsg').textContent = wasWrong ? 'Hmm, das war nicht das Zauberwort. Tippfehler? Heizung und Klimaanlage schauen skeptisch. 🧐' : '';
   show(keyScreen, true, 'flex');
@@ -1128,8 +1166,8 @@ panasonicNotice.addEventListener('click', (e) => {
 });
 
 const weatherTile = document.getElementById('weatherTile');
-const weatherBig = document.getElementById('weatherBig');
-const outsideSpark = document.getElementById('outsideSpark');
+const weatherBody = document.getElementById('weatherBody');
+const weatherFx = weatherTile.querySelector('.wx-fx');
 
 function sparkSvg(values, color, height = 26, minSpan = 0.5) {
   const vals = values.filter((v) => v != null);
@@ -1144,33 +1182,98 @@ function sparkSvg(values, color, height = 26, minSpan = 0.5) {
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
 }
 
+// Wetterzustand für Farbe und Animation: sun | cloud | rain | night
+function weatherMood(weather) {
+  const t = weather.localTime, up = weather.sunrise, down = weather.sunset;
+  if (t && up && down && (t < up || t > down)) return 'night';
+  const st = weather.state || '';
+  if (st === 'NIGHT_CLEAR') return 'night';
+  if (/RAIN|DRIZZLE|SHOWER|THUNDER|SNOW/.test(st)) return 'rain';
+  if (st === 'SUN') return 'sun';
+  return 'cloud';
+}
+const WX_LABELS = { sun: 'Sonnig', cloud: 'Bewölkt', rain: 'Regen', night: 'Klar' };
+const WX_ICONS = { sun: '☀️', cloud: '☁️', rain: '🌧️', night: '🌙' };
+
+// Wolken, Regen und Sterne einmalig anlegen (Farbe/Sichtbarkeit steuert data-s per CSS).
+(function buildWeatherFx() {
+  let h = '<div class="stars"></div>';
+  [[8, 50, 140, 38], [40, 20, 160, 46], [70, 70, 120, 32]].forEach((c, i) => {
+    h += `<div class="cl" style="top:${c[0]}%;width:${c[2]}px;height:${c[3]}px;animation-delay:-${i * 13}s;animation-duration:${34 + i * 9}s"></div>`;
+  });
+  for (let i = 0; i < 24; i++) {
+    h += `<div class="drop" style="left:${(i * 4.3 + 3) % 100}%;animation-duration:${(0.7 + (i % 5) * 0.12).toFixed(2)}s;animation-delay:-${((i % 7) * 0.2).toFixed(1)}s"></div>`;
+  }
+  weatherFx.innerHTML = h;
+})();
+
+function tempColor(v) {
+  const k = Math.min(1, Math.max(0, (v + 3) / 20));
+  return `hsl(${218 - 110 * k} 70% ${70 - 8 * k}%)`;
+}
+
+function sunArcSvg(weather, mood) {
+  const toMin = (iso) => parseInt(iso.slice(11, 13), 10) * 60 + parseInt(iso.slice(14, 16), 10);
+  const up = toMin(weather.sunrise), down = toMin(weather.sunset), now = toMin(weather.localTime);
+  const W = 420, R = 165, cx = W / 2, cy = 172;
+  const f = Math.min(1, Math.max(0, (now - up) / (down - up)));
+  const a = Math.PI * (1 - f);
+  const sx = (cx + R * Math.cos(a)).toFixed(1), sy = (cy - R * Math.sin(a)).toFixed(1);
+  const body = mood === 'night'
+    ? `<circle cx="${cx}" cy="${cy - R}" r="13" fill="#f3efd9"/><circle cx="${cx + 5}" cy="${cy - R - 3}" r="11" fill="#1b2748"/>`
+    : `<circle cx="${sx}" cy="${sy}" r="22" fill="#ffe08a" opacity=".28"/><circle cx="${sx}" cy="${sy}" r="11" fill="#ffe08a"/>`;
+  const trace = mood === 'night' ? '' : `<path d="M${cx - R} ${cy} A${R} ${R} 0 0 1 ${sx} ${sy}" fill="none" stroke="#ffffffcc" stroke-width="3" stroke-linecap="round"/>`;
+  const upT = weather.sunrise.slice(11, 16), downT = weather.sunset.slice(11, 16);
+  return `<svg class="arc" viewBox="0 -16 ${W} 212" role="img" aria-label="Sonnenstand: Aufgang ${upT}, Untergang ${downT}">
+    <path d="M${cx - R} ${cy} A${R} ${R} 0 0 1 ${cx + R} ${cy}" fill="none" stroke="#ffffff55" stroke-width="2" stroke-dasharray="3 6"/>${trace}
+    <line x1="${cx - R - 18}" y1="${cy}" x2="${cx + R + 18}" y2="${cy}" stroke="#ffffff44"/>${body}
+    <text x="${cx - R}" y="${cy + 18}" fill="#fff" font-size="12" text-anchor="middle">↑ ${upT}</text>
+    <text x="${cx + R}" y="${cy + 18}" fill="#fff" font-size="12" text-anchor="middle">↓ ${downT}</text></svg>`;
+}
+
 function renderWeather(weather) {
   lastWeather = weather || null;
   updateScene();
   if (!weather) { show(weatherTile, false); return; }
-  const icon = WEATHER_ICONS[weather.state] || '🌡️';
-  weatherBig.innerHTML = `<div class="big-num">${weather.outsideTemp != null ? weather.outsideTemp.toFixed(1).replace(/\.0$/, '') : '–'}<sup>°C</sup> <span style="font-size:28px;">${icon}</span></div>`;
-  weatherStrip.innerHTML = `
-    ${weather.solarIntensity != null ? `<span>Sonne <b>${Math.round(weather.solarIntensity)}%</b></span>` : ''}
-    ${weather.humidity != null ? `<span>Luftfeuchte <b>${Math.round(weather.humidity)}%</b></span>` : ''}
-    ${weather.windSpeed != null ? `<span>Wind <b>${Math.round(weather.windSpeed)} km/h · ${windLabel(weather.windSpeed)}</b></span>` : ''}
-  `;
+  const mood = weatherMood(weather);
+  weatherTile.dataset.s = mood;
+  const hasArc = Boolean(weather.sunrise && weather.sunset && weather.localTime);
+  const temp = weather.outsideTemp != null ? weather.outsideTemp.toFixed(1).replace(/\.0$/, '') : '–';
+  const icon = WEATHER_ICONS[weather.state] || WX_ICONS[mood];
+  const chips = [
+    weather.humidity != null ? `<span class="chip">💧 Luftfeuchte ${Math.round(weather.humidity)}%</span>` : '',
+    weather.windSpeed != null ? `<span class="chip">💨 Wind ${Math.round(weather.windSpeed)} km/h · ${windLabel(weather.windSpeed)}</span>` : '',
+    weather.solarIntensity != null ? `<span class="chip">☀️ Sonne ${Math.round(weather.solarIntensity)}%</span>` : '',
+  ].join('');
+  const hrs = weather.hourly || [];
+  const withTemp = hrs.filter((h) => h.temp != null);
+  let band = '';
+  if (withTemp.length >= 2) {
+    const cells = hrs.map((h, i) => `<i data-i="${i}" style="background:${h.temp != null ? tempColor(h.temp) : '#ffffff33'}"></i>`).join('');
+    const bars = hrs.map((h) => `<i style="height:${Math.max(2, (h.rainChance || 0) * 0.26)}px"></i>`).join('');
+    const mid = hrs[Math.floor(hrs.length / 2)].time, last = hrs[hrs.length - 1].time;
+    band = `<div class="sec"><div class="cap">Nächste ${hrs.length} Stunden</div>
+      <div class="band" id="wxBand">${cells}</div>
+      <div class="rainbars" aria-hidden="true">${bars}</div>
+      <div class="axis"><span>${hrs[0].time}</span><span>${mid}</span><span>${last} Uhr</span></div>
+      <div class="tip" id="wxTip">Über das Band fahren für Details</div></div>`;
+  }
+  weatherBody.innerHTML = `<div class="cap">Außen</div>
+    ${hasArc ? sunArcSvg(weather, mood) : ''}
+    <div class="mid ${hasArc ? '' : 'noarc'}"><div class="big">${temp}<sup>°C</sup></div><div class="cond">${icon} ${WX_LABELS[mood]}</div></div>
+    <div class="chips ${hasArc ? '' : 'noarc'}">${chips}</div>${band}`;
   show(weatherTile, true, 'block');
 
-  if (weather.hourly && weather.hourly.length) {
-    outsideSpark.innerHTML = sparkSvg(weather.hourly.map((h) => h.temp), '#ffb48a', 40);
-    forecastRow.innerHTML = weather.hourly.map((h) => `
-      ${h.newDay ? '<div class="day-divider">Morgen</div>' : ''}
-      <div class="forecast-chip">
-        <div>${h.time}</div>
-        <div class="fc-temp">${h.temp != null ? Math.round(h.temp) + '°' : '–'}</div>
-        <div class="fc-rain">${h.rainChance != null ? '🌧️' + h.rainChance + '%' : ''}</div>
-      </div>
-    `).join('');
-    show(forecastRow, true, 'flex');
-  } else {
-    outsideSpark.innerHTML = '';
-    show(forecastRow, false);
+  const bandEl = document.getElementById('wxBand'), tip = document.getElementById('wxTip');
+  if (bandEl && tip) {
+    const showTip = (e) => {
+      const r = bandEl.getBoundingClientRect();
+      const i = Math.min(hrs.length - 1, Math.max(0, Math.floor((e.clientX - r.left) / r.width * hrs.length)));
+      const h = hrs[i];
+      tip.textContent = `${h.time} · ${h.temp != null ? Math.round(h.temp) + '°' : '–'} · Regen ${h.rainChance != null ? h.rainChance + '%' : '–'}${h.newDay ? ' · morgen' : ''}`;
+    };
+    bandEl.addEventListener('pointermove', showTip);
+    bandEl.addEventListener('pointerdown', showTip);
   }
 }
 
@@ -1586,18 +1689,19 @@ function renderZones(zones) {
   show(klimaSection, ac.length > 0 || noticeVisible, 'block');
   document.getElementById('klimaSum').textContent = ac.length
     ? `${ac.filter((z) => z.power === 'ON').length} von ${ac.length} an` : '';
-  show(document.getElementById('acAllOff'), ac.length > 0, 'inline');
-  show(document.getElementById('acAllOn'), ac.length > 0, 'inline');
+  show(document.getElementById('acAllOff'), ac.length > 0, 'inline-grid');
+  show(document.getElementById('acAllOn'), ac.length > 0, 'inline-grid');
   acList.innerHTML = acCardsHtml(ac);
 
   // Heizung: kompakte Raum-Kacheln (Verlauf im Fenster per Klick)
   show(heizungSection, rooms.length > 0 || ac.length === 0, 'block');
   const heating = rooms.filter((z) => z.type === 'HEATING' && z.power !== 'OFF' && (z.heatingPower || 0) > 0).length;
-  show(document.getElementById('heatAllOff'), rooms.length > 0, 'inline');
+  show(document.getElementById('heatAllOff'), rooms.length > 0, 'inline-grid');
   const offSchedule = offScheduleHeaters(rooms).length;
   const schedBtn = document.getElementById('heatAllSchedule');
-  show(schedBtn, offSchedule > 0, 'inline');
-  schedBtn.textContent = `↺ Alle auf Zeitplan (${offSchedule})`;
+  show(schedBtn, offSchedule > 0, 'inline-grid');
+  schedBtn.innerHTML = `↺<span class="n">${offSchedule}</span>`;
+  schedBtn.dataset.tip = `${offSchedule} ${offSchedule === 1 ? 'Raum' : 'Räume'} zurück in den Zeitplan`;
   document.getElementById('heizungSum').textContent = rooms.length
     ? `${rooms.length} ${rooms.length === 1 ? 'Raum' : 'Räume'} · ${heating} heizen gerade` : '';
   zoneGrid.innerHTML = rooms.length
