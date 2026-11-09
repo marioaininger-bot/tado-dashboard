@@ -127,6 +127,8 @@
   .greeting p .warn{color:#c0341f;font-weight:600;}
   .greeting p .sched-link{font:inherit;font-weight:600;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-decoration:underline dotted;}
   .greeting p .sched-link:disabled{opacity:.5;cursor:not-allowed;}
+  .sched-panel{margin-top:10px;max-width:420px;background:var(--card);border:1px solid var(--card-border);border-radius:16px;padding:4px 14px;text-align:left;color:var(--text);}
+  .sched-panel[hidden]{display:none;}
 
   .zone-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
   .zone-card{
@@ -540,21 +542,6 @@
         <button class="modal-close" id="dayChartClose" aria-label="Schließen">✕</button>
       </div>
       <div id="dayChartBody"></div>
-    </div>
-  </div>
-
-  <div id="schedModal" class="modal-overlay">
-    <div class="modal-card">
-      <div class="modal-head">
-        <h3 id="schedTitle">Nicht im Zeitplan</h3>
-        <button class="modal-close" id="schedClose" aria-label="Schließen">✕</button>
-      </div>
-      <div id="schedBody"></div>
-      <div class="sched-row sched-all" id="schedAllRow">
-        <div class="mid"><div class="nm" id="schedAllLabel">Alle</div></div>
-        <button class="resume-link" id="schedLater">Später</button>
-        <button class="resume-link" id="schedAll">Zeitplan</button>
-      </div>
     </div>
   </div>
 
@@ -1363,75 +1350,12 @@ function offScheduleHeaters(zones) {
   return zones.filter((z) => z.type === 'HEATING' && !z.deviceOffline && (z.power === 'OFF' || z.manualOverride));
 }
 
-// Popup "nicht im Zeitplan": öffnet beim Laden und danach nur bei neuen Abweichungen.
-// "Später" pausiert einen Raum für 4 Stunden (localStorage, gilt auch nach Neuladen).
-const SCHED_SNOOZE_MS = 4 * 60 * 60 * 1000;
-const SCHED_SNOOZE_KEY = 'schedSnooze';
-const SCHED_SHOWN_KEY = 'schedShown';
+// Hinweis "nicht im Zeitplan" in der Begrüßung: Zeile ein-/ausklappbar, kein Popup.
 const zoneKey = (z) => `${z.homeId}:${z.id}`;
-
-function readStore(storage, key, fallback) {
-  try { return JSON.parse(storage.getItem(key)) ?? fallback; } catch (e) { return fallback; }
-}
-function writeStore(storage, key, value) {
-  try { storage.setItem(key, JSON.stringify(value)); } catch (e) { /* Speicher gesperrt: Popup erscheint dann ggf. öfter */ }
-}
-
-function schedSnoozes() {
-  const now = Date.now();
-  const all = readStore(localStorage, SCHED_SNOOZE_KEY, {});
-  const live = Object.fromEntries(Object.entries(all).filter(([, until]) => until > now));
-  if (Object.keys(live).length !== Object.keys(all).length) writeStore(localStorage, SCHED_SNOOZE_KEY, live);
-  return live;
-}
-
-function snoozeRooms(keys) {
-  const snoozes = schedSnoozes();
-  keys.forEach((k) => { snoozes[k] = Date.now() + SCHED_SNOOZE_MS; });
-  writeStore(localStorage, SCHED_SNOOZE_KEY, snoozes);
-}
-
+let schedPanelOpen = false;
 function schedReason(z) {
   if (z.power === 'OFF') return 'Aus';
   return z.targetTemp != null ? `Manuell ${z.targetTemp.toFixed(z.targetTemp % 1 ? 1 : 0)}°` : 'Manuell übersteuert';
-}
-
-const schedModal = document.getElementById('schedModal');
-let schedListed = []; // aktuell im Popup gezeigte Räume
-
-function closeSchedPopup() {
-  schedModal.style.display = 'none';
-}
-
-function updateSchedPopup(rooms) {
-  const off = offScheduleHeaters(rooms);
-  const offKeys = new Set(off.map(zoneKey));
-  // Räume, die wieder im Zeitplan sind, vergessen - bei erneuter Abweichung meldet das Popup sich wieder.
-  const shown = new Set(readStore(sessionStorage, SCHED_SHOWN_KEY, []).filter((k) => offKeys.has(k)));
-  const snoozes = schedSnoozes();
-  schedListed = off.filter((z) => !snoozes[zoneKey(z)]);
-
-  const isOpen = schedModal.style.display === 'flex';
-  const fresh = schedListed.some((z) => !shown.has(zoneKey(z)));
-  const otherDialogOpen = dayChartModal.style.display === 'flex';
-  if (!schedListed.length) {
-    closeSchedPopup();
-  } else if (isOpen || (fresh && !otherDialogOpen)) {
-    document.getElementById('schedTitle').textContent =
-      `${schedListed.length} ${schedListed.length === 1 ? 'Raum' : 'Räume'} nicht im Zeitplan`;
-    // Mit nur einem Raum wäre die Sammelzeile doppelt.
-    document.getElementById('schedAllRow').style.display = schedListed.length > 1 ? 'flex' : 'none';
-    document.getElementById('schedAllLabel').textContent = `Alle ${schedListed.length} Räume`;
-    document.getElementById('schedBody').innerHTML = schedListed.map((z) => `
-      <div class="sched-row">
-        <div class="mid"><div class="nm">${z.name}</div><div class="why">${schedReason(z)}</div></div>
-        <button class="resume-link" data-sched="later" data-key="${zoneKey(z)}">Später</button>
-        <button class="resume-link" data-sched="resume" data-zone-id="${z.id}" data-home-id="${z.homeId}">Zeitplan</button>
-      </div>`).join('');
-    schedModal.style.display = 'flex';
-    schedListed.forEach((z) => shown.add(zoneKey(z)));
-  }
-  writeStore(sessionStorage, SCHED_SHOWN_KEY, [...shown]);
 }
 
 function renderStatusStrip(ac, rooms) {
@@ -1441,14 +1365,22 @@ function renderStatusStrip(ac, rooms) {
 
   const parts = [];
   if (heatRooms.length) parts.push(`${heating} von ${heatRooms.length} ${heating === 1 ? 'Raum heizt' : 'Räume heizen'}`);
-  const offSchedule = offScheduleHeaters(rooms).length;
+  const offRooms = offScheduleHeaters(rooms);
+  const offSchedule = offRooms.length;
   if (offSchedule) {
-    parts.push(`<button class="sched-link" id="greetingSchedule" title="Alle Heizkörper zurück in den Zeitplan">↺ ${offSchedule} ${offSchedule === 1 ? 'Raum' : 'Räume'} nicht im Zeitplan</button>`);
+    parts.push(`<button class="sched-link" id="greetingSchedule" aria-expanded="${schedPanelOpen}" aria-controls="schedPanel" title="Liste anzeigen">↺ ${offSchedule} ${offSchedule === 1 ? 'Raum' : 'Räume'} nicht im Zeitplan <span class="chev">${schedPanelOpen ? '▴' : '▾'}</span></button>`);
   }
   if (ac.length) parts.push(`❄️ Klima ${ac.filter((z) => z.power === 'ON').length} von ${ac.length} an`);
   if (warnings) parts.push(`<span class="warn">⚠️ ${warnings} ${warnings === 1 ? 'Hinweis' : 'Hinweise'}</span>`);
   document.getElementById('greeting').innerHTML =
-    `<h1>${greetingWord()} 👋</h1><p>${parts.join(' · ') || '&nbsp;'}</p>`;
+    `<h1>${greetingWord()} 👋</h1><p>${parts.join(' · ') || '&nbsp;'}</p>` + (offSchedule ? `
+    <div class="sched-panel" id="schedPanel" ${schedPanelOpen ? '' : 'hidden'}>
+      ${offRooms.map((z) => `<div class="sched-row">
+        <div class="mid"><div class="nm">${z.name}</div><div class="why">${schedReason(z)}</div></div>
+        <button class="zc-pill ${z.overrideType === 'MANUAL' || z.power === 'OFF' && !z.overrideType ? 'perm' : 'sched'}" data-sched-resume data-zone-id="${z.id}" data-home-id="${z.homeId}">↺ Zeitplan</button>
+      </div>`).join('')}
+      ${offSchedule > 1 ? '<div class="sched-row"><div class="mid"></div><button class="zc-pill sched" id="schedPanelAll">↺ Alle zurück</button></div>' : ''}
+    </div>` : '');
 
   const tiles = [];
   // Raum mit kleinstem/größtem Wert (nur Räume mit Messwert).
@@ -1673,7 +1605,6 @@ function renderZones(zones) {
     : (ac.length ? '' : '<div class="empty-state">Keine Zonen gefunden.</div>');
 
   refreshZoneModal();
-  updateSchedPopup(rooms);
 }
 
 function formatTime(iso) {
@@ -2200,32 +2131,21 @@ document.getElementById('acAllOff').addEventListener('click', (e) => setAllZones
 document.getElementById('acAllOn').addEventListener('click', (e) => setAllZones('AC', 'ON', e.currentTarget));
 document.getElementById('heatAllOff').addEventListener('click', (e) => setAllZones('HEATING', 'OFF', e.currentTarget));
 document.getElementById('heatAllSchedule').addEventListener('click', (e) => setAllZones('HEATING', 'ON', e.currentTarget));
-// Popup "nicht im Zeitplan": je Raum "Zeitplan"/"Später", unten für alle gelisteten Räume.
-document.getElementById('schedBody').addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-sched]');
-  if (!btn) return;
-  if (btn.dataset.sched === 'later') {
-    snoozeRooms([btn.dataset.key]);
-    updateSchedPopup(currentZones.filter((z) => z.type !== 'AC'));
-  } else {
-    resumeZoneSchedule(btn.dataset.zoneId, btn.dataset.homeId, btn);
-  }
-});
-document.getElementById('schedAll').addEventListener('click', async (e) => {
-  await setAllZones('HEATING', 'ON', e.currentTarget, schedListed);
-});
-document.getElementById('schedLater').addEventListener('click', () => {
-  snoozeRooms(schedListed.map(zoneKey));
-  closeSchedPopup();
-});
-document.getElementById('schedClose').addEventListener('click', closeSchedPopup);
-schedModal.addEventListener('click', (e) => {
-  if (e.target === schedModal) closeSchedPopup();
-});
 // Hinweis in der Begrüßung (wird bei jedem Rendern neu erzeugt, daher Delegation).
 document.getElementById('greeting').addEventListener('click', (e) => {
-  const btn = e.target.closest('#greetingSchedule');
-  if (btn) setAllZones('HEATING', 'ON', btn);
+  const toggle = e.target.closest('#greetingSchedule');
+  if (toggle) {
+    schedPanelOpen = !schedPanelOpen;
+    const panel = document.getElementById('schedPanel');
+    if (panel) panel.hidden = !schedPanelOpen;
+    toggle.setAttribute('aria-expanded', String(schedPanelOpen));
+    toggle.querySelector('.chev').textContent = schedPanelOpen ? '▴' : '▾';
+    return;
+  }
+  const all = e.target.closest('#schedPanelAll');
+  if (all) { setAllZones('HEATING', 'ON', all); return; }
+  const one = e.target.closest('[data-sched-resume]');
+  if (one) resumeZoneSchedule(one.dataset.zoneId, one.dataset.homeId, one);
 });
 document.getElementById('dayChartClose').addEventListener('click', closeDayChart);
 dayChartModal.addEventListener('click', (e) => {
