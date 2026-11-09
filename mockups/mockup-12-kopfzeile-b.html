@@ -1,0 +1,37 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 12B – Kopfzeile: Menü + Stand als Statuszeile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* B: Strom wird Tab-Umschalter, Abmelden wandert in ein Menü (⋯), Stand ist eine schlanke Statuszeile mit "vor 3 Min." */
+:root{--bg:#f2f1ed;--card:#fff;--text:#1b1b1f;--dim:#76767f;--blue:#2c8fd6;--green:#3ea86a;--red:#e04f38;--orange:#ff7a3d;--line:#e6e3dc}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:900px;margin:0 auto;padding:32px 20px 60px}
+.hero{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;margin-bottom:14px}
+.logo{font-weight:800;font-size:19px;color:var(--dim)}.logo b{color:var(--text)}.logo span{color:var(--blue)}
+.seg{justify-self:start;display:inline-flex;background:var(--card);border-radius:999px;padding:4px;box-shadow:0 1px 0 #0000000a,0 2px 8px #0000000f}
+.seg a{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:600;color:var(--dim);text-decoration:none}
+.seg a.on{background:var(--text);color:#fff}
+.menu{position:relative;justify-self:end}
+.dots{width:40px;height:40px;border-radius:50%;border:0;background:var(--card);font-size:20px;line-height:1;color:var(--dim);cursor:pointer;box-shadow:0 1px 0 #0000000a,0 2px 8px #0000000f}
+.pop{position:absolute;right:0;top:48px;background:var(--card);border-radius:16px;padding:6px;min-width:150px;box-shadow:0 12px 32px #00000026}
+.pop div{padding:9px 12px;border-radius:10px;font-size:13.5px}.pop div:hover{background:#f2f1ed}.pop .out{color:var(--red)}
+.status{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--dim);margin:44px 2px 18px;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 #3ea86a66;animation:p 2s infinite}
+@keyframes p{70%{box-shadow:0 0 0 7px #3ea86a00}100%{box-shadow:0 0 0 0 #3ea86a00}}
+.status b{color:var(--text);font-weight:600}.status .sp{flex:1}
+.status button{border:0;background:none;font:inherit;font-size:12.5px;color:var(--blue);font-weight:600;cursor:pointer;padding:4px 0}
+h2{margin:0 0 16px 2px;font-size:28px;letter-spacing:-.02em}
+.card{background:var(--card);border-radius:26px;height:120px;box-shadow:0 8px 24px #0000000d;margin-top:14px}
+.cap{margin-top:26px;font-size:13px;color:var(--dim);line-height:1.6}
+</style></head><body><div class="wrap">
+<div class="hero">
+  <div class="seg"><a class="on" href="#">Heizung</a><a href="#">⚡ Strom</a></div>
+  <div class="logo"><b>tado</b><span>°</span></div>
+  <div class="menu"><button class="dots" aria-label="Menü">⋯</button>
+    <div class="pop"><div>Einstellungen</div><div class="out">Abmelden</div></div></div>
+</div>
+<h2>Guten Morgen 👋</h2>
+<div class="status"><span class="dot"></span><span>Aktuell · Stand <b>09:42</b> (vor 3 Min.)</span><span class="sp"></span><button>↻ Jetzt aktualisieren</button></div>
+<div class="card"></div><div class="card"></div>
+<div class="cap"><b>Variante B:</b> Strom wird zum Umschalter „Heizung | ⚡ Strom“, Abmelden verschwindet im ⋯-Menü (hier aufgeklappt gezeigt). Stand ist keine Pille mehr, sondern eine ruhige Statuszeile mit pulsierendem Punkt, relativer Zeit und separatem Text-Link zum Aktualisieren.</div>
+</div></body></html>
