@@ -428,6 +428,11 @@
   }
   @keyframes spin{to{transform:rotate(360deg);}}
 
+  /* Breit: Wetterkachel über zwei Zeilen, die beiden Durchschnittskacheln übereinander daneben (sonst werden sie auf Wetterhöhe gestreckt). */
+  @media (min-width:821px){
+    .bento .t.wx{grid-row:span 2;}
+    .bento .t.stat{grid-column:span 2;}
+  }
   @media (max-width:820px){
     .bento{grid-template-columns:1fr 1fr;}
     .t.w4{grid-column:span 2;}
