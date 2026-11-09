@@ -224,6 +224,16 @@
     font-size:12.5px;color:var(--text-dim);display:flex;align-items:center;gap:6px;
   }
   .zc-next b{color:var(--text);font-weight:700;}
+  .zc-next-t{flex:1;min-width:0;}
+  .zc-pill{
+    flex:none;height:28px;padding:0 10px;border:0;border-radius:99px;font-family:inherit;
+    font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;
+  }
+  .zc-pill.perm{background:rgba(255,122,61,.18);color:#b43f08;}
+  .zc-pill.sched{background:rgba(120,120,130,.16);color:var(--text-dim);}
+  .zc-pill:hover{filter:brightness(.95);}
+  .zc-pill:disabled{opacity:.5;cursor:not-allowed;}
+  .zone-grid.dials.dark .zc-pill.perm{color:#ffb48a;}
   .battery-icon{font-size:14px;line-height:1;}
 
   .zone-controls{
@@ -1673,7 +1683,11 @@ function nextChangeHtml(zone) {
   // irreführend (siehe Kommentar zu extractScheduleChange im Worker).
   if (zone.manualOverride) {
     const t = { MANUAL: ' (dauerhaft)', NEXT_TIME_BLOCK: ' (bis Zeitplan)', TIMER: ' (Timer)' }[zone.overrideType] || '';
-    return `<div class="zc-next">✋ Manuell übersteuert${t}</div>`;
+    // Heizkörper: Pille zum Zurückholen in den Zeitplan. Orange bei dauerhaft (kommt nicht von selbst zurück), sonst dezent grau.
+    const pill = zone.type === 'HEATING'
+      ? `<button class="zc-pill ${zone.overrideType === 'MANUAL' ? 'perm' : 'sched'}" data-action="resume" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" title="Zurück zum Zeitplan">↺ Zeitplan</button>`
+      : '';
+    return `<div class="zc-next"><span class="zc-next-t">✋ Manuell übersteuert${t}</span>${pill}</div>`;
   }
   const next = zone.nextScheduleChange;
   if (!next || !next.start) return '';
@@ -1710,7 +1724,6 @@ function controlsHtml(zone) {
     <div class="zone-controls">
       <span class="temp-display">Aus</span>
       <button class="temp-btn power-btn is-off" data-action="on" ${ids} data-temp="${base}" title="Einschalten" aria-label="Einschalten">⏻</button>
-      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" ${ids}>Zeitplan</button>` : ''}
     </div>
   `;
   }
@@ -1720,7 +1733,6 @@ function controlsHtml(zone) {
       <span class="temp-display">${base.toFixed(1)}°</span>
       <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Wärmer">+</button>
       <button class="temp-btn power-btn" data-action="off" ${ids} title="Tippen: aus bis Zeitplan · Halten: dauerhaft aus" aria-label="Ausschalten (Tippen bis Zeitplan, Halten dauerhaft)">⏻</button>
-      ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}" data-home-id="${zone.homeId}">Zeitplan</button>` : ''}
     </div>
   `;
 }
