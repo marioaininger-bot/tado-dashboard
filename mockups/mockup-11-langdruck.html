@@ -1,0 +1,67 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 11 – Langdruck dauerhaft</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Kurz tippen = "bis Zeitplan" · ⏻ gedrückt halten = "dauerhaft" (Ring füllt sich, dann Haptik + Chip) */
+:root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--orange:#ff7a3d;--blue:#2c8fd6;--green:#2e9e6b}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text)}
+.wrap{max-width:900px;margin:0 auto;padding:28px 16px 60px}
+h1{margin:0;font-size:26px;letter-spacing:-.02em}.sub{color:var(--dim);font-size:14px;margin:4px 0 20px;line-height:1.5}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 8px 24px #0000000a;display:flex;flex-direction:column;gap:10px}
+.top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.name{font-weight:700;font-size:16px}.cur{color:var(--dim);font-size:12.5px;margin-top:2px}
+.temp{font-size:34px;font-weight:800;letter-spacing:-.03em}
+.temp small{font-size:14px;color:var(--dim);font-weight:600;margin-left:4px}
+.card.off .temp{color:var(--dim)}
+.state{font-size:12.5px;color:var(--dim);min-height:18px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.chip{border-radius:99px;padding:3px 10px;font-size:12px;font-weight:700}
+.chip.sched{background:#e3f1fb;color:#1f6fa8}.chip.perm{background:#ffe9dc;color:#c2490f}
+.row{display:flex;align-items:center;gap:8px;margin-top:auto}
+.resume{border:0;background:none;color:var(--blue);font-weight:700;font-size:13px;cursor:pointer;padding:6px 8px;margin-left:auto}
+.pwr{position:relative;width:52px;height:52px;border-radius:50%;border:0;background:#f0eee8;color:var(--text);font-size:22px;cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;display:grid;place-items:center}
+.card.off .pwr{background:#2b2b31;color:#fff}
+.pwr svg{position:absolute;inset:-4px;width:60px;height:60px;transform:rotate(-90deg);pointer-events:none}
+.pwr circle{fill:none;stroke:var(--orange);stroke-width:4;stroke-linecap:round;stroke-dasharray:176;stroke-dashoffset:176}
+.pwr.hold circle{transition:stroke-dashoffset 600ms linear;stroke-dashoffset:0}
+.pwr.hold{transform:scale(.94);transition:transform .15s}
+.hint{font-size:11.5px;color:var(--dim)}
+.log{margin-top:20px;background:var(--card);border:1px dashed var(--line);border-radius:18px;padding:14px 18px;font-size:13px;line-height:1.6}
+.log code{background:#f4f2ec;border-radius:6px;padding:1px 6px;font-size:12px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,30px);background:#1b1b1f;color:#fff;padding:10px 16px;border-radius:99px;font-size:13px;font-weight:600;opacity:0;transition:.25s;pointer-events:none}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+</style></head><body><div class="wrap">
+<h1>Langdruck für „dauerhaft"</h1>
+<div class="sub"><b>Kurz tippen</b> auf ⏻ = „bis Zeitplan" (Standard). <b>Gedrückt halten (0,6 s)</b> = „dauerhaft": der Ring füllt sich, dann vibriert das Handy und der Chip wechselt.<br>Gilt nur für diese eine Aktion, es gibt keinen globalen Schalter mehr. Ausprobieren mit Maus oder Finger.</div>
+<div class="grid" id="g"></div>
+<div class="log"><b>Was das Dashboard senden würde:</b><div id="l">Noch nichts. Tippe auf ein ⏻.</div></div>
+</div><div class="toast" id="t"></div>
+<script>
+const R=[{n:'🛋️ Wohnzimmer',c:21.4,s:22},{n:'🚽 Klo',c:19.1,s:19},{n:'🛏️ Schlafzimmer',c:19.2,s:19},{n:'🛁 Bad',c:22.6,s:23}];
+const st=R.map(()=>({off:false,mode:null}));
+const g=document.getElementById('g'),L=document.getElementById('l'),T=document.getElementById('t');
+const toast=m=>{T.textContent=m;T.classList.add('show');clearTimeout(toast.i);toast.i=setTimeout(()=>T.classList.remove('show'),1800)};
+function render(){g.innerHTML=R.map((r,i)=>{const s=st[i];
+ const chip=s.mode==='perm'?'<span class="chip perm">📌 dauerhaft aus</span>':s.mode==='sched'?'<span class="chip sched">⏱ bis Zeitplan (08:00)</span>':'<span>Folgt dem Zeitplan</span>';
+ return `<div class="card ${s.off?'off':''}"><div class="top"><div><div class="name">${r.n}</div><div class="cur">Ist ${r.c.toFixed(1)}°</div></div><div class="temp">${s.off?'AUS':r.s.toFixed(1)+'<small>°</small>'}</div></div>
+ <div class="state">${chip}</div>
+ <div class="row"><button class="pwr" data-i="${i}" aria-label="${s.off?'Einschalten':'Ausschalten'}">⏻<svg viewBox="0 0 60 60"><circle cx="30" cy="30" r="28"/></svg></button>
+ <span class="hint">${s.off?'tippen = einschalten':'tippen = bis Zeitplan · halten = dauerhaft'}</span>
+ ${s.mode?`<button class="resume" data-r="${i}">Zeitplan</button>`:''}</div></div>`}).join('')}
+const log=(i,body)=>{L.innerHTML=`${R[i].n}: <code>POST …/rooms/${i}/manualControl</code> <code>${body}</code>`};
+function act(i,perm){const s=st[i];
+ if(s.off){s.off=false;s.mode=null;log(i,'DELETE manualControl (zurück in den Zeitplan)');toast('Eingeschaltet, folgt dem Zeitplan');return}
+ s.off=true;s.mode=perm?'perm':'sched';
+ log(i,JSON.stringify({setting:{type:'HEATING',power:'OFF'},termination:{type:perm?'MANUAL':'NEXT_TIME_BLOCK'}}));
+ toast(perm?'Dauerhaft ausgeschaltet':'Aus bis zum nächsten Zeitplanwechsel')}
+let tm=null,fired=false;
+g.addEventListener('pointerdown',e=>{const b=e.target.closest('.pwr');if(!b)return;b.setPointerCapture(e.pointerId);fired=false;b.classList.add('hold');
+ const i=+b.dataset.i;tm=setTimeout(()=>{fired=true;b.classList.remove('hold');if(navigator.vibrate)navigator.vibrate(40);act(i,true);render()},600)});
+const end=e=>{const b=e.target.closest&&e.target.closest('.pwr');clearTimeout(tm);if(!b)return;b.classList.remove('hold');
+ if(!fired&&e.type==='pointerup'){act(+b.dataset.i,false);render()}};
+g.addEventListener('pointerup',end);g.addEventListener('pointercancel',end);
+g.addEventListener('contextmenu',e=>e.preventDefault());
+g.addEventListener('click',e=>{const r=e.target.closest('.resume');if(!r)return;const i=+r.dataset.r;st[i]={off:false,mode:null};log(i,'DELETE manualControl (Zeitplan fortsetzen)');toast('Zurück im Zeitplan');render()});
+render();
+</script></body></html>
