@@ -237,7 +237,18 @@
   }
   .temp-btn:hover{border-color:var(--orange);color:var(--orange);}
   .temp-btn:disabled{opacity:.5;cursor:not-allowed;}
-  .power-btn{font-size:14px;margin-left:2px;}
+  @property --hold{syntax:'<angle>';inherits:false;initial-value:0deg;}
+  .power-btn{font-size:18px;margin-left:2px;width:38px;height:38px;position:relative;touch-action:none;user-select:none;-webkit-user-select:none;}
+  .power-btn[data-action="off"].holding{transform:scale(.94);}
+  .power-btn[data-action="off"].holding::after{
+    content:"";position:absolute;inset:-4px;border-radius:50%;pointer-events:none;
+    background:conic-gradient(var(--orange) var(--hold),transparent 0);
+    -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px));
+            mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 3px));
+    animation:holdRing 600ms linear forwards;
+  }
+  @keyframes holdRing{to{--hold:360deg;}}
+  @media (prefers-reduced-motion:reduce){.power-btn[data-action="off"].holding::after{animation-duration:1ms;}}
   .power-btn.is-off{color:var(--orange);border-color:var(--orange);}
   .temp-display{font-weight:700;font-size:14px;min-width:38px;text-align:center;font-variant-numeric:tabular-nums;}
   .resume-link{
@@ -435,7 +446,7 @@
     <a class="icon-btn" href="strom.html" style="justify-self:start;text-decoration:none;">⚡ Strom</a>
     <div class="tado-logo"><b>tado</b><span class="ring">°</span></div>
     <div class="hero-actions">
-      <button class="icon-btn" id="untilBtn" style="display:none;"></button>
+      
       <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
     </div>
   </div>
@@ -566,26 +577,13 @@ const loadingState = document.getElementById('loadingState');
 const weatherStrip = document.getElementById('weatherStrip');
 const forecastRow = document.getElementById('forecastRow');
 const logoutBtn = document.getElementById('logoutBtn');
-const untilBtn = document.getElementById('untilBtn');
 const zoneGrid = document.getElementById('zoneGrid');
 
 /* ---------- Zugriffsschlüssel ---------- */
 const KEY_STORAGE = 'dashboardKey';
-const UNTIL_STORAGE = 'overlayUntil';
-// Dauer manueller Eingriffe: 'schedule' = bis zum nächsten Zeitplanwechsel,
-// 'manual' = bis zum nächsten Eingriff.
-let overlayUntil = 'schedule';
-try { if (localStorage.getItem(UNTIL_STORAGE) === 'manual') overlayUntil = 'manual'; } catch (e) { /* Standard */ }
-function renderUntilBtn() {
-  untilBtn.textContent = overlayUntil === 'manual' ? 'Eingriffe: dauerhaft' : 'Eingriffe: bis Zeitplan';
-  untilBtn.title = 'Dauer manueller Eingriffe umschalten';
-}
-untilBtn.addEventListener('click', () => {
-  overlayUntil = overlayUntil === 'manual' ? 'schedule' : 'manual';
-  try { localStorage.setItem(UNTIL_STORAGE, overlayUntil); } catch (e) { /* nur im Speicher */ }
-  renderUntilBtn();
-});
-renderUntilBtn();
+// Manuelle Eingriffe gelten standardmäßig bis zum nächsten Zeitplanwechsel.
+// "Dauerhaft" gibt es nur pro Aktion: ⏻ am Heizkörper gedrückt halten.
+const overlayUntil = 'schedule';
 let memoryKey = ''; // Rückfall, falls der Browser localStorage sperrt
 function getKey() {
   try { return localStorage.getItem(KEY_STORAGE) || memoryKey; } catch (e) { return memoryKey; }
@@ -621,7 +619,7 @@ async function api(path, options = {}) {
 function showKeyScreen(wasWrong) {
   if (typeof refreshTimer !== 'undefined' && refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   if (typeof pollTimer !== 'undefined' && pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-  [dashboard, weatherStrip, forecastRow, logoutBtn, untilBtn, loadingState, loginScreen].forEach((el) => show(el, false));
+  [dashboard, weatherStrip, forecastRow, logoutBtn, loadingState, loginScreen].forEach((el) => show(el, false));
   if (wasWrong) clearKey();
   document.getElementById('keyMsg').textContent = wasWrong ? 'Hmm, das war nicht das Zauberwort. Tippfehler? Heizung und Klimaanlage schauen skeptisch. 🧐' : '';
   show(keyScreen, true, 'flex');
@@ -733,7 +731,6 @@ logoutBtn.addEventListener('click', async () => {
   show(dashboard, false);
   show(weatherTile, false);
   show(logoutBtn, false);
-  show(untilBtn, false);
   show(loginScreen, true, 'flex');
   document.getElementById('deviceCodeBox').style.display = 'none';
   document.getElementById('connectBtn').disabled = false;
@@ -1014,7 +1011,6 @@ document.addEventListener('visibilitychange', () => {
 function startDashboard() {
   show(loginScreen, false);
   show(logoutBtn, true, 'inline-block');
-  show(untilBtn, true, 'inline-block');
   show(loadingState, true, 'block');
   loadDashboard();
   if (refreshTimer) clearInterval(refreshTimer);
@@ -1723,7 +1719,7 @@ function controlsHtml(zone) {
       <button class="temp-btn" data-action="dec" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Kälter">−</button>
       <span class="temp-display">${base.toFixed(1)}°</span>
       <button class="temp-btn" data-action="inc" data-zone-id="${zone.id}" data-home-id="${zone.homeId}" data-temp="${base}" aria-label="Wärmer">+</button>
-      <button class="temp-btn power-btn" data-action="off" ${ids} title="Ausschalten" aria-label="Ausschalten">⏻</button>
+      <button class="temp-btn power-btn" data-action="off" ${ids} title="Tippen: aus bis Zeitplan · Halten: dauerhaft aus" aria-label="Ausschalten (Tippen bis Zeitplan, Halten dauerhaft)">⏻</button>
       ${zone.manualOverride ? `<button class="resume-link" data-action="resume" data-zone-id="${zone.id}" data-home-id="${zone.homeId}">Zeitplan</button>` : ''}
     </div>
   `;
@@ -1982,7 +1978,7 @@ async function postZoneSet(body, el, errorLabel) {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...body, until: overlayUntil }),
+      body: JSON.stringify({ until: overlayUntil, ...body }),
     });
     if (res.error) throw new Error(res.error);
     await loadDashboard();
@@ -2012,6 +2008,39 @@ async function resumeZoneSchedule(zoneId, homeId, btn) {
     if (btn) btn.disabled = false;
   }
 }
+
+// Heizkörper-⏻: kurz tippen = aus bis zum Zeitplan, 0,6 s halten = dauerhaft aus.
+const HOLD_MS = 600;
+let holdTimer = null;
+let holdFired = false;
+function cancelHold() {
+  clearTimeout(holdTimer);
+  holdTimer = null;
+  document.querySelectorAll('.power-btn.holding').forEach((b) => b.classList.remove('holding'));
+}
+document.addEventListener('pointerdown', (e) => {
+  const btn = e.target.closest('.power-btn[data-action="off"]');
+  if (!btn || btn.disabled) return;
+  holdFired = false;
+  btn.classList.add('holding');
+  holdTimer = setTimeout(() => {
+    holdFired = true;
+    btn.classList.remove('holding');
+    try { if (navigator.vibrate) navigator.vibrate(40); } catch (err) { /* optional */ }
+    postZoneSet({ zoneId: btn.dataset.zoneId, homeId: btn.dataset.homeId, power: 'OFF', until: 'manual' },
+      btn, 'Konnte Heizkörper nicht ausschalten: ');
+  }, HOLD_MS);
+});
+['pointerup', 'pointercancel'].forEach((t) => document.addEventListener(t, cancelHold, true));
+document.addEventListener('contextmenu', (e) => { if (e.target.closest('.power-btn[data-action="off"]')) e.preventDefault(); });
+// Der Klick nach einem Langdruck darf nicht zusätzlich "bis Zeitplan" auslösen.
+document.addEventListener('click', (e) => {
+  if (holdFired && e.target.closest('.power-btn[data-action="off"]')) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    holdFired = false;
+  }
+}, true);
 
 // Steuer-Knöpfe (Schalter, +/−, Ein/Aus, Zeitplan) - gemeinsam für Kacheln, Klima-Zeilen und den Dialog.
 function handleControlClick(e) {
@@ -2062,6 +2091,12 @@ function stepZoneTemp(zoneId, homeId, action, step, btn) {
   entry.timer = setTimeout(() => flushZoneTemp(key, zoneId, homeId), TEMP_SEND_DELAY_MS);
 }
 
+// Ist ein Raum schon dauerhaft übersteuert, bleibt er es auch beim Ändern der Temperatur.
+function keepOverrideUntil(zoneId, homeId) {
+  const z = currentZones.find((x) => String(x.id) === String(zoneId) && String(x.homeId) === String(homeId));
+  return z && z.overrideType === 'MANUAL' ? 'manual' : overlayUntil;
+}
+
 async function flushZoneTemp(key, zoneId, homeId) {
   const entry = pendingTemps.get(key);
   if (!entry) return;
@@ -2071,7 +2106,7 @@ async function flushZoneTemp(key, zoneId, homeId) {
     const res = await api('/api/zones/set', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ zoneId, homeId, temperature: entry.temp, until: overlayUntil }),
+      body: JSON.stringify({ zoneId, homeId, temperature: entry.temp, until: keepOverrideUntil(zoneId, homeId) }),
     });
     if (res.error) throw new Error(res.error);
   } catch (e) {
