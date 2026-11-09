@@ -47,6 +47,9 @@
     box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
   .icon-btn:hover{color:var(--text);}
+  .icon-btn.round{width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;text-decoration:none;}
+  .icon-btn.round svg{width:19px;height:19px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  .icon-btn.strom{color:var(--orange);}
 
   /* Bento-Kacheln oben */
   .bento{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:14px;}
@@ -134,16 +137,18 @@
   .greeting-row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin:2px 2px 18px;}
   .greeting{min-width:0;margin:0;}
   .updated{
-    flex:none;display:inline-flex;align-items:center;gap:6px;margin-top:6px;
-    background:var(--card);border:none;border-radius:999px;padding:7px 13px;
+    flex:none;display:inline-flex;align-items:center;gap:9px;margin-top:4px;
+    background:var(--card);border:none;border-radius:999px;padding:5px 14px 5px 6px;
     font:inherit;font-size:12.5px;color:var(--text-dim);cursor:pointer;
     box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
   .updated:hover{color:var(--text);}
-  .updated .dot{width:8px;height:8px;border-radius:50%;background:var(--green);}
+  .updated .ring{--p:100;--c:var(--green);width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--c) calc(var(--p)*1%),var(--card-border) 0);}
+  .updated .ring .ico{width:22px;height:22px;border-radius:50%;background:var(--card);display:grid;place-items:center;color:var(--text);font-size:14px;}
+  .updated b{color:var(--text);font-weight:600;}
   .updated.stale{color:#c0341f;}
-  .updated.stale .dot{background:var(--red);}
-  .updated.loading .ico{display:inline-block;animation:spin .8s linear infinite;}
+  .updated.stale .ring{--p:100;--c:var(--red);}
+  .updated.loading .ico i{display:inline-block;font-style:normal;animation:spin .8s linear infinite;}
   .toast{
     position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);z-index:100;
     max-width:min(440px,calc(100vw - 32px));background:#1b1b1f;color:#fff;
@@ -439,9 +444,8 @@
   }
   @media (max-width:480px){
     .wrap{padding:24px 16px 50px;}
-    .hero{grid-template-columns:auto 1fr;row-gap:10px;}
-    .hero .tado-logo{grid-column:1 / -1;grid-row:1;}
     .icon-btn{padding:8px 12px;font-size:12px;}
+    .icon-btn.round{padding:0;}
     .code-box{font-size:24px;letter-spacing:4px;padding:12px 16px;}
     #loginScreen,#keyScreen{padding:32px 18px;}
     .zone-grid{grid-template-columns:1fr 1fr;gap:10px;}
@@ -506,11 +510,11 @@
 <div class="wrap">
 
   <div class="hero">
-    <a class="icon-btn" href="strom.html" style="justify-self:start;text-decoration:none;">⚡ Strom</a>
+    <a class="icon-btn round strom" href="strom.html" title="Strom" aria-label="Strom"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></a>
     <div class="tado-logo"><b>tado</b><span class="ring">°</span></div>
     <div class="hero-actions">
       
-      <button class="icon-btn" id="logoutBtn" style="display:none;">Abmelden</button>
+      <button class="icon-btn round" id="logoutBtn" title="Abmelden" aria-label="Abmelden" style="display:none;"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button>
     </div>
   </div>
 
@@ -545,7 +549,7 @@
   <div id="dashboard" style="display:none;">
     <div class="greeting-row">
       <div id="greeting" class="greeting"></div>
-      <button type="button" id="updatedInfo" class="updated" aria-label="Jetzt aktualisieren"><span class="dot"></span><span class="ico">↻</span><span id="updatedText">–</span></button>
+      <button type="button" id="updatedInfo" class="updated" aria-label="Jetzt aktualisieren"><span class="ring"><span class="ico"><i>↻</i></span></span><span id="updatedText">–</span></button>
     </div>
 
     <div class="bento">
@@ -1025,9 +1029,12 @@ let resumeOnVisible = false;
 
 function renderUpdated() {
   if (!lastUpdate) { updatedText.textContent = '–'; return; }
-  const stale = lastLoadFailed || Date.now() - lastUpdate > STALE_AFTER_MS;
+  const age = Date.now() - lastUpdate;
+  const stale = lastLoadFailed || age > STALE_AFTER_MS;
   updatedInfo.classList.toggle('stale', stale);
-  updatedText.textContent = 'Stand ' + formatTime(lastUpdate) + (stale ? ' · veraltet' : '');
+  // Ring leert sich mit dem Alter der Daten (voll = frisch, leer = veraltet).
+  updatedInfo.querySelector('.ring').style.setProperty('--p', stale ? 100 : Math.round(100 - age / STALE_AFTER_MS * 100));
+  updatedText.innerHTML = 'Stand <b>' + formatTime(lastUpdate) + '</b>' + (stale ? ' · veraltet' : '');
 }
 setInterval(renderUpdated, 30000);
 updatedInfo.addEventListener('click', async () => {
@@ -1053,7 +1060,7 @@ document.addEventListener('visibilitychange', () => {
 
 function startDashboard() {
   show(loginScreen, false);
-  show(logoutBtn, true, 'inline-block');
+  show(logoutBtn, true, 'grid');
   show(loadingState, true, 'block');
   loadDashboard();
   if (refreshTimer) clearInterval(refreshTimer);

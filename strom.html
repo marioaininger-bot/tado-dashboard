@@ -34,6 +34,7 @@
     box-shadow:0 1px 0 rgba(0,0,0,.04),0 2px 8px rgba(0,0,0,.06);
   }
   .icon-btn:hover{color:var(--text);}
+  .icon-btn.round{width:40px;height:40px;padding:0;border-radius:50%;display:grid;place-items:center;font-size:18px;line-height:1;}
   a:focus-visible,button:focus-visible,input:focus-visible,.col:focus-visible{outline:2px solid var(--blue);outline-offset:2px;}
 
   .banner{
@@ -88,9 +89,9 @@
 <body>
 <div class="wrap">
   <div class="hero">
-    <a class="icon-btn" href="./">← Dashboard</a>
+    <a class="icon-btn round" href="./" title="Zurück zum Dashboard" aria-label="Zurück zum Dashboard">←</a>
     <h1>⚡ Stromverbrauch</h1>
-    <span class="spacer" style="width:104px" aria-hidden="true"></span>
+    <span class="spacer" style="width:40px" aria-hidden="true"></span>
   </div>
 
   <div id="banner" class="banner" role="status">Lade Daten …</div>
