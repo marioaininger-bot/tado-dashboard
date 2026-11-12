@@ -908,7 +908,6 @@ const flakes = Array.from({ length: 120 }, () => ({ x: rand(0, 1), y: rand(0, 1)
 const stars = Array.from({ length: 110 }, () => ({ x: rand(0, 1), y: rand(0, .7), r: rand(.4, 1.5), p: rand(0, 6.28) }));
 const clouds = Array.from({ length: 9 }, (_, i) => ({ x: rand(0, 1), y: .06 + i * .05 + rand(0, .04), s: rand(.7, 1.6), v: rand(.004, .012) }));
 let bgTarget = null, bgState = null, bgSceneKey = '';
-let moonFr = 1;
 let moonPh = .5; // aktuelle Mondphase (0 Neumond, .5 Vollmond), siehe updateScene()
 
 function resizeBg() {
@@ -929,7 +928,7 @@ window.addEventListener('resize', resizeBg);
 function updateScene() {
   const now = new Date();
   const { name, mods } = pickScene(now, lastWeather);
-  { const mph = moonPhase(now); moonPh = mph.phase; moonFr = mph.fraction; }
+  moonPh = moonPhase(now).phase;
   const ma = moonArc(now);
   const sc = { ...SCENES[name], ...mods };
   // Sonne wandert mit der Tageszeit von links (Aufgang) über den Bogen nach rechts (Untergang).
@@ -965,12 +964,12 @@ function drawBg(t, dt) {
     stars.forEach((s) => { c.globalAlpha = st.stars * (.4 + .6 * Math.abs(Math.sin(t * 1.2 + s.p))); c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, 6.3); c.fill(); });
   }
   if (st.moon > .01) {
-    const x = st.mx * W, y = st.my * H, mr = 26 + 16 * moonFr; // Vollmond größer als Sichel
+    const x = st.mx * W, y = st.my * H, mr = 36; // Größe konstant, nur die Beleuchtung zeigt die Phase
     c.globalAlpha = st.moon;
     const g = c.createRadialGradient(x, y, 10, x, y, 140);
     g.addColorStop(0, '#fff6d8aa'); g.addColorStop(1, '#fff6d800');
     c.fillStyle = g; c.fillRect(x - 140, y - 140, 280, 280);
-    c.fillStyle = 'rgba(255,246,216,.14)'; c.beginPath(); c.arc(x, y, mr, 0, 6.3); c.fill();
+    c.fillStyle = 'rgba(255,246,216,.22)'; c.beginPath(); c.arc(x, y, mr, 0, 6.3); c.fill();
     const mc = Math.cos(2 * Math.PI * moonPh), waxing = moonPh < .5;
     c.fillStyle = '#fff6d8'; c.beginPath();
     c.arc(x, y, mr, -Math.PI / 2, Math.PI / 2, !waxing);
@@ -1335,7 +1334,7 @@ function moonBodySvg(x, y, r, phase) {
   const sweepLimb = waxing ? 1 : 0;
   const sweepTerm = waxing ? (c > 0 ? 0 : 1) : (c > 0 ? 1 : 0);
   const lit = `<path d="M${x} ${y - r} A${r} ${r} 0 0 ${sweepLimb} ${x} ${y + r} A${rx} ${r} 0 0 ${sweepTerm} ${x} ${y - r}Z" fill="#f3efd9"/>`;
-  return `<circle cx="${x}" cy="${y}" r="${r * 2.2}" fill="#f3efd9" opacity=".14"/><circle cx="${x}" cy="${y}" r="${r}" fill="#ffffff" opacity=".16"/>${lit}`;
+  return `<circle cx="${x}" cy="${y}" r="${r * 2.2}" fill="#f3efd9" opacity=".14"/><circle cx="${x}" cy="${y}" r="${r}" fill="#ffffff" opacity=".24"/>${lit}`;
 }
 
 function sunArcSvg(weather, mood) {
@@ -1348,7 +1347,7 @@ function sunArcSvg(weather, mood) {
   const hhmm = (t) => new Date(t).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
   let body, trace = '', leftT = weather.sunrise.slice(11, 16), rightT = weather.sunset.slice(11, 16), label, extra = '';
   if (mood === 'night') {
-    const mp = moonPhase(new Date()), arc = moonArc(new Date()), mr = 9 + 6 * mp.fraction;
+    const mp = moonPhase(new Date()), arc = moonArc(new Date()), mr = 12;
     leftT = arc.rise ? hhmm(arc.rise) : '–'; rightT = arc.set ? hhmm(arc.set) : '–';
     label = `Mond: Aufgang ${leftT}, Untergang ${rightT}, ${moonPhaseName(mp.phase)}`;
     if (arc.up && arc.rise && arc.set) {
