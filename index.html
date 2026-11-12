@@ -825,6 +825,8 @@ logoutBtn.addEventListener('click', async () => {
 let refreshTimer = null;
 
 /* ---------- Animierter Hintergrund (Tageszeit + Wetter) ---------- */
+// Standort für Sonnen-/Mondberechnung (Österreich), vor den Funktionen definiert, da updateScene() früh läuft.
+const MOON_LAT = 48.2, MOON_LON = 14.3;
 // Szenen: Farben, Sonne/Mond/Sterne, Wolken, Regen, Schnee. Die Anzeige wird
 // weich zwischen den Szenen überblendet. Eine Szene zum Ausprobieren kann per
 // ?scene=sunrise|day|cloudy|rain|snow|wintersun|sunset|night erzwungen werden.
@@ -927,14 +929,19 @@ function updateScene() {
   const now = new Date();
   const { name, mods } = pickScene(now, lastWeather);
   moonPh = moonPhase(now).phase;
+  const ma = moonArc(now);
   const sc = { ...SCENES[name], ...mods };
   // Sonne wandert mit der Tageszeit von links (Aufgang) über den Bogen nach rechts (Untergang).
   const { sr, ss } = sunTimes(now);
   const m = now.getHours() * 60 + now.getMinutes();
   const p = Math.max(0, Math.min(1, (m - sr) / (ss - sr)));
+  // Mond wandert wie die Sonne von Aufgang (links) zu Untergang (rechts); unter dem Horizont unsichtbar.
+  const moonUp = ma.up && ma.rise && ma.set;
+  const mp = moonUp ? Math.max(0, Math.min(1, (ma.t - ma.rise) / (ma.set - ma.rise))) : 0;
   const T = {
     top: hexRGB(sc.top), bot: hexRGB(sc.bot), sx: .12 + .76 * p, sy: .84 - .68 * Math.sin(Math.PI * p),
-    sunA: sc.sunA, glow: sc.glow, moon: sc.moon, stars: sc.stars, cloud: sc.cloud, cc: sc.cc, rain: sc.rain, snow: sc.snow, wind: currentWind(),
+    mx: .12 + .76 * mp, my: .84 - .68 * Math.sin(Math.PI * mp),
+    sunA: sc.sunA, glow: sc.glow, moon: moonUp ? (sc.moon || (sc.sunA > 0 ? .45 : 0)) : 0, stars: sc.stars, cloud: sc.cloud, cc: sc.cc, rain: sc.rain, snow: sc.snow, wind: currentWind(),
   };
   document.body.classList.toggle('light', !!SCENES[name].light);
   bgTarget = T;
@@ -947,7 +954,7 @@ function drawBg(t, dt) {
   const c = bgCtx, W = bgW, H = bgH, st = bgState, T = bgTarget;
   const k = Math.min(1, .045 * dt);
   const w = reducedMotion ? 0 : Math.max(0, st.wind || 0) / 50; // 0 = windstill, 1 = 50 km/h
-  for (const p of ['sx', 'sy', 'sunA', 'glow', 'moon', 'stars', 'cloud', 'rain', 'snow', 'wind']) st[p] = lerp(st[p], T[p], k);
+  for (const p of ['sx', 'sy', 'mx', 'my', 'sunA', 'glow', 'moon', 'stars', 'cloud', 'rain', 'snow', 'wind']) st[p] = lerp(st[p], T[p], k);
   st.top = lerpArr(st.top, T.top, k); st.bot = lerpArr(st.bot, T.bot, k); st.cc = lerpArr(st.cc, T.cc, k);
   const gr = c.createLinearGradient(0, 0, 0, H);
   gr.addColorStop(0, `rgb(${st.top.map(Math.round)})`); gr.addColorStop(1, `rgb(${st.bot.map(Math.round)})`);
@@ -957,7 +964,7 @@ function drawBg(t, dt) {
     stars.forEach((s) => { c.globalAlpha = st.stars * (.4 + .6 * Math.abs(Math.sin(t * 1.2 + s.p))); c.beginPath(); c.arc(s.x * W, s.y * H, s.r, 0, 6.3); c.fill(); });
   }
   if (st.moon > .01) {
-    const x = .78 * W, y = .2 * H;
+    const x = st.mx * W, y = st.my * H;
     c.globalAlpha = st.moon;
     const g = c.createRadialGradient(x, y, 10, x, y, 140);
     g.addColorStop(0, '#fff6d8aa'); g.addColorStop(1, '#fff6d800');
@@ -1271,7 +1278,6 @@ function tempColor(v) {
 
 // Mond: Position (Höhe über dem Horizont) und Phase nach der vereinfachten
 // SunCalc-Näherung (Meeus), Standort wie bei sunTimes() - Abweichung wenige Minuten.
-const MOON_LAT = 48.2, MOON_LON = 14.3;
 function moonCoords(d) {
   const rad = Math.PI / 180, e = rad * 23.4397;
   const L = rad * (218.316 + 13.176396 * d), M = rad * (134.963 + 13.064993 * d), F = rad * (93.272 + 13.22935 * d);
