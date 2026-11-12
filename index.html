@@ -1263,6 +1263,68 @@ function tempColor(v) {
   return `hsl(${218 - 110 * k} 70% ${70 - 8 * k}%)`;
 }
 
+// Mond: Position (Höhe über dem Horizont) und Phase nach der vereinfachten
+// SunCalc-Näherung (Meeus), Standort wie bei sunTimes() - Abweichung wenige Minuten.
+const MOON_LAT = 48.2, MOON_LON = 14.3;
+function moonCoords(d) {
+  const rad = Math.PI / 180, e = rad * 23.4397;
+  const L = rad * (218.316 + 13.176396 * d), M = rad * (134.963 + 13.064993 * d), F = rad * (93.272 + 13.22935 * d);
+  const l = L + rad * 6.289 * Math.sin(M), b = rad * 5.128 * Math.sin(F);
+  return {
+    ra: Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l)),
+    dec: Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l)),
+    dist: 385001 - 20905 * Math.cos(M),
+  };
+}
+function moonDays(date) { return date.getTime() / 864e5 - 0.5 + 2440588 - 2451545; }
+function moonAltitude(date) {
+  const rad = Math.PI / 180, d = moonDays(date), c = moonCoords(d);
+  const H = rad * (280.16 + 360.9856235 * d) + rad * MOON_LON - c.ra;
+  const phi = MOON_LAT * rad;
+  return Math.asin(Math.sin(phi) * Math.sin(c.dec) + Math.cos(phi) * Math.cos(c.dec) * Math.cos(H)) / rad;
+}
+// phase: 0 Neumond, .25 erstes Viertel, .5 Vollmond, .75 letztes Viertel; fraction: beleuchteter Anteil
+function moonPhase(date) {
+  const rad = Math.PI / 180, d = moonDays(date), m = moonCoords(d);
+  const M = rad * (357.5291 + 0.98560028 * d);
+  const Ls = M + rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)) + rad * 102.9372 + Math.PI;
+  const e = rad * 23.4397, sdist = 149598000;
+  const sdec = Math.asin(Math.sin(e) * Math.sin(Ls)), sra = Math.atan2(Math.sin(Ls) * Math.cos(e), Math.cos(Ls));
+  const phi = Math.acos(Math.sin(sdec) * Math.sin(m.dec) + Math.cos(sdec) * Math.cos(m.dec) * Math.cos(sra - m.ra));
+  const inc = Math.atan2(sdist * Math.sin(phi), m.dist - sdist * Math.cos(phi));
+  const angle = Math.atan2(Math.cos(sdec) * Math.sin(sra - m.ra), Math.sin(sdec) * Math.cos(m.dec) - Math.cos(sdec) * Math.sin(m.dec) * Math.cos(sra - m.ra));
+  return { fraction: (1 + Math.cos(inc)) / 2, phase: 0.5 + 0.5 * inc * (angle < 0 ? -1 : 1) / Math.PI };
+}
+function moonPhaseName(p) {
+  const names = ['Neumond', 'zunehmende Sichel', 'erstes Viertel', 'zunehmender Mond', 'Vollmond', 'abnehmender Mond', 'letztes Viertel', 'abnehmende Sichel'];
+  return names[Math.round(p * 8) % 8];
+}
+// Auf-/Untergang des aktuellen (bzw. nächsten) Mondbogens: up = ob der Mond jetzt über dem Horizont steht
+function moonArc(now) {
+  const H0 = 0.125, step = 6 * 6e4, t0 = now.getTime();
+  const alt = (t) => moonAltitude(new Date(t)) - H0;
+  const rises = [], sets = [];
+  let prev = alt(t0 - 30 * 36e5);
+  for (let t = t0 - 30 * 36e5 + step; t <= t0 + 30 * 36e5; t += step) {
+    const cur = alt(t);
+    if (prev <= 0 && cur > 0) rises.push(t);
+    if (prev > 0 && cur <= 0) sets.push(t);
+    prev = cur;
+  }
+  const up = alt(t0) > 0;
+  const rise = up ? rises.filter((t) => t <= t0).pop() : rises.find((t) => t > t0);
+  const set = sets.find((t) => t > (up ? t0 : rise || t0));
+  return { up, rise, set, t: t0 };
+}
+function moonBodySvg(x, y, r, phase) {
+  const c = Math.cos(2 * Math.PI * phase), rx = (Math.abs(c) * r).toFixed(2);
+  const waxing = phase < 0.5;
+  const sweepLimb = waxing ? 1 : 0;
+  const sweepTerm = waxing ? (c > 0 ? 0 : 1) : (c > 0 ? 1 : 0);
+  const lit = `<path d="M${x} ${y - r} A${r} ${r} 0 0 ${sweepLimb} ${x} ${y + r} A${rx} ${r} 0 0 ${sweepTerm} ${x} ${y - r}Z" fill="#f3efd9"/>`;
+  return `<circle cx="${x}" cy="${y}" r="${r * 2.2}" fill="#f3efd9" opacity=".14"/><circle cx="${x}" cy="${y}" r="${r}" fill="#ffffff" opacity=".16"/>${lit}`;
+}
+
 function sunArcSvg(weather, mood) {
   const toMin = (iso) => parseInt(iso.slice(11, 13), 10) * 60 + parseInt(iso.slice(14, 16), 10);
   const up = toMin(weather.sunrise), down = toMin(weather.sunset), now = toMin(weather.localTime);
@@ -1270,16 +1332,33 @@ function sunArcSvg(weather, mood) {
   const f = Math.min(1, Math.max(0, (now - up) / (down - up)));
   const a = Math.PI * (1 - f);
   const sx = (cx + R * Math.cos(a)).toFixed(1), sy = (cy - R * Math.sin(a)).toFixed(1);
-  const body = mood === 'night'
-    ? `<circle cx="${cx}" cy="${cy - R}" r="13" fill="#f3efd9"/><circle cx="${cx + 5}" cy="${cy - R - 3}" r="11" fill="#1b2748"/>`
-    : `<circle cx="${sx}" cy="${sy}" r="22" fill="#ffe08a" opacity=".28"/><circle cx="${sx}" cy="${sy}" r="11" fill="#ffe08a"/>`;
-  const trace = mood === 'night' ? '' : `<path d="M${cx - R} ${cy} A${R} ${R} 0 0 1 ${sx} ${sy}" fill="none" stroke="#ffffffcc" stroke-width="3" stroke-linecap="round"/>`;
-  const upT = weather.sunrise.slice(11, 16), downT = weather.sunset.slice(11, 16);
-  return `<svg class="arc" viewBox="0 -16 ${W} 212" role="img" aria-label="Sonnenstand: Aufgang ${upT}, Untergang ${downT}">
+  const hhmm = (t) => new Date(t).toLocaleTimeString('de-AT', { hour: '2-digit', minute: '2-digit' });
+  let body, trace = '', leftT = weather.sunrise.slice(11, 16), rightT = weather.sunset.slice(11, 16), label, extra = '';
+  if (mood === 'night') {
+    const mp = moonPhase(new Date()), arc = moonArc(new Date());
+    leftT = arc.rise ? hhmm(arc.rise) : '–'; rightT = arc.set ? hhmm(arc.set) : '–';
+    label = `Mond: Aufgang ${leftT}, Untergang ${rightT}, ${moonPhaseName(mp.phase)}`;
+    if (arc.up && arc.rise && arc.set) {
+      const mf = Math.min(1, Math.max(0, (arc.t - arc.rise) / (arc.set - arc.rise)));
+      const ma = Math.PI * (1 - mf);
+      const mx = +(cx + R * Math.cos(ma)).toFixed(1), my = +(cy - R * Math.sin(ma)).toFixed(1);
+      body = moonBodySvg(mx, my, 12, mp.phase);
+      trace = `<path d="M${cx - R} ${cy} A${R} ${R} 0 0 1 ${mx} ${my}" fill="none" stroke="#ffffffcc" stroke-width="3" stroke-linecap="round"/>`;
+    } else {
+      body = moonBodySvg(cx - R, cy, 12, mp.phase).replace('opacity=".14"', 'opacity=".05"');
+      extra = `<text x="${cx}" y="${cy - 58}" fill="#fff" font-size="14" text-anchor="middle" opacity=".85">Mond geht ${arc.rise && new Date(arc.rise).getDate() !== new Date().getDate() ? 'morgen ' : ''}um ${leftT} auf</text>`;
+    }
+  } else {
+    body = `<circle cx="${sx}" cy="${sy}" r="22" fill="#ffe08a" opacity=".28"/><circle cx="${sx}" cy="${sy}" r="11" fill="#ffe08a"/>`;
+    trace = `<path d="M${cx - R} ${cy} A${R} ${R} 0 0 1 ${sx} ${sy}" fill="none" stroke="#ffffffcc" stroke-width="3" stroke-linecap="round"/>`;
+    label = `Sonnenstand: Aufgang ${leftT}, Untergang ${rightT}`;
+  }
+  const sym = mood === 'night' ? '🌙 ' : '';
+  return `<svg class="arc" viewBox="0 -16 ${W} 212" role="img" aria-label="${label}">
     <path d="M${cx - R} ${cy} A${R} ${R} 0 0 1 ${cx + R} ${cy}" fill="none" stroke="#ffffff55" stroke-width="2" stroke-dasharray="3 6"/>${trace}
-    <line x1="${cx - R - 18}" y1="${cy}" x2="${cx + R + 18}" y2="${cy}" stroke="#ffffff44"/>${body}
-    <text x="${cx - R}" y="${cy + 18}" fill="#fff" font-size="12" text-anchor="middle">↑ ${upT}</text>
-    <text x="${cx + R}" y="${cy + 18}" fill="#fff" font-size="12" text-anchor="middle">↓ ${downT}</text></svg>`;
+    <line x1="${cx - R - 18}" y1="${cy}" x2="${cx + R + 18}" y2="${cy}" stroke="#ffffff44"/>${body}${extra}
+    <text x="${cx - R}" y="${cy + 18}" fill="#fff" font-size="12" text-anchor="middle">${sym}↑ ${leftT}</text>
+    <text x="${cx + R}" y="${cy + 18}" fill="#fff" font-size="12" text-anchor="middle">↓ ${rightT}</text></svg>`;
 }
 
 function renderWeather(weather) {
@@ -1294,7 +1373,8 @@ function renderWeather(weather) {
   const chips = [
     weather.humidity != null ? `<span class="chip">💧 Luftfeuchte ${Math.round(weather.humidity)}%</span>` : '',
     weather.windSpeed != null ? `<span class="chip">💨 Wind ${Math.round(weather.windSpeed)} km/h · ${windLabel(weather.windSpeed)}</span>` : '',
-    weather.solarIntensity != null ? `<span class="chip">☀️ Sonne ${Math.round(weather.solarIntensity)}%</span>` : '',
+    mood === 'night' ? (() => { const mp = moonPhase(new Date()); return `<span class="chip">🌙 Mond ${Math.round(mp.fraction * 100)}% · ${moonPhaseName(mp.phase)}</span>`; })()
+      : weather.solarIntensity != null ? `<span class="chip">☀️ Sonne ${Math.round(weather.solarIntensity)}%</span>` : '',
   ].join('');
   const hrs = weather.hourly || [];
   const withTemp = hrs.filter((h) => h.temp != null);
