@@ -13,10 +13,11 @@
 // Daten kommen vom Netzbetreiber erst am Folgetag. Antworten werden deshalb
 // kurz in KV gecacht, um das API-Limit zu schonen.
 
-// Token-Endpunkt laut Swagger der WN_SMART_METER_API (OAuth2 client_credentials,
-// Scope "profile"). Per Variable WN_TOKEN_URL überschreibbar, falls die Wiener
-// Netze den Endpunkt ändern.
-const DEFAULT_TOKEN_URL = 'https://api.wstw.at/invoke/pub.apigateway.oauth2/getAccessToken';
+// Token-Endpunkt: Laut Antwort des Smart-Meter-Supports (12.11.2026) sind die
+// OAuth-Credentials (Business-Portal > Einstellungen) für den logwien-Login
+// gedacht (Keycloak, client_credentials). Der frühere Endpunkt auf api.wstw.at
+// liefert 501. Per Variable WN_TOKEN_URL überschreibbar.
+const DEFAULT_TOKEN_URL = 'https://log.wien/auth/realms/logwien/protocol/openid-connect/token';
 const BASE_URL = 'https://api.wstw.at/gateway/WN_SMART_METER_API/1.0/';
 
 const REQUIRED_SECRETS = ['WN_CLIENT_ID', 'WN_CLIENT_SECRET', 'WN_API_KEY', 'WN_ZAEHLPUNKT'];
@@ -52,7 +53,6 @@ async function getBearerToken(env) {
       client_id: env.WN_CLIENT_ID,
       client_secret: env.WN_CLIENT_SECRET,
       grant_type: 'client_credentials',
-      scope: 'profile',
     }),
   });
   const raw = await res.text();

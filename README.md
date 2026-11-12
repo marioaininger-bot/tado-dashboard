@@ -157,22 +157,25 @@ Fehler stehen mit Panasonics Originalmeldung unter den Kacheln. Optional kann
 `PANASONIC_APP_VERSION` als Variable gesetzt werden, falls Panasonic eine
 neuere App-Version verlangt.
 
-## Stromverbrauch (Wiener Netze Smart Meter, in Vorbereitung)
+## Stromverbrauch (Wiener Netze Smart Meter)
 
 Der Worker enthält die Anbindung an die offizielle Smart-Meter-API der Wiener
 Netze (`cloudflare/smartmeter.js`), damit sich der echte Stromverbrauch der
 Wohnung später mit den Tado-Laufzeiten abgleichen lässt. Die Anbindung ist
-ausgeliefert, aber **erst nutzbar, wenn die Zugangsdaten da sind**:
+ausgeliefert, **nutzbar sobald die vier Secrets gesetzt sind**. Die Seite
+`strom.html` zeigt dann automatisch echte Werte (bis dahin Beispieldaten):
 
 1. Anwendung für die `WN_SMART_METER_API` im
    [Developer-Portal](https://api-portal.wienerstadtwerke.at/) anlegen und
    freigeben lassen (liefert den API-Key).
 2. Den Smart-Meter-Support (`support.sm-portal@wienit.at`) bitten, die
-   Anwendung mit dem Smart-Meter-Portal-Zugang zu verbinden (1-2 Wochen). Danach
-   gibt es Client-ID und Client-Secret.
-3. Die vier Secrets setzen (siehe `cloudflare/wrangler.toml`; Login über den
-   Token-Endpunkt `api.wstw.at/invoke/pub.apigateway.oauth2/getAccessToken`,
-   optional per Variable `WN_TOKEN_URL` überschreibbar):
+   Anwendung mit dem Smart-Meter-Portal-Zugang zu verbinden (hat gedauert:
+   6.10. bis 12.11.2026). Danach stehen Client-ID und Client-Secret im
+   [Business-Portal unter Einstellungen](https://smartmeter-business.wienernetze.at/einstellungen).
+3. Die vier Secrets setzen (siehe `cloudflare/wrangler.toml`; der Login läuft
+   über den logwien-Token-Endpunkt
+   `log.wien/auth/realms/logwien/protocol/openid-connect/token`, optional per
+   Variable `WN_TOKEN_URL` überschreibbar; der API-Key steht im WSTW-API-Portal):
    `WN_CLIENT_ID`, `WN_CLIENT_SECRET`, `WN_API_KEY`, `WN_ZAEHLPUNKT`.
 
 Endpunkte (alle mit `X-Dashboard-Key`, nur GET):

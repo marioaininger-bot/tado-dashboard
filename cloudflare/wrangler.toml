@@ -18,9 +18,9 @@ compatibility_date = "2024-09-01"
 # Smart Meter (Wiener Netze, offizielle API) - alles Secrets, nichts davon im Repo.
 # Erst setzen, wenn Developer-Portal-Anwendung freigegeben und vom Support mit
 # dem Smart-Meter-Portal-Zugang verbunden ist:
-#   wrangler secret put WN_CLIENT_ID
-#   wrangler secret put WN_CLIENT_SECRET
-#   wrangler secret put WN_API_KEY
+#   wrangler secret put WN_CLIENT_ID      # Business-Portal > Einstellungen (OAuth-Credentials)
+#   wrangler secret put WN_CLIENT_SECRET  # ebenda
+#   wrangler secret put WN_API_KEY        # WSTW-API-Portal > Details der Applikation
 #   wrangler secret put WN_ZAEHLPUNKT    # komplette Zählpunktnummer (AT00...)
 # Prüfen: GET /api/strom/status zeigt, was noch fehlt.
 #
