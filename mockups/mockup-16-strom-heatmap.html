@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 16 – Strom Heatmap</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Variante A: Heatmap, ein Feld je Tag und Stunde. Ersetzt beide Balkendiagramme. */
+:root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--orange:#ff7a3d;--blue:#2c8fd6;--green:#3ea86a;--track:#eeece6}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);font-variant-numeric:tabular-nums}
+.wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:19px;font-weight:800;margin:0 0 4px}
+.sub{font-size:13px;color:var(--dim);margin-bottom:16px}
+.card{background:var(--card);border-radius:26px;padding:20px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:15px;font-weight:700}
+.readout{font-size:13px;color:var(--dim);min-height:1.4em;margin-bottom:10px}.readout b{color:var(--text)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.tile{background:var(--card);border-radius:22px;padding:14px 16px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05)}
+.tile .l{font-size:11px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.tile .n{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:2px}.tile .n small{font-size:13px;opacity:.7;margin-left:2px}
+.tile.o{background:var(--orange);color:#fff}.tile.o .l{color:#fff;opacity:.8}
+.note{font-size:12px;color:var(--dim);line-height:1.5;margin-top:10px}
+@media(max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.hm{display:grid;grid-template-columns:54px repeat(24,1fr) 52px;gap:2px;align-items:center}
+.hm .r{font-size:11px;color:var(--dim);white-space:nowrap}.hm .r.we{color:var(--orange);font-weight:600}.hm .t{font-size:11px;text-align:right;color:var(--text);font-weight:600}
+.hm .c{height:15px;border-radius:3px}.hm .c:hover{outline:2px solid var(--text);outline-offset:0}
+.hm .ax{font-size:10px;color:var(--dim);text-align:left}
+.leg{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--dim);margin-top:12px}.leg i{flex:0 0 160px;height:8px;border-radius:4px;background:linear-gradient(90deg,#e9f3fb,#8fc4ec,#2c8fd6,#165aa0,#0c2a60)}
+@media(max-width:640px){.hm{grid-template-columns:62px repeat(24,1fr) 34px}.hm .c{height:11px}.hm .r{font-size:10px}}
+</style></head><body><div class="wrap">
+<h1>⚡ Strom <span style="font-weight:500;color:var(--dim)">bis gestern</span></h1>
+<div class="sub">Mockup mit Beispieldaten · Stand: Daten des Netzbetreibers mit einem Tag Verzug</div>
+<div class="tiles" id="tiles"></div>
+<div class="card"><h2>Wann läuft was? Jede Zeile ein Tag, jede Spalte eine Stunde</h2>
+<div class="readout" id="ro">Zelle antippen oder darüberfahren</div><div class="hm" id="hm"></div>
+<div class="leg"><span>wenig</span><i></i><span>viel (bis 2,5 kW)</span></div></div>
+<div class="note">Kosten: 15,00 ct/kWh + 4,79 € Grundpreis/Monat (V-Strom-ÖSTERREICH-H-0326) + geschätzte 14,5 ct/kWh Netz, Abgaben und Steuern.</div>
+</div><script>
+
+const $=id=>document.getElementById(id), fmt=(n,d=1)=>n.toLocaleString('de-AT',{minimumFractionDigits:d,maximumFractionDigits:d});
+const DAYS=30, ENERGY=15.00, GRID=14.5, BASE=4.79*12/365, PRICE=(ENERGY+GRID)/100;
+let seed=7; const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const today=new Date(); today.setHours(0,0,0,0);
+const data=[]; // {date, wd, h:[24 x kW]}
+for(let i=DAYS;i>=1;i--){const d=new Date(today.getTime()-i*86400000);const we=d.getDay()%6===0;const act=.6+rnd()*.9+(we?.25:0);
+  const h=[];for(let k=0;k<24;k++){let kw=.22+rnd()*.05;
+    if(k>=6&&k<9)kw+=(.35+rnd()*.3)*act; if(k>=11&&k<14)kw+=((we?.6:.2)+rnd()*.25)*act; if(k>=18&&k<22)kw+=(.9+rnd()*.7)*act; if(rnd()<.05*act)kw+=2.2; h.push(kw)}
+  data.push({date:d,wd:d.getDay(),we,h,kwh:h.reduce((a,b)=>a+b,0)})}
+const sd=d=>`${d.getDate()}.${d.getMonth()+1}.`;
+const total=data.reduce((s,d)=>s+d.kwh,0), avg=total/DAYS, cost=total*PRICE+BASE*DAYS, last=data[data.length-1];
+const baseKw=(()=>{const a=[];data.forEach(d=>[2,3,4].forEach(k=>a.push(d.h[k])));a.sort((x,y)=>x-y);return a[Math.floor(a.length/2)]})();
+function tiles(){ $('tiles').innerHTML=
+ `<div class="tile"><div class="l">Gestern</div><div class="n">${fmt(last.kwh)}<small>kWh</small></div></div>
+  <div class="tile"><div class="l">Ø pro Tag</div><div class="n">${fmt(avg)}<small>kWh</small></div></div>
+  <div class="tile o"><div class="l">Kosten ${DAYS} Tage</div><div class="n">${fmt(cost,2)}<small>€</small></div></div>
+  <div class="tile"><div class="l">Grundlast</div><div class="n">${Math.round(baseKw*1000)}<small>W</small></div></div>`}
+tiles();
+
+const col=kw=>{const t=Math.min(kw/2.5,1);const st=[[233,243,251],[143,196,236],[44,143,214],[22,90,160],[12,42,96]];const x=t*4,i=Math.min(Math.floor(x),3),f=x-i;return `rgb(${st[i].map((v,j)=>Math.round(v+(st[i+1][j]-v)*f)).join(',')})`};
+const hm=$('hm');let html='<div></div>';for(let k=0;k<24;k++)html+=`<div class="ax">${k%6===0?k:''}</div>`;html+='<div></div>';
+data.forEach((d,di)=>{html+=`<div class="r ${d.we?'we':''}">${WD[d.wd]} ${sd(d.date)}</div>`;d.h.forEach((kw,k)=>html+=`<div class="c" data-d="${di}" data-h="${k}" style="background:${col(kw)}"></div>`);html+=`<div class="t">${fmt(d.kwh)}</div>`});
+hm.innerHTML=html;
+const show=e=>{const c=e.target.closest('.c');if(!c)return;const d=data[+c.dataset.d],k=+c.dataset.h;$('ro').innerHTML=`<b>${WD[d.wd]} ${sd(d.date)}, ${String(k).padStart(2,'0')}:00</b> Ø ${Math.round(d.h[k]*1000)} W`};
+hm.addEventListener('mouseover',show);hm.addEventListener('click',show);
+
+</script></body></html>
