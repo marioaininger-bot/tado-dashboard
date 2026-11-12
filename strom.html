@@ -143,6 +143,7 @@
 <script>
 // URL des Cloudflare Workers (siehe index.html).
 const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
+const GRID_STORAGE = 'stromGridCt';        // gemerkter Wert für Netz, Abgaben und Steuern
 const KEY_STORAGE = 'dashboardKey';       // gleicher Schlüssel wie im Dashboard
 const REFERENCE_KWH_PER_DAY = 16.75;       // Jahresabrechnung 2024/25 (6.115 kWh in 365 Tagen)
 // Tarif V-Strom-ÖSTERREICH-H-0326 (VERBUND), jeweils inkl. USt.
@@ -355,7 +356,19 @@ $('seg').addEventListener('click', (e) => {
   [...$('seg').children].forEach((x) => x.classList.toggle('on', x === b));
   render();
 });
-$('grid').addEventListener('input', () => { if (model) render(); });
+// Eingegebenen Wert im Browser merken (nur dieser Browser, wie die Ansichtswahl im Dashboard).
+try {
+  const saved = localStorage.getItem(GRID_STORAGE);
+  if (saved !== null && Number.isFinite(parseFloat(saved))) $('grid').value = saved;
+} catch (e) { /* Speicher gesperrt: Standardwert bleibt */ }
+$('grid').addEventListener('input', () => {
+  try {
+    const v = $('grid').value;
+    if (v === '' || !Number.isFinite(parseFloat(v))) localStorage.removeItem(GRID_STORAGE);
+    else localStorage.setItem(GRID_STORAGE, v);
+  } catch (e) { /* ignorieren */ }
+  if (model) render();
+});
 load();
 </script>
 </body>
