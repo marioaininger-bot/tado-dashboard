@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 18 – Strom Tagesprofil</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* Variante C: Kurven Werktag gegen Wochenende, dazu ein frei wählbarer Tag. */
+:root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--orange:#ff7a3d;--blue:#2c8fd6;--green:#3ea86a;--track:#eeece6}
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--text);font-variant-numeric:tabular-nums}
+.wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:19px;font-weight:800;margin:0 0 4px}
+.sub{font-size:13px;color:var(--dim);margin-bottom:16px}
+.card{background:var(--card);border-radius:26px;padding:20px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:15px;font-weight:700}
+.readout{font-size:13px;color:var(--dim);min-height:1.4em;margin-bottom:10px}.readout b{color:var(--text)}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.tile{background:var(--card);border-radius:22px;padding:14px 16px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05)}
+.tile .l{font-size:11px;color:var(--dim);font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.tile .n{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:2px}.tile .n small{font-size:13px;opacity:.7;margin-left:2px}
+.tile.o{background:var(--orange);color:#fff}.tile.o .l{color:#fff;opacity:.8}
+.note{font-size:12px;color:var(--dim);line-height:1.5;margin-top:10px}
+@media(max-width:640px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 12px}.chips button{border:1px solid var(--line);background:#fff;font:inherit;font-size:12px;font-weight:600;color:var(--dim);padding:6px 12px;border-radius:999px;cursor:pointer}.chips button.on{background:var(--text);color:#fff;border-color:var(--text)}
+svg{width:100%;height:auto;display:block}.key{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-top:10px}.key i{display:inline-block;width:18px;height:3px;border-radius:2px;margin-right:6px;vertical-align:3px}
+</style></head><body><div class="wrap">
+<h1>⚡ Strom <span style="font-weight:500;color:var(--dim)">bis gestern</span></h1>
+<div class="sub">Mockup mit Beispieldaten · Stand: Daten des Netzbetreibers mit einem Tag Verzug</div>
+<div class="tiles" id="tiles"></div>
+<div class="card"><h2>Tagesverlauf im Vergleich</h2><div class="readout" id="ro">Über die Kurve fahren für Uhrzeit und Leistung</div>
+<div class="chips" id="chips"></div><svg id="svg" viewBox="0 0 800 280"></svg>
+<div class="key"><span><i style="background:var(--blue)"></i>Ø Werktag</span><span><i style="background:var(--orange)"></i>Ø Wochenende</span><span><i style="background:#1b1b1f"></i>gewählter Tag</span></div></div>
+<div class="note">Kosten: 15,00 ct/kWh + 4,79 € Grundpreis/Monat (V-Strom-ÖSTERREICH-H-0326) + geschätzte 14,5 ct/kWh Netz, Abgaben und Steuern.</div>
+</div><script>
+
+const $=id=>document.getElementById(id), fmt=(n,d=1)=>n.toLocaleString('de-AT',{minimumFractionDigits:d,maximumFractionDigits:d});
+const DAYS=30, ENERGY=15.00, GRID=14.5, BASE=4.79*12/365, PRICE=(ENERGY+GRID)/100;
+let seed=7; const rnd=()=>{seed=(seed*16807)%2147483647;return seed/2147483647};
+const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+const today=new Date(); today.setHours(0,0,0,0);
+const data=[]; // {date, wd, h:[24 x kW]}
+for(let i=DAYS;i>=1;i--){const d=new Date(today.getTime()-i*86400000);const we=d.getDay()%6===0;const act=.6+rnd()*.9+(we?.25:0);
+  const h=[];for(let k=0;k<24;k++){let kw=.22+rnd()*.05;
+    if(k>=6&&k<9)kw+=(.35+rnd()*.3)*act; if(k>=11&&k<14)kw+=((we?.6:.2)+rnd()*.25)*act; if(k>=18&&k<22)kw+=(.9+rnd()*.7)*act; if(rnd()<.05*act)kw+=2.2; h.push(kw)}
+  data.push({date:d,wd:d.getDay(),we,h,kwh:h.reduce((a,b)=>a+b,0)})}
+const sd=d=>`${d.getDate()}.${d.getMonth()+1}.`;
+const total=data.reduce((s,d)=>s+d.kwh,0), avg=total/DAYS, cost=total*PRICE+BASE*DAYS, last=data[data.length-1];
+const baseKw=(()=>{const a=[];data.forEach(d=>[2,3,4].forEach(k=>a.push(d.h[k])));a.sort((x,y)=>x-y);return a[Math.floor(a.length/2)]})();
+function tiles(){ $('tiles').innerHTML=
+ `<div class="tile"><div class="l">Gestern</div><div class="n">${fmt(last.kwh)}<small>kWh</small></div></div>
+  <div class="tile"><div class="l">Ø pro Tag</div><div class="n">${fmt(avg)}<small>kWh</small></div></div>
+  <div class="tile o"><div class="l">Kosten ${DAYS} Tage</div><div class="n">${fmt(cost,2)}<small>€</small></div></div>
+  <div class="tile"><div class="l">Grundlast</div><div class="n">${Math.round(baseKw*1000)}<small>W</small></div></div>`}
+tiles();
+
+const W=800,H=280,L=40,B=26,T=10,pw=W-L-10,ph=H-B-T;
+const avgH=f=>{const a=data.filter(f);return Array.from({length:24},(_,k)=>a.reduce((s,d)=>s+d.h[k],0)/a.length)};
+const wk=avgH(d=>!d.we),we=avgH(d=>d.we);let sel=data.length-1;
+const mx=2.2,X=k=>L+(k+.5)/24*pw,Y=v=>T+ph-(Math.min(v,mx)/mx)*ph;
+const path=a=>a.map((v,k)=>(k?'L':'M')+X(k).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
+function draw(){let s='';for(let g=0;g<=2;g+=.5)s+=`<line x1="${L}" x2="${W-10}" y1="${Y(g)}" y2="${Y(g)}" stroke="#e6e3dc"/><text x="${L-6}" y="${Y(g)+4}" font-size="10" fill="#76767f" text-anchor="end">${g} kW</text>`;
+ for(let k=0;k<24;k+=3)s+=`<text x="${X(k)}" y="${H-8}" font-size="10" fill="#76767f" text-anchor="middle">${k}</text>`;
+ s+=`<path d="${path(wk)} L${X(23)} ${Y(0)} L${X(0)} ${Y(0)}Z" fill="#2c8fd6" opacity=".12"/><path d="${path(wk)}" fill="none" stroke="#2c8fd6" stroke-width="2.5"/><path d="${path(we)}" fill="none" stroke="#ff7a3d" stroke-width="2.5"/>`;
+ s+=`<path d="${path(data[sel].h)}" fill="none" stroke="#1b1b1f" stroke-width="2" stroke-dasharray="5 4"/><rect id="hit" x="${L}" y="${T}" width="${pw}" height="${ph}" fill="transparent"/><line id="cur" y1="${T}" y2="${T+ph}" stroke="#1b1b1f" opacity="0"/>`;
+ $('svg').innerHTML=s;
+ const hit=$('hit');const mv=e=>{const r=$('svg').getBoundingClientRect(),x=(e.clientX-r.left)/r.width*W;const k=Math.max(0,Math.min(23,Math.floor((x-L)/pw*24)));
+  $('cur').setAttribute('x1',X(k));$('cur').setAttribute('x2',X(k));$('cur').setAttribute('opacity',.35);
+  $('ro').innerHTML=`<b>${String(k).padStart(2,'0')}:00</b> Werktag ${Math.round(wk[k]*1000)} W · Wochenende ${Math.round(we[k]*1000)} W · ${sd(data[sel].date)} ${Math.round(data[sel].h[k]*1000)} W`};
+ hit.onmousemove=mv;hit.onclick=mv}
+$('chips').innerHTML=data.slice(-7).map((d,i)=>`<button data-i="${data.length-7+i}" class="${i===6?'on':''}">${WD[d.wd]} ${sd(d.date)}</button>`).join('');
+$('chips').onclick=e=>{const b=e.target.closest('button');if(!b)return;sel=+b.dataset.i;[...$('chips').children].forEach(x=>x.classList.toggle('on',x===b));draw()};draw();
+
+</script></body></html>
