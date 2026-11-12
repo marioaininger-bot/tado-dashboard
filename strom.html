@@ -123,8 +123,8 @@
         <span><i style="background:var(--green)"></i>Nacht (2 bis 5 Uhr): zeigt, was dauerhaft läuft</span>
       </div>
       <div class="controls">
-        <label for="price">Strompreis gesamt (ct/kWh, inkl. Netz und Steuern)</label>
-        <input id="price" type="number" min="1" max="100" step="0.1" value="35.2" inputmode="decimal">
+        <label for="grid">Netz, Abgaben und Steuern (ct/kWh, Schätzung)</label>
+        <input id="grid" type="number" min="0" max="100" step="0.1" value="14.5" inputmode="decimal">
       </div>
       <div class="foot" id="foot"></div>
     </div>
@@ -136,7 +136,12 @@
 const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
 const KEY_STORAGE = 'dashboardKey';       // gleicher Schlüssel wie im Dashboard
 const REFERENCE_KWH_PER_DAY = 16.75;       // Jahresabrechnung 2024/25 (6.115 kWh in 365 Tagen)
-const DEFAULT_PRICE_CT = 35.2;             // Gesamtkosten 2.152,63 EUR / 6.115 kWh (inkl. Netz, Steuern, USt.)
+// Tarif V-Strom-ÖSTERREICH-H-0326 (VERBUND), jeweils inkl. USt.
+const ENERGY_CT = 15.00;                   // Arbeitspreis in ct/kWh
+const BASE_EUR_MONTH = 4.79;               // Grundpreis in EUR pro Monat
+// Netz, Abgaben und Steuern: Schätzung aus der Monatsinfo August 2026 (437,72 kWh = 134,05 EUR inkl. allem):
+// (134,05 - 437,72 * 0,15 - 4,79) / 437,72 = 14,5 ct/kWh. Enthält anteilig die festen Netzkosten.
+const DEFAULT_GRID_CT = 14.5;
 const DAYS = 30;
 const TZ = 'Europe/Vienna';
 
@@ -222,7 +227,9 @@ let model = null;
 const shortDate = (iso) => { const [, m, d] = iso.split('-'); return `${Number(d)}.${Number(m)}.`; };
 
 function render() {
-  const price = parseFloat($('price').value) || DEFAULT_PRICE_CT;
+  const gridCt = parseFloat($('grid').value);
+  const price = ENERGY_CT + (Number.isFinite(gridCt) ? gridCt : DEFAULT_GRID_CT);   // ct/kWh gesamt
+  const baseDay = BASE_EUR_MONTH * 12 / 365;                                       // Grundpreis pro Tag
   const full = model.days.filter((d) => !d.partial);
   const total = full.reduce((s, d) => s + d.kwh, 0);
   const avg = full.length ? total / full.length : 0;
@@ -232,9 +239,9 @@ function render() {
   $('tLastSub').textContent = `am ${shortDate(last.date)}, ${last.kwh > avg ? Math.round((last.kwh / avg - 1) * 100) + ' % über' : Math.round((1 - last.kwh / avg) * 100) + ' % unter'} dem Schnitt`;
   $('tAvg').innerHTML = `${fmt(avg)}<small>kWh</small>`;
   $('tAvgSub').textContent = `Jahresschnitt laut Rechnung: ${fmt(REFERENCE_KWH_PER_DAY, 2)} kWh`;
-  const cost = total * price / 100;
+  const cost = total * price / 100 + baseDay * full.length;
   $('tCost').innerHTML = `${fmt(cost, 2)}<small>€</small>`;
-  $('tCostSub').textContent = `${full.length} Tage, hochgerechnet ca. ${Math.round(avg * 365 * price / 100).toLocaleString('de-AT')} € pro Jahr`;
+  $('tCostSub').textContent = `${full.length} Tage, hochgerechnet ca. ${Math.round(avg * 365 * price / 100 + BASE_EUR_MONTH * 12).toLocaleString('de-AT')} € pro Jahr`;
   $('tBase').innerHTML = model.baseW === null ? '–' : `${Math.round(model.baseW)}<small>W</small>`;
   $('tBaseSub').textContent = model.baseW === null ? '' : `≈ ${fmt(model.baseW * 24 / 1000)} kWh pro Tag, die rund um die Uhr laufen`;
 
@@ -250,7 +257,7 @@ function render() {
     bar.style.height = (d.kwh / max * 100) + '%';
     col.appendChild(bar);
     const show = () => {
-      $('dayReadout').innerHTML = `<b>${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(d.kwh * price / 100, 2)} €${d.partial ? ' (unvollständig)' : ''}`;
+      $('dayReadout').innerHTML = `<b>${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(d.kwh * price / 100 + baseDay, 2)} €${d.partial ? ' (unvollständig)' : ''}`;
     };
     ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
     chart.appendChild(col);
@@ -281,7 +288,9 @@ function render() {
   const p = model.peak;
   $('foot').textContent = p.at
     ? `Höchste Leistung im Zeitraum: ${fmt(p.kw, 2)} kW am ${shortDate(dayFmt.format(p.at))} um ${hhmmFmt.format(p.at)} Uhr. `
-      + 'Der voreingestellte Preis ist aus deiner Jahresabrechnung berechnet (Gesamtkosten geteilt durch Verbrauch).'
+      + `Tarif V-Strom-ÖSTERREICH-H-0326: ${fmt(ENERGY_CT, 2)} ct/kWh plus ${fmt(BASE_EUR_MONTH, 2)} € Grundpreis pro Monat (inkl. USt.). `
+      + 'Netz, Abgaben und Steuern sind aus der VERBUND-Monatsinfo August 2026 geschätzt; Boni und Rabatte sind nicht berücksichtigt. '
+      + 'Die Werte kommen vom Netzbetreiber mit einem Tag Verzug.'
     : '';
 }
 
@@ -335,7 +344,7 @@ async function load() {
   render();
 }
 
-$('price').addEventListener('input', () => { if (model) render(); });
+$('grid').addEventListener('input', () => { if (model) render(); });
 load();
 </script>
 </body>
