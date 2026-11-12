@@ -906,6 +906,7 @@ const flakes = Array.from({ length: 120 }, () => ({ x: rand(0, 1), y: rand(0, 1)
 const stars = Array.from({ length: 110 }, () => ({ x: rand(0, 1), y: rand(0, .7), r: rand(.4, 1.5), p: rand(0, 6.28) }));
 const clouds = Array.from({ length: 9 }, (_, i) => ({ x: rand(0, 1), y: .06 + i * .05 + rand(0, .04), s: rand(.7, 1.6), v: rand(.004, .012) }));
 let bgTarget = null, bgState = null, bgSceneKey = '';
+let moonPh = .5; // aktuelle Mondphase (0 Neumond, .5 Vollmond), siehe updateScene()
 
 function resizeBg() {
   const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
@@ -925,6 +926,7 @@ window.addEventListener('resize', resizeBg);
 function updateScene() {
   const now = new Date();
   const { name, mods } = pickScene(now, lastWeather);
+  moonPh = moonPhase(now).phase;
   const sc = { ...SCENES[name], ...mods };
   // Sonne wandert mit der Tageszeit von links (Aufgang) über den Bogen nach rechts (Untergang).
   const { sr, ss } = sunTimes(now);
@@ -960,8 +962,12 @@ function drawBg(t, dt) {
     const g = c.createRadialGradient(x, y, 10, x, y, 140);
     g.addColorStop(0, '#fff6d8aa'); g.addColorStop(1, '#fff6d800');
     c.fillStyle = g; c.fillRect(x - 140, y - 140, 280, 280);
-    c.fillStyle = '#fff6d8'; c.beginPath(); c.arc(x, y, 34, 0, 6.3); c.fill();
-    c.fillStyle = `rgb(${st.top.map(Math.round)})`; c.beginPath(); c.arc(x + 14, y - 6, 30, 0, 6.3); c.fill();
+    c.fillStyle = 'rgba(255,246,216,.14)'; c.beginPath(); c.arc(x, y, 34, 0, 6.3); c.fill();
+    const mc = Math.cos(2 * Math.PI * moonPh), waxing = moonPh < .5;
+    c.fillStyle = '#fff6d8'; c.beginPath();
+    c.arc(x, y, 34, -Math.PI / 2, Math.PI / 2, !waxing);
+    c.ellipse(x, y, Math.abs(mc) * 34, 34, 0, Math.PI / 2, waxing ? -Math.PI / 2 : 3 * Math.PI / 2, waxing ? mc > 0 : mc <= 0);
+    c.fill();
   }
   if (st.sunA > .01) {
     const x = st.sx * W, y = st.sy * H, r = Math.min(W, H) * .075;
