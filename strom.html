@@ -85,6 +85,8 @@
   .dv .base{stroke:var(--text);stroke-width:1;stroke-dasharray:4 3;}
   .dv .mark{stroke:var(--text);stroke-opacity:.3;}
   .dv .dot{fill:var(--blue);stroke:#fff;stroke-width:2;}
+  .dv .actrack{fill:var(--track);}
+  .dv .acbar{fill:var(--green);}
   .dv .hl{fill:var(--text);fill-opacity:.08;}
   .dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px;font-size:12px;color:var(--text-dim);}
   .dl .icon-btn{padding:7px 14px;font-size:12px;border:1px solid var(--card-border);box-shadow:none;}
@@ -129,7 +131,7 @@
       <div class="readout" id="dvSub"></div>
       <div class="readout" id="dvReadout">&nbsp;</div>
       <svg class="dv" id="dvChart" role="img" aria-label="Stromleistung in kW über den ausgewählten Tag, je Viertelstunde"></svg>
-      <div class="key"><span><i style="background:var(--blue)"></i>Leistung je Viertelstunde in kW</span><span><i style="background:var(--text)"></i>Grundlast nachts (gestrichelt)</span></div>
+      <div class="key"><span><i style="background:var(--blue)"></i>Leistung je Viertelstunde in kW</span><span><i style="background:var(--text)"></i>Grundlast nachts (gestrichelt)</span><span id="dvAcKey" hidden><i style="background:var(--green)"></i>Klimaanlage läuft (kräftiger = mehr Minuten in der Stunde)</span></div>
     </div>
 
     <div class="t w4" style="margin-bottom:14px;">
@@ -242,6 +244,21 @@ function makeSampleResponse() {
   return { wertetyp: 'QUARTER_HOUR', series: [{ obis: '1-1:1.29.0', unit: 'WH', values }] };
 }
 
+// Beispiel-Laufzeiten im Format von /api/klima/laufzeit (nur für den Demo-Modus).
+function makeSampleRuntime(m) {
+  let seed = 11;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const zone = (key, name, hours) => ({
+    key, name,
+    days: m.days.filter(() => rnd() < 0.75).map((d) => {
+      const byHour = Array(24).fill(0);
+      hours.forEach((h) => { byHour[h] = Math.round(25 + rnd() * 35); });
+      return { date: d.date, minutes: byHour.reduce((a, b) => a + b, 0), byHour, modes: { COOL: 0 } };
+    }),
+  });
+  return { since: m.days[0].date, tickMinutes: 5, zones: [zone('wohnzimmer', 'Wohnzimmer', [18, 19, 20, 21]), zone('schlafzimmer', 'Schlafzimmer', [21, 22, 23, 0])] };
+}
+
 /* ---------- Auswertung ---------- */
 const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' });
 const hhmmFmt = new Intl.DateTimeFormat('de-AT', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -287,7 +304,19 @@ let range = 30;
 let selDate = null;                         // Tag, dessen Verlauf oben gezeigt wird
 let dvMode = 'line';
 try { if (localStorage.getItem('stromDayMode') === 'bars') dvMode = 'bars'; } catch (e) { /* egal */ }
+let acLog = null;                           // Laufzeit-Protokoll der Klimaanlagen (/api/klima/laufzeit), optional
 let dv = null;                              // Geometrie des aktuellen Verlaufs fürs Hover
+
+const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Klima-Minuten je Stunde für einen Tag. Das Protokoll gilt erst ab `since`; davor ist nichts bekannt.
+function acForDay(date) {
+  if (!acLog || !acLog.since || date < acLog.since) return [];
+  return acLog.zones.map((z) => {
+    const day = z.days.find((x) => x.date === date);
+    return { name: z.name, byHour: day ? day.byHour : Array(24).fill(0) };
+  });
+}
 
 // Tagesverlauf: 96 Viertelstunden (92/100 bei Zeitumstellung) als Linie oder Balken in kW.
 function drawDay() {
@@ -296,7 +325,10 @@ function drawDay() {
   const q = d.q.slice().sort((a, b) => a.t - b.t);
   const svg = $('dvChart');
   const W = Math.max(280, svg.clientWidth || 600), H = 210, L = 34, R = 6, T = 8, B = 22;
-  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const ac = acForDay(d.date);
+  const totalH = H + ac.length * 24;
+  svg.setAttribute('viewBox', `0 0 ${W} ${totalH}`);
+  svg.style.height = `${totalH}px`;
   const peakKw = Math.max(...q.map((p) => p.kw));
   const step = peakKw > 3 ? 1 : 0.5;
   const max = Math.max(step, Math.ceil(peakKw / step) * step);
@@ -323,14 +355,27 @@ function drawDay() {
     const by = y(model.baseW / 1000);
     out += `<line class="base" x1="${L}" x2="${W - R}" y1="${by}" y2="${by}"/>`;
   }
+  const hours = q.map((p) => hourOf(p.t));
+  ac.forEach((z, k) => {
+    const y0 = H + 6 + k * 24;
+    const total = z.byHour.reduce((a, b) => a + b, 0);
+    out += `<text x="${L}" y="${y0 + 8}">${escHtml(z.name)}: ${total ? total + ' Min. an' : 'aus'}</text>`
+      + `<rect class="actrack" x="${L}" y="${y0 + 12}" width="${W - L - R}" height="8" rx="2"/>`;
+    q.forEach((p, i) => {
+      const m = z.byHour[hours[i]];
+      if (m > 0) out += `<rect class="acbar" x="${L + i * bw}" y="${y0 + 12}" width="${bw + 0.3}" height="8" style="opacity:${(0.3 + 0.7 * Math.min(m, 60) / 60).toFixed(2)}"/>`;
+    });
+  });
   out += '<g id="dvMark"></g>';
   svg.innerHTML = out;
-  dv = { q, W, L, R, bw, n, y, xc };
+  dv = { q, W, L, R, bw, n, y, xc, ac, hours };
+  $('dvAcKey').hidden = !ac.length;
 
   const peak = q.reduce((a, b) => (b.kw > a.kw ? b : a));
   $('dvTitle').textContent = `Tagesverlauf ${WEEKDAYS[d.weekday]} ${shortDate(d.date)}`;
   $('dvSub').innerHTML = `<b>${fmt(d.kwh)} kWh</b>, ca. ${fmt(dayCost(d), 2)} €, Spitze ${fmt(peak.kw, 2)} kW um ${hhmmFmt.format(peak.t)} Uhr${d.partial ? ' (unvollständiger Tag)' : ''}`;
-  $('dvReadout').innerHTML = 'Über die Grafik fahren oder tippen für Uhrzeit und Leistung';
+  $('dvReadout').innerHTML = 'Über die Grafik fahren oder tippen für Uhrzeit und Leistung'
+    + (acLog && acLog.since && d.date < acLog.since ? ` (Klima-Laufzeiten liegen erst ab ${shortDate(acLog.since)} vor)` : '');
   document.querySelectorAll('#dayChart .col').forEach((c) => c.classList.toggle('sel', c.dataset.date === selDate));
 }
 
@@ -353,10 +398,17 @@ const sortedQ = (d) => d.q.slice().sort((a, b) => a.t - b.t);
 // Eine Zeile je Viertelstunde.
 function downloadList() {
   const days = rangeDays();
-  const rows = [['Datum', 'Uhrzeit', 'Wochentag', 'kW', 'kWh']];
-  days.forEach((d) => sortedQ(d).forEach((p) => {
-    rows.push([d.date, hhmmFmt.format(p.t), WEEKDAYS[d.weekday], num(p.kw), num(p.kw / 4)]);
-  }));
+  // Klima-Spalten: Minuten, die die Anlage in der jeweiligen Stunde lief (leer = vor Beginn des Protokolls).
+  const acNames = acLog ? acLog.zones.map((z) => z.name) : [];
+  const rows = [['Datum', 'Uhrzeit', 'Wochentag', 'kW', 'kWh', ...acNames.map((n) => `Klima ${n} Min. in der Stunde`)]];
+  days.forEach((d) => {
+    const ac = acForDay(d.date);
+    sortedQ(d).forEach((p) => {
+      const h = hourOf(p.t);
+      rows.push([d.date, hhmmFmt.format(p.t), WEEKDAYS[d.weekday], num(p.kw), num(p.kw / 4),
+        ...acNames.map((n, k) => (ac[k] ? ac[k].byHour[h] : ''))]);
+    });
+  });
   downloadCsv(`strom-viertelstunden_${rangeName(days)}.csv`, rows);
 }
 
@@ -395,7 +447,9 @@ function dvPoint(ev) {
   if (dvMode === 'bars') mark = `<rect class="hl" x="${dv.L + i * dv.bw - 1}" y="8" width="${dv.bw + 2}" height="${dv.y(0) - 8}"/>`;
   else mark = `<line class="mark" x1="${dv.xc(i)}" x2="${dv.xc(i)}" y1="8" y2="${dv.y(0)}"/><circle class="dot" cx="${dv.xc(i)}" cy="${dv.y(p.kw)}" r="4.5"/>`;
   $('dvMark').innerHTML = mark;
-  $('dvReadout').innerHTML = `<b>${hhmmFmt.format(p.t)}–${hhmmFmt.format(new Date(p.t.getTime() + 900000))} Uhr</b> ${fmt(p.kw, 2)} kW (${fmt(p.kw / 4, 3)} kWh)`;
+  const acNow = dv.ac.filter((z) => z.byHour[dv.hours[i]] > 0).map((z) => `${escHtml(z.name)} ${z.byHour[dv.hours[i]]} Min.`);
+  $('dvReadout').innerHTML = `<b>${hhmmFmt.format(p.t)}–${hhmmFmt.format(new Date(p.t.getTime() + 900000))} Uhr</b> ${fmt(p.kw, 2)} kW (${fmt(p.kw / 4, 3)} kWh)`
+    + (acNow.length ? `, Klima in dieser Stunde: ${acNow.join(', ')}` : '');
 }
 
 // Tagesbalken: je Tag Grundlast (unten, dunkel) und aktiver Verbrauch (oben).
@@ -503,6 +557,7 @@ async function load() {
         const iso = (d) => d.toISOString().slice(0, 10);
         const response = await workerGet(`/api/strom/quarter-hours?von=${iso(from)}&bis=${iso(to)}`);
         model = analyse(response);
+        try { acLog = await workerGet(`/api/klima/laufzeit?von=${iso(from)}&bis=${iso(to)}`); } catch (e) { acLog = null; }   // optional
         banner(`<span>✅</span><span><b>Echte Messwerte</b> aus dem Smart Meter${response.cached ? ' (aus dem Zwischenspeicher)' : ''}.</span>`, true);
       }
     } catch (err) {
@@ -513,6 +568,7 @@ async function load() {
   }
   if (!model) {
     model = analyse(makeSampleResponse());
+    acLog = makeSampleRuntime(model);
     banner(`<span>🧪</span><span><b>Beispieldaten.</b> ${note} Sobald der Zugang steht, zeigt diese Seite automatisch deine echten Werte.</span>`, false);
   }
   $('content').hidden = false;
