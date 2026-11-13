@@ -205,8 +205,11 @@ trotzdem benutzbar):
 - Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast (schwarz), aktiven
   Verbrauch (blau, am Wochenende orange) und die **geschätzte** Klimaanlage
   (grün, oben): Betriebsminuten × geschätzte Leistung (siehe Kachel „Klima heute“),
-  aus dem aktiven Teil herausgerechnet, nicht zusätzlich. Ohne Schätzung oder
-  vor Beginn des Protokolls gibt es keinen grünen Teil
+  aus dem aktiven Teil herausgerechnet, nicht zusätzlich. Ist die Schätzung für
+  eine Anlage (noch) nicht belastbar, gilt die Annahme `AC_ASSUMED_KW` (0,8 kW im
+  Betrieb, in `strom.html`); der Teil ist dann **schraffiert** und in Legende und
+  Hover-Text als „angenommen“ gekennzeichnet. Vor Beginn des Protokolls gibt es
+  keinen grünen Teil
 - Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
 - **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
   Browser erzeugt, ohne zusätzlichen Abruf. Zwei Dateien: die Liste aller

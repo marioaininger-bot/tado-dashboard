@@ -72,6 +72,7 @@
   .chart .col{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;cursor:default;border-radius:4px 4px 0 0;}
   .chart .act{width:100%;background:var(--blue);border-radius:4px 4px 0 0;}
   .chart .clim{width:100%;background:var(--green);border-radius:4px 4px 0 0;}
+  .chart .clim.assumed{background:repeating-linear-gradient(135deg,var(--green) 0 3px,rgba(62,168,106,.35) 3px 6px);}
   .chart .col.hasclim .act{border-radius:0;}
   .chart .base{width:100%;background:var(--text);min-height:2px;}
   .chart .col.we .act{background:var(--orange);}
@@ -168,6 +169,7 @@
         <span><i style="background:var(--text)"></i>Grundlast (läuft immer)</span>
         <span><i style="background:var(--blue)"></i>Aktiver Verbrauch</span>
         <span id="keyClim" hidden><i style="background:var(--green)"></i>Klimaanlage (geschätzt)</span>
+        <span id="keyClimAssumed" hidden><i style="background:repeating-linear-gradient(135deg,var(--green) 0 2px,rgba(62,168,106,.35) 2px 4px)"></i>Klimaanlage (Betriebszeit × angenommene Leistung)</span>
         <span><i style="background:var(--orange)"></i>Wochenende</span>
         <span><i style="background:var(--blue);opacity:.45"></i>Unvollständiger Tag</span>
       </div>
@@ -412,17 +414,23 @@ function estimateAc() {
   };
 }
 
-// Geschätzter Klima-Verbrauch eines Tages in kWh (Minuten je Anlage x geschätzte Leistung); null = nicht schätzbar.
+// Klima-Verbrauch eines Tages in kWh: Minuten je Anlage x Leistung. Als Leistung gilt die Schätzung (estimateAc),
+// solange sie für die Anlage belastbar ist, sonst die Annahme AC_ASSUMED_KW (dann assumed = true, im Balken schraffiert).
+// null = keine Daten (Tag vor Beginn des Protokolls oder kein Protokoll).
+const AC_ASSUMED_KW = 0.8;                       // übliche Leistung eines Split-Geräts im Betrieb
 function acKwhFor(date) {
-  if (!acEst || !acEst.zones || !acLog || !acLog.since || date < acLog.since) return null;
-  let any = false, sum = 0;
-  acEst.zones.forEach((e, k) => {
-    if (!e.ok) return;
-    any = true;
-    const dd = acLog.zones[k].days.find((x) => x.date === date);
-    if (dd) sum += e.kw * dd.minutes / 60;
+  if (!acLog || !acLog.since || date < acLog.since) return null;
+  let kwh = 0, minutes = 0, assumed = false;
+  acLog.zones.forEach((z, k) => {
+    const dd = z.days.find((x) => x.date === date);
+    if (!dd || !dd.minutes) return;
+    const e = acEst && acEst.zones ? acEst.zones[k] : null;
+    const kw = e && e.ok ? e.kw : AC_ASSUMED_KW;
+    if (!(e && e.ok)) assumed = true;
+    kwh += kw * dd.minutes / 60;
+    minutes += dd.minutes;
   });
-  return any ? sum : null;
+  return { kwh, assumed, minutes };
 }
 
 const fmtMin = (m) => (m <= 0 ? 'aus' : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`);
@@ -458,6 +466,9 @@ function drawAcToday() {
   $('acFoot').textContent = est && est.few !== undefined
     ? `Betriebszeit der Klimaanlagen, kein gemessener Stromverbrauch. Eine Schätzung der Leistung braucht mindestens ${MIN_EST_DAYS} Tage Protokoll (bisher ${est.few}).`
     : 'Betriebszeit der Klimaanlagen. kW und kWh sind geschätzt: Der Zähler misst nur die ganze Wohnung, die Schätzung vergleicht Stunden mit und ohne Klimaanlage (je Uhrzeit, über alle Tage seit Beginn des Protokolls) und wird mit mehr Tagen genauer. ± ist ein 95-%-Bereich. Die Zählung im 5-Minuten-Takt ist eine Untergrenze.';
+  if (acLog.zones.some((_, k) => !(est && est.zones && est.zones[k] && est.zones[k].ok))) {
+    $('acFoot').textContent += ` In den Tagesbalken gilt, wo keine belastbare Schätzung vorliegt, vorläufig ${fmt(AC_ASSUMED_KW, 1)} kW je laufender Anlage (schraffiert).`;
+  }
   box.hidden = false;
 }
 
@@ -604,16 +615,16 @@ function drawRange() {
   chart.innerHTML = '';
   days.forEach((d) => {
     const base = Math.min(baseKwh, d.kwh);
-    const acRaw = acKwhFor(d.date);
-    const clim = acRaw === null ? 0 : Math.min(acRaw, d.kwh - base);          // Klima steckt im Gesamtverbrauch, wird aus dem aktiven Teil herausgerechnet
+    const ac = acKwhFor(d.date);
+    const clim = !ac ? 0 : Math.min(ac.kwh, d.kwh - base);          // Klima steckt im Gesamtverbrauch, wird aus dem aktiven Teil herausgerechnet
     const col = document.createElement('div');
     col.className = 'col' + (d.weekday === 0 || d.weekday === 6 ? ' we' : '') + (d.partial ? ' partial' : '') + (clim > 0 ? ' hasclim' : '');
     col.tabIndex = 0;
     col.dataset.date = d.date;
-    col.innerHTML = (clim > 0 ? `<div class="clim" style="height:${clim / max * 100}%"></div>` : '')
+    col.innerHTML = (clim > 0 ? `<div class="clim${ac.assumed ? ' assumed' : ''}" style="height:${clim / max * 100}%"></div>` : '')
       + `<div class="act" style="height:${(d.kwh - base - clim) / max * 100}%"></div><div class="base" style="height:${base / max * 100}%"></div>`;
     const show = () => {
-      $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(dayCost(d), 2)} €${d.partial ? ' (unvollständig)' : ''}${clim > 0 ? `, davon Klima ≈ ${fmt(clim, 1)} kWh (geschätzt)` : ''}`;
+      $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(dayCost(d), 2)} €${d.partial ? ' (unvollständig)' : ''}${clim > 0 ? `, Klima lief ${fmtMin(ac.minutes)}, davon ≈ ${fmt(clim, 1)} kWh (${ac.assumed ? 'angenommen: ' + fmt(AC_ASSUMED_KW, 1) + ' kW im Betrieb' : 'geschätzt'})` : ''}`;
     };
     ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
     const pick = () => { selDate = d.date; drawDay(); };
@@ -624,10 +635,13 @@ function drawRange() {
   const fullDays = days.filter((d) => !d.partial);
   const total = fullDays.reduce((s, d) => s + d.kwh, 0);
   const share = total ? Math.min(baseKwh * fullDays.length / total, 1) : 0;
-  const climTotal = fullDays.reduce((a, d) => a + (acKwhFor(d.date) || 0), 0);
-  $('keyClim').hidden = !days.some((d) => acKwhFor(d.date) !== null);
+  const acDays = days.map((d) => acKwhFor(d.date)).filter((a) => a && a.minutes > 0);
+  const climTotal = fullDays.reduce((a, d) => { const c = acKwhFor(d.date); return a + (c ? c.kwh : 0); }, 0);
+  const climAssumed = acDays.some((a) => a.assumed);
+  $('keyClim').hidden = !acDays.some((a) => !a.assumed);
+  $('keyClimAssumed').hidden = !climAssumed;
   $('rangeTitle').textContent = `${days.length} Tage: ${fmt(total)} kWh, ca. ${fmt(fullDays.reduce((s, d) => s + dayCost(d), 0), 2)} €, davon Grundlast ${Math.round(share * 100)} %`
-    + (climTotal > 0 ? `, Klima ≈ ${Math.round(climTotal / total * 100)} % (geschätzt)` : '');
+    + (climTotal > 0 ? `, Klima ≈ ${Math.round(climTotal / total * 100)} % (${climAssumed ? 'angenommen' : 'geschätzt'})` : '');
   $('axFrom').textContent = shortDate(days[0].date);
   $('axTo').textContent = shortDate(days[days.length - 1].date);
 }
