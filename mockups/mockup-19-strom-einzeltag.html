@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockup 19 – Strom Einzeltag</title>
+<style>
+  :root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--track:#eeece6;--orange:#ff7a3d;--blue:#2c8fd6;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);background:var(--bg);}
+  .wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px;}
+  h1{font-size:19px;margin:0 0 4px;}
+  p.lead{margin:0 0 18px;color:var(--dim);font-size:13px;line-height:1.5;}
+  .card{background:var(--card);border-radius:26px;padding:20px;margin-bottom:16px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);}
+  .card h2{margin:0;font-size:15px;}
+  .head{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;margin-bottom:10px;}
+  .readout{font-size:13px;color:var(--dim);min-height:1.4em;font-variant-numeric:tabular-nums;}
+  .readout b{color:var(--text);}
+  .tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;background:var(--track);color:var(--dim);border-radius:999px;padding:3px 10px;margin-bottom:8px;}
+  .pros{font-size:12px;color:var(--dim);margin-top:10px;line-height:1.5;}
+  svg{display:block;width:100%;height:auto;touch-action:none;}
+  .ax{font-size:10px;fill:var(--dim);}
+  .sel{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;}
+  .sel button{border:0;background:var(--card);font:inherit;font-size:13px;font-weight:600;color:var(--dim);padding:8px 14px;border-radius:999px;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,.08);}
+  .sel button.on{background:var(--text);color:#fff;}
+  .kpis{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;}
+  .kpis div{background:var(--card);border-radius:18px;padding:10px 16px;font-size:12px;color:var(--dim);}
+  .kpis b{display:block;font-size:20px;color:var(--text);font-variant-numeric:tabular-nums;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>⚡ Tagesverlauf – drei Darstellungen</h1>
+  <p class="lead">Erscheint nach Klick auf einen Tagesbalken. Alle drei Varianten zeigen dieselben 96 Viertelstundenwerte (Demo-Daten), Leistung in kW. Über die Grafik fahren oder tippen für Uhrzeit und Wert.</p>
+
+  <div class="sel" id="sel"></div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card"><span class="tag">Variante A</span>
+    <div class="head"><h2>Linie</h2><div class="readout" id="roA">&nbsp;</div></div>
+    <svg id="A" viewBox="0 0 800 220"></svg>
+    <div class="pros">Ruhig und genau. Gut, um Spitzen und die Nacht-Grundlast abzulesen. Die Verbrauchsmenge (Fläche) ist nur indirekt sichtbar.</div>
+  </div>
+
+  <div class="card"><span class="tag">Variante B</span>
+    <div class="head"><h2>Fläche mit Grundlast</h2><div class="readout" id="roB">&nbsp;</div></div>
+    <svg id="B" viewBox="0 0 800 220"></svg>
+    <div class="pros">Passt zu den Tagesbalken: dunkel = Grundlast, blau = aktiver Verbrauch. Man sieht auf einen Blick, wie viel „rund um die Uhr“ läuft.</div>
+  </div>
+
+  <div class="card"><span class="tag">Variante C</span>
+    <div class="head"><h2>Balken je Viertelstunde</h2><div class="readout" id="roC">&nbsp;</div></div>
+    <svg id="C" viewBox="0 0 800 220"></svg>
+    <div class="pros">Zeigt die Rohdaten ehrlich, jede Viertelstunde ist ein Balken. Optisch am nächsten an der Tagesansicht darüber, aber unruhiger. Wochenende orange wie bisher.</div>
+  </div>
+</div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const W = 800, H = 220, L = 34, R = 8, T = 10, B = 24;
+const days = [
+  { name: 'Mi 12.11.', seed: 3, we: false },
+  { name: 'Sa 8.11.',  seed: 7, we: true  },
+  { name: 'Mo 3.11.',  seed: 11, we: false },
+];
+let cur = 0;
+
+function rnd(s){ return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+function makeDay(d){
+  const r = rnd(d.seed * 9973), v = [];
+  for (let i = 0; i < 96; i++){
+    const h = i / 4;
+    let kw = 0.11 + r() * 0.03;
+    const bump = (c, w, a) => a * Math.exp(-((h - c) ** 2) / (2 * w * w));
+    kw += bump(7.2, 0.7, 0.9) + bump(12.3, 0.8, d.we ? 1.5 : 0.8) + bump(19.2, 1.4, 1.7) + bump(21.0, 0.6, 0.6);
+    if (r() < 0.07) kw += 1.2 + r() * 1.5;
+    v.push(kw);
+  }
+  return v;
+}
+const el = (n, a, p) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); (p || null)?.appendChild(e); return e; };
+const hhmm = (i) => `${String(Math.floor(i / 4)).padStart(2, '0')}:${String((i % 4) * 15).padStart(2, '0')}`;
+const f = (x, n = 2) => x.toLocaleString('de-AT', { minimumFractionDigits: n, maximumFractionDigits: n });
+
+function frame(svg, max){
+  svg.innerHTML = '';
+  const y = (kw) => T + (H - T - B) * (1 - kw / max);
+  for (let g = 0; g <= max + 1e-6; g += 0.5){
+    el('line', { x1: L, x2: W - R, y1: y(g), y2: y(g), stroke: '#e6e3dc', 'stroke-width': 1 }, svg);
+    el('text', { x: L - 6, y: y(g) + 3, 'text-anchor': 'end', class: 'ax' }, svg).textContent = f(g, 1);
+  }
+  for (let h = 0; h <= 24; h += 3)
+    el('text', { x: L + (W - L - R) * h / 24, y: H - 6, 'text-anchor': h === 0 ? 'start' : h === 24 ? 'end' : 'middle', class: 'ax' }, svg).textContent = String(h).padStart(2, '0') + ':00';
+  return y;
+}
+function hover(svg, ro, v, base, drawMark){
+  const mark = el('g', {}, svg);
+  const move = (ev) => {
+    const pt = svg.getBoundingClientRect();
+    const px = (ev.clientX - pt.left) / pt.width * W;
+    const i = Math.max(0, Math.min(95, Math.floor((px - L) / (W - L - R) * 96)));
+    mark.innerHTML = ''; drawMark(mark, i);
+    ro.innerHTML = `<b>${hhmm(i)}–${hhmm((i + 1) % 96 || 0)} Uhr</b> ${f(v[i])} kW (${f(v[i] / 4, 3)} kWh)`;
+  };
+  svg.onpointermove = move; svg.onpointerdown = move;
+}
+
+function draw(){
+  const v = makeDay(days[cur]);
+  const max = Math.ceil(Math.max(...v) * 2) / 2 + 0.5;
+  const base = [...v.slice(8, 20)].sort((a, b) => a - b)[6];   // Median 2-5 Uhr
+  const bw = (W - L - R) / 96, xs = (i) => L + i * bw;
+  const kwh = v.reduce((s, x) => s + x / 4, 0), pk = Math.max(...v);
+
+  document.getElementById('kpis').innerHTML =
+    `<div>Verbrauch<b>${f(kwh)} kWh</b></div><div>Grundlast<b>${Math.round(base * 1000)} W</b></div><div>Spitze<b>${f(pk)} kW</b>um ${hhmm(v.indexOf(pk))} Uhr</div>`;
+
+  // A: Linie
+  let svg = document.getElementById('A'), y = frame(svg, max);
+  el('path', { d: v.map((x, i) => `${i ? 'L' : 'M'}${xs(i) + bw / 2},${y(x)}`).join(' '), fill: 'none', stroke: '#2c8fd6', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+  hover(svg, document.getElementById('roA'), v, base, (g, i) => {
+    el('line', { x1: xs(i) + bw / 2, x2: xs(i) + bw / 2, y1: T, y2: H - B, stroke: '#1b1b1f', 'stroke-opacity': .25 }, g);
+    el('circle', { cx: xs(i) + bw / 2, cy: y(v[i]), r: 4.5, fill: '#2c8fd6', stroke: '#fff', 'stroke-width': 2 }, g);
+  });
+
+  // B: Fläche, Grundlast dunkel
+  svg = document.getElementById('B'); y = frame(svg, max);
+  const top = v.map((x, i) => `${i ? 'L' : 'M'}${xs(i) + bw / 2},${y(x)}`).join(' ');
+  el('path', { d: `${top} L${xs(95) + bw / 2},${y(0)} L${xs(0) + bw / 2},${y(0)} Z`, fill: '#2c8fd6', 'fill-opacity': .85 }, svg);
+  el('rect', { x: L, y: y(base), width: W - L - R, height: y(0) - y(base), fill: '#1b1b1f', 'fill-opacity': .85 }, svg);
+  el('line', { x1: L, x2: W - R, y1: y(base), y2: y(base), stroke: '#fff', 'stroke-dasharray': '4 3', 'stroke-opacity': .7 }, svg);
+  el('text', { x: L + 6, y: y(base) - 5, class: 'ax', fill: '#fff', style: 'fill:#fff;font-weight:600' }, svg).textContent = `Grundlast ${Math.round(base * 1000)} W`;
+  hover(svg, document.getElementById('roB'), v, base, (g, i) => {
+    el('line', { x1: xs(i) + bw / 2, x2: xs(i) + bw / 2, y1: T, y2: H - B, stroke: '#1b1b1f', 'stroke-opacity': .35 }, g);
+  });
+
+  // C: Balken
+  svg = document.getElementById('C'); y = frame(svg, max);
+  const col = days[cur].we ? '#ff7a3d' : '#2c8fd6';
+  v.forEach((x, i) => el('rect', { x: xs(i) + .5, y: y(x), width: bw - 1, height: y(0) - y(x), fill: col, rx: 1.5 }, svg));
+  el('line', { x1: L, x2: W - R, y1: y(base), y2: y(base), stroke: '#1b1b1f', 'stroke-dasharray': '4 3' }, svg);
+  hover(svg, document.getElementById('roC'), v, base, (g, i) => {
+    el('rect', { x: xs(i) - 1, y: T, width: bw + 2, height: H - T - B, fill: '#1b1b1f', 'fill-opacity': .08 }, g);
+  });
+  ['roA', 'roB', 'roC'].forEach((id) => document.getElementById(id).innerHTML = '&nbsp;');
+}
+
+const sel = document.getElementById('sel');
+days.forEach((d, i) => {
+  const b = document.createElement('button'); b.textContent = d.name;
+  b.onclick = () => { cur = i; [...sel.children].forEach((c, j) => c.classList.toggle('on', j === i)); draw(); };
+  if (!i) b.classList.add('on'); sel.appendChild(b);
+});
+draw();
+</script>
+</body>
+</html>
