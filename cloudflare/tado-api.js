@@ -17,9 +17,6 @@ import { handleStrom } from './smartmeter.js';
 import { handleRuntime, recordRuntime, viennaDayHour } from './runtime-log.js';
 import { handleAcChanges, recordAcChanges, markDashboardCommand } from './ac-changes.js';
 import { handleEnergy, syncAcEnergy } from './ac-energy.js';
-import {
-  MIN_AGE, isNotifyConfigured, sendPushDetailed, evaluateNotifications, conditionsFromZones,
-} from './notify.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
@@ -715,58 +712,15 @@ async function handlePanasonicLogin(request, env, step) {
 // zeichnet den Verlauf unabhängig davon auf, ob gerade jemand das
 // Dashboard geöffnet hat. Fehler werden bewusst verschluckt: der nächste
 // Lauf in 5 Minuten versucht es einfach erneut.
-// Push-Nachrichten (notify.js): Tado-Daten fehlen seit 30 Minuten.
-const TADO_DATA_CONDITION = {
-  key: 'tado-data',
-  minAge: MIN_AGE.tadoData,
-  title: 'Dashboard: keine Tado-Daten',
-  message: 'Der Cron-Lauf bekommt seit über 30 Minuten keine Tado-Daten (Login abgelaufen oder Tado nicht erreichbar). Der Verlauf hat Lücken.',
-  priority: 4,
-  tags: ['warning'],
-  recovered: { title: 'Dashboard: Tado-Daten wieder da', message: 'Der Cron-Lauf bekommt wieder Tado-Daten.' },
-};
-
-// Meldet Zustände an notify.js; Fehler dort dürfen den Cron nie stören.
-async function notifySafe(env, conditions, checked) {
-  try {
-    await evaluateNotifications(env, conditions, checked);
-  } catch (err) {
-    // best effort
-  }
-}
-
 async function handleScheduled(env) {
   const accessToken = await getValidAccessToken(env);
-  if (!accessToken) {
-    await notifySafe(env, [TADO_DATA_CONDITION], ['tado-data']);
-    return;
-  }
+  if (!accessToken) return;
 
   try {
     const { zoneList } = await fetchHomeAndZones(env, accessToken);
     const panasonic = await fetchPanasonicZones(env);
     const zones = zoneList.concat(panasonic.zones);
     await recordHistory(env, zones);
-
-    // Push-Nachrichten: Tado-Zustände sind geprüft. Der Panasonic-Login
-    // zählt nur als geprüft, wenn Panasonic ohne anderen Fehler geantwortet hat.
-    const conditions = conditionsFromZones(zoneList);
-    const checked = ['tado-data', 'window:', 'battery:', 'offline:'];
-    if (panasonic.loginRequired) {
-      conditions.push({
-        key: 'panasonic-login',
-        minAge: MIN_AGE.panasonicLogin,
-        title: 'Panasonic: Anmeldung nötig',
-        message: 'Die Panasonic-Sitzung ist abgelaufen. Bitte im Dashboard unter den Kacheln "Bei Panasonic anmelden" tippen. Bis dahin fehlen Klima-Daten und Verbrauch.',
-        priority: 4,
-        tags: ['warning'],
-        recovered: { title: 'Panasonic wieder verbunden', message: 'Die Panasonic-Anmeldung funktioniert wieder.' },
-      });
-      checked.push('panasonic-login');
-    } else if (!panasonic.error) {
-      checked.push('panasonic-login');
-    }
-    await notifySafe(env, conditions, checked);
     // Eigener Versuch: ein Fehler im Laufzeit-Protokoll darf den Verlauf nicht
     // stören (und umgekehrt).
     try {
@@ -785,30 +739,8 @@ async function handleScheduled(env) {
       // best effort
     }
   } catch (err) {
-    // Tado-Abruf fehlgeschlagen: andere Zustände bleiben unverändert,
-    // nur "keine Tado-Daten" läuft hoch.
-    await notifySafe(env, [TADO_DATA_CONDITION], ['tado-data']);
+    // best effort
   }
-}
-
-// Schickt eine Test-Nachricht, um ntfy einzurichten (POST /api/notify/test).
-async function handleNotifyTest(env) {
-  if (!isNotifyConfigured(env)) {
-    return json(400, { error: 'NTFY_TOPIC ist nicht gesetzt.' }, env);
-  }
-  const result = await sendPushDetailed(env, {
-    title: 'Tado-Dashboard',
-    message: 'Test: Push-Nachrichten funktionieren.',
-    priority: 3,
-    tags: ['white_check_mark'],
-  });
-  if (result.ok) return json(200, { status: 'ok' }, env);
-  return json(502, {
-    error: 'ntfy hat die Nachricht nicht angenommen.',
-    ntfyStatus: result.status,
-    ntfyAntwort: result.detail,
-    topicLaenge: String(env.NTFY_TOPIC).length,
-  }, env);
 }
 
 // Diagnose (nur lesend): Modell und Verbrauchsdaten der Panasonic-Geräte. ?datum=JJJJ-MM-TT, sonst gestern.
@@ -863,10 +795,6 @@ export default {
     }
     if (url.pathname === '/api/panasonic/login/verify' && request.method === 'POST') {
       return handlePanasonicLogin(request, env, 'verify');
-    }
-
-    if (url.pathname === '/api/notify/test' && request.method === 'POST') {
-      return handleNotifyTest(env);
     }
 
     if (url.pathname === '/api/klima/laufzeit' && request.method === 'GET') {
