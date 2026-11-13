@@ -997,3 +997,29 @@ export async function diagnosePanasonicDevices(env, dateIso) {
   }
   return { configured: true, date: dateIso, timezone: tz, devices };
 }
+
+/* ---------- Stundenwerte des Stromverbrauchs je Gerät (für ac-energy.js) ---------- */
+
+export async function listPanasonicDevices(env) {
+  return listDevices(env);
+}
+
+// 24 Werte (kWh je Stunde, Wiener Ortszeit) eines Tages; null = Panasonic liefert für die Stunde keinen Wert
+// (-255 ist dort der Platzhalter, z. B. vor der Registrierung des Geräts).
+export async function fetchPanasonicDayEnergy(env, device, dateIso) {
+  const history = await accRequest(env, 'POST', '/deviceHistoryData', {
+    deviceGuid: device.guid,
+    dataMode: 0,                                      // 0 = Tag
+    date: dateIso.replace(/-/g, ''),
+    osTimezone: viennaOffset(dateIso),
+  });
+  const hours = Array(24).fill(null);
+  for (const row of Array.isArray(history.historyDataList) ? history.historyDataList : []) {
+    const m = /(\d{2})\s*$/.exec(String(row.dataTime || ''));
+    const hour = m ? Number(m[1]) : -1;
+    if (hour >= 0 && hour < 24 && typeof row.consumption === 'number' && row.consumption >= 0) {
+      hours[hour] = Math.round(row.consumption * 10000) / 10000;
+    }
+  }
+  return hours;
+}

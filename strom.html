@@ -152,7 +152,7 @@
       <div class="readout" id="dvSub"></div>
       <div class="readout" id="dvReadout">&nbsp;</div>
       <svg class="dv" id="dvChart" role="img" aria-label="Stromleistung in kW über den ausgewählten Tag, je Viertelstunde"></svg>
-      <div class="key"><span><i style="background:var(--blue)"></i>Leistung je Viertelstunde in kW</span><span><i style="background:var(--text)"></i>Grundlast nachts (gestrichelt)</span><span id="dvAcKey" hidden><i style="background:var(--green)"></i>Klimaanlage läuft (kräftiger = mehr Minuten in der Stunde)</span></div>
+      <div class="key"><span><i style="background:var(--blue)"></i>Leistung je Viertelstunde in kW</span><span><i style="background:var(--text)"></i>Grundlast nachts (gestrichelt)</span><span id="dvAcKey" hidden><i style="background:var(--green)"></i><span id="dvAcKeyText">Klimaanlage läuft (kräftiger = mehr Minuten in der Stunde)</span></span></div>
     </div>
 
     <div class="t w4" style="margin-bottom:14px;">
@@ -168,6 +168,7 @@
       <div class="key">
         <span><i style="background:var(--text)"></i>Grundlast (läuft immer)</span>
         <span><i style="background:var(--blue)"></i>Aktiver Verbrauch</span>
+        <span id="keyClimReal" hidden><i style="background:var(--green)"></i>Klimaanlage (Panasonic-Messwerte)</span>
         <span id="keyClim" hidden><i style="background:var(--green)"></i>Klimaanlage (geschätzt)</span>
         <span id="keyClimAssumed" hidden><i style="background:repeating-linear-gradient(135deg,var(--green) 0 2px,rgba(62,168,106,.35) 2px 4px)"></i>Klimaanlage (Betriebszeit × angenommene Leistung)</span>
         <span><i style="background:var(--orange)"></i>Wochenende</span>
@@ -267,6 +268,20 @@ function makeSampleResponse() {
   return { wertetyp: 'QUARTER_HOUR', series: [{ obis: '1-1:1.29.0', unit: 'WH', values }] };
 }
 
+// Beispiel-Verbrauch im Format von /api/klima/verbrauch, passend zu den Beispiel-Laufzeiten (0,9 und 0,6 kW im Betrieb, 3 W Standby).
+function makeSampleEnergy(runtime) {
+  const stamp = new Date().toISOString();
+  return {
+    zones: runtime.zones.map((z, k) => ({
+      key: z.key, name: z.name,
+      days: z.days.map((d) => {
+        const byHour = d.byHour.map((m) => Math.round((0.003 + (k ? 0.6 : 0.9) * m / 60) * 1000) / 1000);
+        return { date: d.date, kwh: Math.round(byHour.reduce((a, b) => a + b, 0) * 1000) / 1000, hoursKnown: 24, byHour, fetchedAt: stamp };
+      }),
+    })),
+  };
+}
+
 // Beispiel-Laufzeiten im Format von /api/klima/laufzeit (nur für den Demo-Modus).
 function makeSampleRuntime(m) {
   let seed = 11;
@@ -328,17 +343,35 @@ let selDate = null;                         // Tag, dessen Verlauf oben gezeigt 
 let dvMode = 'line';
 try { if (localStorage.getItem('stromDayMode') === 'bars') dvMode = 'bars'; } catch (e) { /* egal */ }
 let acEst = null;                           // Schätzung der Anlagenleistung (estimateAc), wird in render() gesetzt
+let acEnergy = null;                        // echter Stromverbrauch je Klimaanlage aus Panasonic (/api/klima/verbrauch), optional
 let acLog = null;                           // Laufzeit-Protokoll der Klimaanlagen (/api/klima/laufzeit), optional
 let dv = null;                              // Geometrie des aktuellen Verlaufs fürs Hover
 
 const escHtml = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+// Echte Stundenwerte (kWh) der Klimaanlagen für einen Tag, null = keine Panasonic-Daten für diesen Tag.
+// "active" ist der Teil über dem Standby: der Standby steckt schon in der Grundlast und zählt nicht doppelt.
+const STANDBY_KWH_H = 0.004;                     // rund 4 W
+function energyDay(date) {
+  if (!acEnergy || !acEnergy.zones.length) return null;
+  const zs = acEnergy.zones.map((z) => {
+    const d = z.days.find((x) => x.date === date);
+    if (!d || !d.hoursKnown) return null;
+    return { name: z.name, byHour: d.byHour, total: d.kwh, active: d.byHour.reduce((a, v) => a + (v === null ? 0 : Math.max(0, v - STANDBY_KWH_H)), 0) };
+  });
+  if (zs.every((z) => z === null)) return null;
+  return zs.map((z, i) => z || { name: acEnergy.zones[i].name, byHour: Array(24).fill(null), total: 0, active: 0 });
+}
+
 // Klima-Minuten je Stunde für einen Tag. Das Protokoll gilt erst ab `since`; davor ist nichts bekannt.
+// Mit Panasonic-Daten kind "kwh" (kWh je Stunde), sonst kind "min" (Minuten je Stunde aus dem Laufzeit-Protokoll).
 function acForDay(date) {
+  const e = energyDay(date);
+  if (e) return e.map((z) => ({ name: z.name, kind: 'kwh', byHour: z.byHour, total: z.total }));
   if (!acLog || !acLog.since || date < acLog.since) return [];
   return acLog.zones.map((z) => {
     const day = z.days.find((x) => x.date === date);
-    return { name: z.name, byHour: day ? day.byHour : Array(24).fill(0) };
+    return { name: z.name, kind: 'min', byHour: day ? day.byHour : Array(24).fill(0) };
   });
 }
 
@@ -419,6 +452,8 @@ function estimateAc() {
 // null = keine Daten (Tag vor Beginn des Protokolls oder kein Protokoll).
 const AC_ASSUMED_KW = 0.8;                       // übliche Leistung eines Split-Geräts im Betrieb
 function acKwhFor(date) {
+  const real = energyDay(date);
+  if (real) return { kwh: real.reduce((a, z) => a + z.active, 0), assumed: false, real: true, minutes: 0 };
   if (!acLog || !acLog.since || date < acLog.since) return null;
   let kwh = 0, minutes = 0, assumed = false;
   acLog.zones.forEach((z, k) => {
@@ -430,14 +465,42 @@ function acKwhFor(date) {
     kwh += kw * dd.minutes / 60;
     minutes += dd.minutes;
   });
-  return { kwh, assumed, minutes };
+  return { kwh, assumed, minutes, real: false };
 }
 
 const fmtMin = (m) => (m <= 0 ? 'aus' : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`);
 
+// Kachel „Klima heute" mit echten Panasonic-Werten: kWh seit Mitternacht je Anlage, dazu Betriebszeit, gestern, Ø pro Tag, Standby.
+function drawAcTodayReal(box) {
+  const today = dayFmt.format(new Date());
+  const yesterday = dayFmt.format(new Date(Date.now() - 86400000));
+  const disc = today <= TARIFF.discountUntil;
+  const dayOf = (z, date) => { const d = z.days.find((x) => x.date === date); return d && d.hoursKnown ? d : null; };
+  const minutesToday = (z) => { const lz = acLog && acLog.zones.find((x) => x.key === z.key); const d = lz && lz.days.find((x) => x.date === today); return d ? d.minutes : 0; };
+  let stamp = null;
+  $('acTiles').innerHTML = acEnergy.zones.map((z) => {
+    const nowDay = dayOf(z, today);
+    const past = z.days.filter((d) => d.date < today && d.hoursKnown >= 20);          // ganze Tage, ohne heute
+    const avg = past.length ? past.reduce((a, d) => a + d.kwh, 0) / past.length : null;
+    const yest = dayOf(z, yesterday);
+    if (nowDay && nowDay.fetchedAt && (!stamp || nowDay.fetchedAt > stamp)) stamp = nowDay.fetchedAt;
+    const sub = [avg === null ? '' : `Ø ${fmt(avg, 2)} kWh pro Tag (ca. ${fmt(costOf(avg, 0, disc), 2)} €)`, yest ? `gestern ${fmt(yest.kwh, 2)} kWh` : ''].filter(Boolean).join(', ');
+    const ref = past.length ? past[past.length - 1] : null;                         // Standby: Mittel der leisen Stunden des letzten ganzen Tags
+    const quiet = ref ? ref.byHour.filter((v) => v !== null && v <= 0.01) : [];
+    const standbyW = quiet.length ? Math.round(quiet.reduce((a, b) => a + b, 0) / quiet.length * 1000) : null;
+    const min = minutesToday(z);
+    const estHtml = `<div class="est"><i>gemessen:</i> ${min > 0 ? `lief heute ${fmtMin(min)}` : 'heute bisher nicht gelaufen'}${standbyW === null ? '' : `, Standby ≈ ${standbyW} W`}</div>`;
+    return `<div class="actile"><div class="nm">${escHtml(z.name)}</div><div class="val${nowDay ? '' : ' off'}">${nowDay ? fmt(nowDay.kwh, 2) + ' kWh' : 'noch kein Wert'}</div><div class="sub">${sub}</div>${estHtml}</div>`;
+  }).join('');
+  $('acTodayNote').textContent = stamp ? `Stand Panasonic ${hhmmFmt.format(new Date(stamp))} Uhr` : `bis ${hhmmFmt.format(new Date())} Uhr`;
+  $('acFoot').textContent = 'Echte Messwerte der Klimaanlagen aus der Panasonic Comfort Cloud (Stundenwerte, wenige Minuten bis eine halbe Stunde verzögert), inklusive Standby. In den Tagesbalken zählt nur der Teil über dem Standby (≈ 4 W) als Klima, weil der Standby schon in der Grundlast steckt. Der Zähler misst weiterhin nur die ganze Wohnung.';
+  box.hidden = false;
+}
+
 // Kachel „Klima heute": Betriebsminuten je Anlage seit Mitternacht, dazu Gestern und Ø pro Tag.
 function drawAcToday() {
   const box = $('acToday');
+  if (acEnergy && acEnergy.zones.length) { drawAcTodayReal(box); return; }
   if (!acLog || !acLog.since || !acLog.zones.length) { box.hidden = true; return; }
   const today = dayFmt.format(new Date());
   const yesterday = dayFmt.format(new Date(Date.now() - 86400000));
@@ -512,18 +575,21 @@ function drawDay() {
   const hours = q.map((p) => hourOf(p.t));
   ac.forEach((z, k) => {
     const y0 = H + 6 + k * 24;
-    const total = z.byHour.reduce((a, b) => a + b, 0);
-    out += `<text x="${L}" y="${y0 + 8}">${escHtml(z.name)}: ${total ? total + ' Min. an' : 'aus'}</text>`
+    const kwhKind = z.kind === 'kwh';
+    const total = kwhKind ? z.total : z.byHour.reduce((a, b) => a + b, 0);
+    out += `<text x="${L}" y="${y0 + 8}">${escHtml(z.name)}: ${kwhKind ? fmt(total, 2) + ' kWh' : (total ? total + ' Min. an' : 'aus')}</text>`
       + `<rect class="actrack" x="${L}" y="${y0 + 12}" width="${W - L - R}" height="8" rx="2"/>`;
     q.forEach((p, i) => {
       const m = z.byHour[hours[i]];
-      if (m > 0) out += `<rect class="acbar" x="${L + i * bw}" y="${y0 + 12}" width="${bw + 0.3}" height="8" style="opacity:${(0.3 + 0.7 * Math.min(m, 60) / 60).toFixed(2)}"/>`;
+      const strength = kwhKind ? (m !== null && m > STANDBY_KWH_H ? Math.min(1, m / 0.6) : 0) : (m > 0 ? Math.min(m, 60) / 60 : 0);
+      if (strength > 0) out += `<rect class="acbar" x="${L + i * bw}" y="${y0 + 12}" width="${bw + 0.3}" height="8" style="opacity:${(0.3 + 0.7 * strength).toFixed(2)}"/>`;
     });
   });
   out += '<g id="dvMark"></g>';
   svg.innerHTML = out;
   dv = { q, W, L, R, bw, n, y, xc, ac, hours };
   $('dvAcKey').hidden = !ac.length;
+  if (ac.length) $('dvAcKeyText').textContent = ac[0].kind === 'kwh' ? 'Klimaanlage (Panasonic-Messwerte, kräftiger = mehr kWh in der Stunde)' : 'Klimaanlage läuft (kräftiger = mehr Minuten in der Stunde)';
 
   const peak = q.reduce((a, b) => (b.kw > a.kw ? b : a));
   $('dvTitle').textContent = `Tagesverlauf ${WEEKDAYS[d.weekday]} ${shortDate(d.date)}`;
@@ -553,14 +619,20 @@ const sortedQ = (d) => d.q.slice().sort((a, b) => a.t - b.t);
 function downloadList() {
   const days = rangeDays();
   // Klima-Spalten: Minuten, die die Anlage in der jeweiligen Stunde lief (leer = vor Beginn des Protokolls).
-  const acNames = acLog ? acLog.zones.map((z) => z.name) : [];
-  const rows = [['Datum', 'Uhrzeit', 'Wochentag', 'kW', 'kWh', ...acNames.map((n) => `Klima ${n} Min. in der Stunde`)]];
+  // Mit Panasonic-Daten stehen dort die echten kWh der Stunde, sonst die Minuten aus dem Laufzeit-Protokoll.
+  const useKwh = Boolean(acEnergy && acEnergy.zones.length);
+  const acNames = useKwh ? acEnergy.zones.map((z) => z.name) : (acLog ? acLog.zones.map((z) => z.name) : []);
+  const rows = [['Datum', 'Uhrzeit', 'Wochentag', 'kW', 'kWh', ...acNames.map((n) => (useKwh ? `Klima ${n} kWh in der Stunde` : `Klima ${n} Min. in der Stunde`))]];
   days.forEach((d) => {
     const ac = acForDay(d.date);
     sortedQ(d).forEach((p) => {
       const h = hourOf(p.t);
       rows.push([d.date, hhmmFmt.format(p.t), WEEKDAYS[d.weekday], num(p.kw), num(p.kw / 4),
-        ...acNames.map((n, k) => (ac[k] ? ac[k].byHour[h] : ''))]);
+        ...acNames.map((n, k) => {
+          const v = ac[k] ? ac[k].byHour[h] : null;
+          if (v === null || v === undefined) return '';
+          return ac[k].kind === 'kwh' ? num(v) : v;
+        })]);
     });
   });
   downloadCsv(`strom-viertelstunden_${rangeName(days)}.csv`, rows);
@@ -601,7 +673,8 @@ function dvPoint(ev) {
   if (dvMode === 'bars') mark = `<rect class="hl" x="${dv.L + i * dv.bw - 1}" y="8" width="${dv.bw + 2}" height="${dv.y(0) - 8}"/>`;
   else mark = `<line class="mark" x1="${dv.xc(i)}" x2="${dv.xc(i)}" y1="8" y2="${dv.y(0)}"/><circle class="dot" cx="${dv.xc(i)}" cy="${dv.y(p.kw)}" r="4.5"/>`;
   $('dvMark').innerHTML = mark;
-  const acNow = dv.ac.filter((z) => z.byHour[dv.hours[i]] > 0).map((z) => `${escHtml(z.name)} ${z.byHour[dv.hours[i]]} Min.`);
+  const acNow = dv.ac.filter((z) => (z.kind === 'kwh' ? z.byHour[dv.hours[i]] > STANDBY_KWH_H : z.byHour[dv.hours[i]] > 0))
+    .map((z) => (z.kind === 'kwh' ? `${escHtml(z.name)} ${fmt(z.byHour[dv.hours[i]], 2)} kWh` : `${escHtml(z.name)} ${z.byHour[dv.hours[i]]} Min.`));
   $('dvReadout').innerHTML = `<b>${hhmmFmt.format(p.t)}–${hhmmFmt.format(new Date(p.t.getTime() + 900000))} Uhr</b> ${fmt(p.kw, 2)} kW (${fmt(p.kw / 4, 3)} kWh)`
     + (acNow.length ? `, Klima in dieser Stunde: ${acNow.join(', ')}` : '');
 }
@@ -624,7 +697,7 @@ function drawRange() {
     col.innerHTML = (clim > 0 ? `<div class="clim${ac.assumed ? ' assumed' : ''}" style="height:${clim / max * 100}%"></div>` : '')
       + `<div class="act" style="height:${(d.kwh - base - clim) / max * 100}%"></div><div class="base" style="height:${base / max * 100}%"></div>`;
     const show = () => {
-      $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(dayCost(d), 2)} €${d.partial ? ' (unvollständig)' : ''}${clim > 0 ? `, Klima lief ${fmtMin(ac.minutes)}, davon ≈ ${fmt(clim, 1)} kWh (${ac.assumed ? 'angenommen: ' + fmt(AC_ASSUMED_KW, 1) + ' kW im Betrieb' : 'geschätzt'})` : ''}`;
+      $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(dayCost(d), 2)} €${d.partial ? ' (unvollständig)' : ''}${clim > 0 ? (ac.real ? `, davon Klima ${fmt(clim, 2)} kWh (Panasonic-Messwert)` : `, Klima lief ${fmtMin(ac.minutes)}, davon ≈ ${fmt(clim, 1)} kWh (${ac.assumed ? 'angenommen: ' + fmt(AC_ASSUMED_KW, 1) + ' kW im Betrieb' : 'geschätzt'})`) : ''}`;
     };
     ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
     const pick = () => { selDate = d.date; drawDay(); };
@@ -635,13 +708,14 @@ function drawRange() {
   const fullDays = days.filter((d) => !d.partial);
   const total = fullDays.reduce((s, d) => s + d.kwh, 0);
   const share = total ? Math.min(baseKwh * fullDays.length / total, 1) : 0;
-  const acDays = days.map((d) => acKwhFor(d.date)).filter((a) => a && a.minutes > 0);
+  const acDays = days.map((d) => acKwhFor(d.date)).filter((a) => a && (a.real ? a.kwh > 0 : a.minutes > 0));
   const climTotal = fullDays.reduce((a, d) => { const c = acKwhFor(d.date); return a + (c ? c.kwh : 0); }, 0);
   const climAssumed = acDays.some((a) => a.assumed);
-  $('keyClim').hidden = !acDays.some((a) => !a.assumed);
+  $('keyClimReal').hidden = !acDays.some((a) => a.real);
+  $('keyClim').hidden = !acDays.some((a) => !a.assumed && !a.real);
   $('keyClimAssumed').hidden = !climAssumed;
   $('rangeTitle').textContent = `${days.length} Tage: ${fmt(total)} kWh, ca. ${fmt(fullDays.reduce((s, d) => s + dayCost(d), 0), 2)} €, davon Grundlast ${Math.round(share * 100)} %`
-    + (climTotal > 0 ? `, Klima ≈ ${Math.round(climTotal / total * 100)} % (${climAssumed ? 'angenommen' : 'geschätzt'})` : '');
+    + (climTotal > 0 ? `, Klima ≈ ${Math.round(climTotal / total * 100)} % (${acDays.every((a) => a.real) ? 'gemessen' : climAssumed ? 'angenommen' : 'geschätzt'})` : '');
   $('axFrom').textContent = shortDate(days[0].date);
   $('axTo').textContent = shortDate(days[days.length - 1].date);
 }
@@ -722,7 +796,12 @@ async function load() {
         const iso = (d) => d.toISOString().slice(0, 10);
         const response = await workerGet(`/api/strom/quarter-hours?von=${iso(from)}&bis=${iso(to)}`);
         model = analyse(response);
-        try { acLog = await workerGet(`/api/klima/laufzeit?von=${iso(from)}&bis=${iso(to)}`); } catch (e) { acLog = null; }   // optional
+        const until = iso(new Date(to.getTime() + 86400000));          // bis einschließlich morgen (UTC), damit "heute" in Wiener Zeit sicher dabei ist
+        try { acLog = await workerGet(`/api/klima/laufzeit?von=${iso(from)}&bis=${until}`); } catch (e) { acLog = null; }   // optional
+        try {
+          acEnergy = await workerGet(`/api/klima/verbrauch?von=${iso(from)}&bis=${until}`);                         // optional: echte Werte aus Panasonic
+          if (!acEnergy.zones || !acEnergy.zones.some((z) => z.days.length)) acEnergy = null;
+        } catch (e) { acEnergy = null; }
         banner(`<span>✅</span><span><b>Echte Messwerte</b> aus dem Smart Meter${response.cached ? ' (aus dem Zwischenspeicher)' : ''}.</span>`, true);
       }
     } catch (err) {
@@ -741,6 +820,7 @@ async function load() {
       day.q.forEach((p) => { p.kw += (k ? 0.6 : 0.9) * zd.byHour[hourOf(p.t)] / 60; });
       day.kwh = day.q.reduce((a, p) => a + p.kw / 4, 0);
     }));
+    acEnergy = makeSampleEnergy(acLog);
     banner(`<span>🧪</span><span><b>Beispieldaten.</b> ${note} Sobald der Zugang steht, zeigt diese Seite automatisch deine echten Werte.</span>`, false);
   }
   $('content').hidden = false;

@@ -16,6 +16,7 @@ import {
 import { handleStrom } from './smartmeter.js';
 import { handleRuntime, recordRuntime, viennaDayHour } from './runtime-log.js';
 import { handleAcChanges, recordAcChanges, markDashboardCommand } from './ac-changes.js';
+import { handleEnergy, syncAcEnergy } from './ac-energy.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
 const AUTH_BASE = 'https://login.tado.com/oauth2';
@@ -732,6 +733,11 @@ async function handleScheduled(env) {
     } catch (err) {
       // best effort
     }
+    try {
+      await syncAcEnergy(env);
+    } catch (err) {
+      // best effort
+    }
   } catch (err) {
     // best effort
   }
@@ -796,6 +802,9 @@ export default {
     }
     if (url.pathname === '/api/klima/aenderungen' && request.method === 'GET') {
       return handleAcChanges(request, env, json);
+    }
+    if (url.pathname === '/api/klima/verbrauch' && request.method === 'GET') {
+      return handleEnergy(request, env, json);
     }
     if (url.pathname === '/api/klima/geraete' && request.method === 'GET') {
       return handleKlimaGeraete(url, env);
