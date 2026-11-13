@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Klima-Geräte prüfen</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<style>
+  :root{--bg:#f2f1ed;--card:#fff;--line:#e6e3dc;--text:#1b1b1f;--dim:#76767f;--track:#eeece6;--green:#3ea86a;--red:#e04f38;--blue:#2c8fd6;}
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);background:var(--bg);}
+  .wrap{max-width:900px;margin:0 auto;padding:32px 20px 60px;}
+  h1{font-size:19px;margin:0 0 6px;}
+  p.lead{margin:0 0 16px;color:var(--dim);font-size:13px;line-height:1.5;}
+  .card{background:var(--card);border-radius:22px;padding:18px 20px;margin-bottom:14px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.05);min-width:0;}
+  .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;}
+  input,button{font:inherit;font-size:14px;padding:9px 14px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--text);}
+  button{background:var(--blue);color:#fff;border-color:transparent;font-weight:600;cursor:pointer;}
+  button:disabled{opacity:.5;cursor:default;}
+  h2{font-size:15px;margin:0 0 8px;}
+  dl{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:6px 14px;margin:0;font-size:13px;}
+  dt{color:var(--dim);} dd{margin:0;min-width:0;overflow-wrap:anywhere;}
+  .ok{color:var(--green);font-weight:700;} .no{color:var(--red);font-weight:700;}
+  .msg{font-size:13px;color:var(--dim);margin:12px 0;}
+  pre{background:var(--track);border-radius:12px;padding:12px;font-size:12px;overflow:auto;max-height:340px;margin:10px 0 0;}
+  a{color:var(--blue);}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Klima-Geräte prüfen</h1>
+  <p class="lead">Fragt bei Panasonic nach Modell und Verbrauchsdaten der Klimaanlagen. Nur lesend. <a href="./strom.html">← Strom</a></p>
+  <div class="card row">
+    <label for="datum">Tag</label>
+    <input type="date" id="datum">
+    <button type="button" id="go">Abfragen</button>
+  </div>
+  <div class="msg" id="msg">Noch nicht abgefragt.</div>
+  <div id="out"></div>
+</div>
+<script>
+const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
+const KEY_STORAGE = 'dashboardKey';
+const $ = (id) => document.getElementById(id);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const fmt = (n, d = 2) => n.toLocaleString('de-AT', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// Standard: gestern.
+const y = new Date(Date.now() - 86400000);
+$('datum').value = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Vienna' }).format(y);
+
+function key() { try { return localStorage.getItem(KEY_STORAGE) || ''; } catch (e) { return ''; } }
+
+function render(data) {
+  if (!data.configured) { $('out').innerHTML = ''; $('msg').textContent = 'Panasonic ist im Worker nicht eingerichtet.'; return; }
+  $('msg').textContent = `Abfrage für ${data.date} (Zeitzone ${data.timezone}), ${data.devices.length} Gerät(e).`;
+  $('out').innerHTML = data.devices.map((d) => {
+    const h = d.history;
+    const sum = h ? h.data.reduce((a, r) => a + (typeof r.consumption === 'number' ? r.consumption : 0), 0) : 0;
+    const hints = Object.entries({ ...d.listHints, ...d.statusHints }).map(([k, v]) => `${esc(k)}: ${esc(v)}`).join(', ') || 'keine';
+    return `<div class="card"><h2>${esc(d.name)}</h2><dl>
+      <dt>Modell-Hinweise</dt><dd>${hints}</dd>
+      <dt>Verbrauchsdaten</dt><dd>${h ? (h.hasConsumption ? `<span class="ok">ja</span>, ${h.rows} Zeilen, zusammen ${fmt(sum)} kWh` : `<span class="no">keine</span> (${h.rows} Zeilen)`) : `<span class="no">Fehler</span>: ${esc(d.historyError || '')}`}</dd>
+      <dt>Felder im Verlauf</dt><dd>${h && h.fields.length ? esc(h.fields.join(', ')) : '–'}</dd>
+      <dt>Felder der Geräteliste</dt><dd>${esc(d.listFields.join(', '))}</dd>
+      <dt>Felder im Status</dt><dd>${d.statusFields ? esc(d.statusFields.join(', ')) : esc(d.statusError || '–')}</dd>
+    </dl></div>`;
+  }).join('') + `<details class="card"><summary>Rohdaten (zum Kopieren)</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre></details>`;
+}
+
+$('go').addEventListener('click', async () => {
+  const k = key();
+  if (!k) { $('msg').innerHTML = 'Bitte zuerst im <a href="./">Dashboard</a> anmelden, dann gilt der Zugangsschlüssel auch hier.'; return; }
+  $('go').disabled = true; $('msg').textContent = 'Frage Panasonic ab …'; $('out').innerHTML = '';
+  try {
+    const res = await fetch(`${API_ENDPOINT}/api/klima/geraete?datum=${encodeURIComponent($('datum').value)}`, { headers: { 'X-Dashboard-Key': k } });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    render(data);
+  } catch (err) {
+    $('msg').textContent = `Abruf nicht möglich: ${err.message}`;
+  } finally { $('go').disabled = false; }
+});
+</script>
+</body>
+</html>
