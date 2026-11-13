@@ -195,8 +195,13 @@ trotzdem benutzbar):
   `since` des Protokolls gibt es keine Streifen
 - Kachel **Klima heute**: Betriebszeit je Klimaanlage seit Mitternacht (aus
   `/api/klima/laufzeit`), dazu gestern und Ø pro Tag seit Beginn des Protokolls.
-  Nur Betriebszeit, kein Stromverbrauch. Ohne Laufzeit-Protokoll bleibt die Kachel
-  ausgeblendet
+  Der Zähler misst nur die ganze Wohnung, die Leistung je Anlage ist deshalb
+  **geschätzt**: eine Regression im Browser über alle vollständigen Stunden seit
+  Beginn des Protokolls (Stromverbrauch je Stunde = typischer Wert der Uhrzeit +
+  Leistung der Anlage × Minuten in der Stunde). Die Kachel zeigt kW im Betrieb mit
+  95-%-Bereich sowie kWh heute und Ø pro Tag samt Kosten, erst ab 7 Tagen Protokoll.
+  Ist die Leistung nicht eindeutig, steht „noch nicht erkennbar“. Ohne
+  Laufzeit-Protokoll bleibt die Kachel ausgeblendet
 - Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast und aktiven Verbrauch
 - Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
 - **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
