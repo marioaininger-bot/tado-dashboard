@@ -178,6 +178,27 @@ ausgeliefert, **nutzbar sobald die vier Secrets gesetzt sind**. Die Seite
    Variable `WN_TOKEN_URL` überschreibbar; der API-Key steht im WSTW-API-Portal):
    `WN_CLIENT_ID`, `WN_CLIENT_SECRET`, `WN_API_KEY`, `WN_ZAEHLPUNKT`.
 
+Die Seite `strom.html` zeigt, alles aus den Viertelstundenwerten der letzten
+30 Tage (ein Abruf von `/api/strom/quarter-hours`, kein zusätzlicher Aufruf):
+
+- vier Kennzahlen: letzter Tag, Durchschnitt pro Tag, Kosten, Grundlast nachts
+  (Median der Leistung zwischen 2 und 5 Uhr)
+- **Tagesverlauf**: Leistung in kW über einen Tag, je Viertelstunde (92 bis 100
+  Werte bei Zeitumstellung). Beim Öffnen steht der letzte vollständige Tag
+  da; ein Klick auf einen Tagesbalken wechselt den Tag. Darstellung als Linie
+  oder Balken umschaltbar (die Wahl merkt sich der Browser), die Grundlast ist
+  gestrichelt eingezeichnet
+- Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast und aktiven Verbrauch
+- Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
+- **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
+  Browser erzeugt, ohne zusätzlichen Abruf. Zwei Dateien: die Liste aller
+  Viertelstunden (Datum, Uhrzeit, Wochentag, kW, kWh) und eine Tabelle Uhrzeit
+  mal Tag mit Durchschnitt und Maximum je Uhrzeit, um wiederkehrende
+  Verbraucher zu finden. Semikolon, Dezimalkomma und UTF-8 mit BOM, damit
+  Excel sie direkt öffnet. Uhrzeiten in Wiener Zeit
+
+Mit `?demo` in der Adresse zeigt die Seite Beispieldaten.
+
 Endpunkte (alle mit `X-Dashboard-Key`, nur GET):
 
 | Pfad | Inhalt |

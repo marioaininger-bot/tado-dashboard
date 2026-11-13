@@ -86,6 +86,8 @@
   .dv .mark{stroke:var(--text);stroke-opacity:.3;}
   .dv .dot{fill:var(--blue);stroke:#fff;stroke-width:2;}
   .dv .hl{fill:var(--text);fill-opacity:.08;}
+  .dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px;font-size:12px;color:var(--text-dim);}
+  .dl .icon-btn{padding:7px 14px;font-size:12px;border:1px solid var(--card-border);box-shadow:none;}
   .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:6px;font-variant-numeric:tabular-nums;}
   .key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--text-dim);margin-top:12px;}
   .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
@@ -145,6 +147,11 @@
         <span><i style="background:var(--blue)"></i>Aktiver Verbrauch</span>
         <span><i style="background:var(--orange)"></i>Wochenende</span>
         <span><i style="background:var(--blue);opacity:.45"></i>Unvollständiger Tag</span>
+      </div>
+      <div class="dl">
+        <span>Download (Zeitraum wie oben):</span>
+        <button type="button" class="icon-btn" id="dlList" title="Eine Zeile je Viertelstunde: Datum, Uhrzeit, Wochentag, kW, kWh">↓ Viertelstunden (CSV)</button>
+        <button type="button" class="icon-btn" id="dlMatrix" title="Eine Zeile je Uhrzeit, eine Spalte je Tag, dazu Durchschnitt und Maximum">↓ Uhrzeit × Tag (CSV)</button>
       </div>
     </div>
 
@@ -327,6 +334,58 @@ function drawDay() {
   document.querySelectorAll('#dayChart .col').forEach((c) => c.classList.toggle('sel', c.dataset.date === selDate));
 }
 
+/* ---------- CSV-Download (Semikolon, Dezimalkomma, UTF-8 mit BOM: öffnet direkt in Excel) ---------- */
+const num = (x) => x.toFixed(3).replace('.', ',');
+
+function downloadCsv(name, rows) {
+  const text = '\uFEFF' + rows.map((r) => r.join(';')).join('\r\n') + '\r\n';
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+const rangeDays = () => model.days.slice(-range);
+const rangeName = (days) => `${days[0].date}_bis_${days[days.length - 1].date}`;
+const sortedQ = (d) => d.q.slice().sort((a, b) => a.t - b.t);
+
+// Eine Zeile je Viertelstunde.
+function downloadList() {
+  const days = rangeDays();
+  const rows = [['Datum', 'Uhrzeit', 'Wochentag', 'kW', 'kWh']];
+  days.forEach((d) => sortedQ(d).forEach((p) => {
+    rows.push([d.date, hhmmFmt.format(p.t), WEEKDAYS[d.weekday], num(p.kw), num(p.kw / 4)]);
+  }));
+  downloadCsv(`strom-viertelstunden_${rangeName(days)}.csv`, rows);
+}
+
+// Eine Zeile je Uhrzeit, eine Spalte je Tag (kW), dazu Durchschnitt und Maximum über die Tage.
+// Bei der Zeitumstellung fehlt eine Uhrzeit oder kommt doppelt vor; doppelte Werte werden gemittelt.
+function downloadMatrix() {
+  const days = rangeDays();
+  const slots = new Map();                          // "HH:MM" -> Map(Datum -> [kW])
+  days.forEach((d) => d.q.forEach((p) => {
+    const key = hhmmFmt.format(p.t);
+    if (!slots.has(key)) slots.set(key, new Map());
+    const perDay = slots.get(key);
+    if (!perDay.has(d.date)) perDay.set(d.date, []);
+    perDay.get(d.date).push(p.kw);
+  }));
+  const rows = [['Uhrzeit', ...days.map((d) => `${d.date} ${WEEKDAYS[d.weekday]}`), 'Ø kW', 'Max kW']];
+  [...slots.keys()].sort().forEach((key) => {
+    const perDay = slots.get(key);
+    const vals = days.map((d) => {
+      const v = perDay.get(d.date);
+      return v ? v.reduce((a, b) => a + b, 0) / v.length : null;
+    });
+    const have = vals.filter((v) => v !== null);
+    rows.push([key, ...vals.map((v) => (v === null ? '' : num(v))),
+      have.length ? num(have.reduce((a, b) => a + b, 0) / have.length) : '', have.length ? num(Math.max(...have)) : '']);
+  });
+  downloadCsv(`strom-uhrzeit-mal-tag_${rangeName(days)}.csv`, rows);
+}
+
 function dvPoint(ev) {
   if (!dv) return;
   const r = $('dvChart').getBoundingClientRect();
@@ -476,6 +535,8 @@ $('dvMode').addEventListener('click', (e) => {
   [...$('dvMode').children].forEach((x) => x.classList.toggle('on', x === b));
   drawDay();
 });
+$('dlList').addEventListener('click', () => { if (model) downloadList(); });
+$('dlMatrix').addEventListener('click', () => { if (model) downloadMatrix(); });
 $('dvChart').addEventListener('pointermove', dvPoint);
 $('dvChart').addEventListener('pointerdown', dvPoint);
 $('dvChart').addEventListener('pointerleave', () => { const m = $('dvMark'); if (m) m.innerHTML = ''; });
