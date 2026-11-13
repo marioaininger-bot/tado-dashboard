@@ -24,6 +24,11 @@ compatibility_date = "2024-09-01"
 #   wrangler secret put WN_ZAEHLPUNKT    # komplette Zählpunktnummer (AT00...)
 # Prüfen: GET /api/strom/status zeigt, was noch fehlt.
 #
+# Push-Nachrichten (ntfy) - Secret, nichts davon im Repo:
+#   wrangler secret put NTFY_TOPIC   # langer, zufälliger Topic-Name
+# Optional eigener Server: Variable NTFY_URL (Standard https://ntfy.sh).
+# Testen: POST /api/notify/test
+#
 # Deploy:
 #   wrangler deploy
 
