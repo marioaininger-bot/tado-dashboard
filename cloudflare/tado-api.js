@@ -11,10 +11,10 @@
 
 import {
   PANASONIC_HOME_ID, fetchPanasonicZones, setPanasonicDevice,
-  startPanasonicLogin, verifyPanasonicMfa,
+  startPanasonicLogin, verifyPanasonicMfa, diagnosePanasonicDevices,
 } from './panasonic.js';
 import { handleStrom } from './smartmeter.js';
-import { handleRuntime, recordRuntime } from './runtime-log.js';
+import { handleRuntime, recordRuntime, viennaDayHour } from './runtime-log.js';
 import { handleAcChanges, recordAcChanges, markDashboardCommand } from './ac-changes.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
@@ -737,6 +737,20 @@ async function handleScheduled(env) {
   }
 }
 
+// Diagnose (nur lesend): Modell und Verbrauchsdaten der Panasonic-Geräte. ?datum=JJJJ-MM-TT, sonst gestern.
+async function handleKlimaGeraete(url, env) {
+  const given = url.searchParams.get('datum');
+  if (given && !/^\d{4}-\d{2}-\d{2}$/.test(given)) {
+    return json(400, { error: 'Datum bitte als JJJJ-MM-TT angeben (datum).', code: 'BAD_DATE' }, env);
+  }
+  const dateIso = given || viennaDayHour(new Date(Date.now() - 86400000)).day;
+  try {
+    return json(200, await diagnosePanasonicDevices(env, dateIso), env);
+  } catch (err) {
+    return json(err.loginRequired ? 401 : 502, { error: err.message, code: err.loginRequired ? 'PANASONIC_LOGIN_REQUIRED' : 'PANASONIC_ERROR' }, env);
+  }
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
@@ -782,6 +796,9 @@ export default {
     }
     if (url.pathname === '/api/klima/aenderungen' && request.method === 'GET') {
       return handleAcChanges(request, env, json);
+    }
+    if (url.pathname === '/api/klima/geraete' && request.method === 'GET') {
+      return handleKlimaGeraete(url, env);
     }
     if (url.pathname.startsWith('/api/strom/') && request.method === 'GET') {
       return handleStrom(request, env, json);

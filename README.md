@@ -256,6 +256,17 @@ das Protokoll angelegt wurde). Fällt eine Cron-Messung aus, zählt die Zeit als
 „aus“; die Werte sind also eine Untergrenze. Tados Heizkörper-Zonen werden
 nicht protokolliert.
 
+`GET /api/klima/geraete?datum=JJJJ-MM-TT` (mit `X-Dashboard-Key`, nur lesend,
+ohne Datum gestern) ist ein **Diagnose-Abruf**: Je Klimaanlage liefert er die
+Modell-Hinweise aus Geräteliste und Status (nur Feldnamen und einfache Werte,
+nie IDs oder Anmeldedaten) und den Verlaufs-Abruf `deviceHistoryData` der
+Comfort-Cloud für diesen Tag. So lässt sich prüfen, ob Panasonic echte
+Verbrauchswerte (kWh) liefert. Das ist nur bei Modellen mit Energiemessung der
+Fall. Die Seite `geraete.html` ruft ihn mit dem gespeicherten Zugangsschlüssel
+auf und zeigt das Ergebnis. Der Abruf läuft nur auf Anfrage, nicht im Cron, und
+schreibt nichts nach KV. Pro Aufruf sind es 1 + 2 Anfragen je Gerät an
+Panasonic (Free-Plan: höchstens 50 pro Aufruf).
+
 ## Änderungs-Protokoll der Klimaanlagen
 
 Zusätzlich hält der Cron-Trigger fest, *wann* sich Ein/Aus, Modus,

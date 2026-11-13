@@ -923,3 +923,77 @@ export async function setPanasonicDevice(env, deviceId, { power, temperature, mo
 
   await accRequest(env, 'POST', '/deviceStatus/control', { deviceGuid: device.guid, parameters });
 }
+
+/* ---------- Diagnose: Modell und Verbrauchsdaten der Geräte ---------- */
+
+// Offset der Wiener Zeit an einem Datum als "+01:00" (für den Verlaufs-Abruf).
+function viennaOffset(dateIso) {
+  const part = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Vienna', timeZoneName: 'shortOffset' })
+    .formatToParts(new Date(`${dateIso}T12:00:00Z`)).find((p) => p.type === 'timeZoneName');
+  const hours = Number(String(part ? part.value : 'GMT+1').replace('GMT', '')) || 0;
+  return `${hours < 0 ? '-' : '+'}${String(Math.abs(hours)).padStart(2, '0')}:00`;
+}
+
+// Felder, die einen Rückschluss auf Modell oder Energie erlauben könnten. Nur Namen und einfache Werte,
+// nie IDs oder Anmeldedaten.
+const MODEL_FIELD_RE = /model|module|type|series|capacity|rated|power|energy|consum|watt|kw/i;
+const SAFE_VALUE = (v) => (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') && String(v).length <= 60;
+
+function pickInteresting(obj) {
+  const out = {};
+  for (const [k, v] of Object.entries(obj || {})) {
+    if (/guid|token|secret|password|hash|mac|ssid|serial/i.test(k)) continue;
+    if (MODEL_FIELD_RE.test(k) && SAFE_VALUE(v)) out[k] = v;
+  }
+  return out;
+}
+
+// Nur lesend: je Klimaanlage Feldnamen und Modellhinweise der Geräteliste, Feldnamen des Status und der
+// Verlaufs-Abruf (deviceHistoryData, Tageswerte) für ein Datum. Liefert, was Panasonic zurückgibt, damit sich
+// prüfen lässt, ob echte Verbrauchswerte (kWh) verfügbar sind. Kein Schreibzugriff auf KV, kein Cron.
+export async function diagnosePanasonicDevices(env, dateIso) {
+  if (!isPanasonicConfigured(env)) return { configured: false, devices: [] };
+  const groups = await accRequest(env, 'GET', '/device/group');
+  const raw = [];
+  for (const group of groups.groupList || []) {
+    for (const device of group.deviceList || group.deviceIdList || []) if (device && device.deviceGuid) raw.push(device);
+  }
+  const tz = viennaOffset(dateIso);
+  const devices = [];
+  for (const device of raw) {
+    const entry = {
+      name: displayName(device.deviceName),
+      listFields: Object.keys(device).filter((k) => !/guid|hash/i.test(k)).sort(),
+      listHints: pickInteresting(device),
+    };
+    try {
+      const status = await accRequest(env, 'GET', `/deviceStatus/${guidPath(device.deviceGuid)}`);
+      const params = status.parameters || {};
+      entry.statusFields = Object.keys(params).sort();
+      entry.statusHints = pickInteresting(params);
+    } catch (err) {
+      entry.statusError = err.message;
+    }
+    try {
+      const history = await accRequest(env, 'POST', '/deviceHistoryData', {
+        deviceGuid: device.deviceGuid,
+        dataMode: 0,                                      // 0 = Tag, 1 = Woche, 2 = Monat, 3 = Jahr
+        date: dateIso.replace(/-/g, ''),
+        osTimezone: tz,
+      });
+      const list = Array.isArray(history.historyDataList) ? history.historyDataList : [];
+      entry.history = {
+        date: dateIso,
+        rows: list.length,
+        fields: list[0] ? Object.keys(list[0]).sort() : [],
+        hasConsumption: list.some((r) => typeof r.consumption === 'number' && r.consumption > 0),
+        data: list.slice(0, 48),
+        otherFields: Object.fromEntries(Object.entries(history).filter(([k, v]) => k !== 'historyDataList' && SAFE_VALUE(v))),
+      };
+    } catch (err) {
+      entry.historyError = err.message;
+    }
+    devices.push(entry);
+  }
+  return { configured: true, date: dateIso, timezone: tz, devices };
+}
