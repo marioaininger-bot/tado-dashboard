@@ -193,6 +193,10 @@ trotzdem benutzbar):
   an war (aus `/api/klima/laufzeit`, Stundenraster, kräftiger = mehr Minuten in
   der Stunde). So lassen sich Strom-Spitzen den Anlagen zuordnen. Vor dem
   `since` des Protokolls gibt es keine Streifen
+- Kachel **Klima heute**: Betriebszeit je Klimaanlage seit Mitternacht (aus
+  `/api/klima/laufzeit`), dazu gestern und Ø pro Tag seit Beginn des Protokolls.
+  Nur Betriebszeit, kein Stromverbrauch. Ohne Laufzeit-Protokoll bleibt die Kachel
+  ausgeblendet
 - Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast und aktiven Verbrauch
 - Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
 - **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
