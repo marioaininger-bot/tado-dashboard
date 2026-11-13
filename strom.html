@@ -88,6 +88,10 @@
   .dv .hl{fill:var(--text);fill-opacity:.08;}
   .dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px;font-size:12px;color:var(--text-dim);}
   .dl .icon-btn{padding:7px 14px;font-size:12px;border:1px solid var(--card-border);box-shadow:none;}
+  .dl .icon-btn.dl-blue,.dl .icon-btn.dl-orange{color:#fff;font-weight:600;border-color:transparent;}
+  .dl .icon-btn.dl-blue{background:var(--blue);}
+  .dl .icon-btn.dl-orange{background:var(--orange);}
+  .dl .icon-btn.dl-blue:hover,.dl .icon-btn.dl-orange:hover{color:#fff;filter:brightness(1.1);}
   .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:6px;font-variant-numeric:tabular-nums;}
   .key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--text-dim);margin-top:12px;}
   .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
@@ -150,8 +154,8 @@
       </div>
       <div class="dl">
         <span>Download (Zeitraum wie oben):</span>
-        <button type="button" class="icon-btn" id="dlList" title="Eine Zeile je Viertelstunde: Datum, Uhrzeit, Wochentag, kW, kWh">↓ Viertelstunden (CSV)</button>
-        <button type="button" class="icon-btn" id="dlMatrix" title="Eine Zeile je Uhrzeit, eine Spalte je Tag, dazu Durchschnitt und Maximum">↓ Uhrzeit × Tag (CSV)</button>
+        <button type="button" class="icon-btn dl-blue" id="dlList" title="Eine Zeile je Viertelstunde: Datum, Uhrzeit, Wochentag, kW, kWh">↓ Viertelstunden (CSV)</button>
+        <button type="button" class="icon-btn dl-orange" id="dlMatrix" title="Eine Zeile je Uhrzeit, eine Spalte je Tag, dazu Durchschnitt und Maximum">↓ Uhrzeit × Tag (CSV)</button>
       </div>
     </div>
 
