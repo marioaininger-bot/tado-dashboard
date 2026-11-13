@@ -88,6 +88,12 @@
   .dv .actrack{fill:var(--track);}
   .dv .acbar{fill:var(--green);}
   .dv .hl{fill:var(--text);fill-opacity:.08;}
+  .actiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-top:10px;}
+  .actile{background:var(--track);border-radius:18px;padding:14px 16px;min-width:0;}
+  .actile .nm{font-size:12px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
+  .actile .val{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:4px 0 2px;font-variant-numeric:tabular-nums;}
+  .actile .val.off{color:var(--text-dim);}
+  .actile .sub{font-size:12px;color:var(--text-dim);line-height:1.4;}
   .dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px;font-size:12px;color:var(--text-dim);}
   .dl .icon-btn{padding:7px 14px;font-size:12px;border:1px solid var(--card-border);box-shadow:none;}
   .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:6px;font-variant-numeric:tabular-nums;}
@@ -119,6 +125,12 @@
       <div class="t"><div class="lab">Ø pro Tag</div><div class="big-num" id="tAvg">–</div><div class="t-sub" id="tAvgSub"></div></div>
       <div class="t org"><div class="lab">Kosten</div><div class="big-num" id="tCost">–</div><div class="t-sub" id="tCostSub"></div></div>
       <div class="t dark"><div class="lab">Grundlast nachts</div><div class="big-num" id="tBase">–</div><div class="t-sub" id="tBaseSub"></div></div>
+    </div>
+
+    <div class="t w4" id="acToday" style="margin-bottom:14px;" hidden>
+      <div class="card-head"><h2>Klima heute</h2><div class="readout" id="acTodayNote"></div></div>
+      <div class="actiles" id="acTiles"></div>
+      <div class="foot" style="margin-top:12px;">Betriebszeit der Klimaanlagen, kein Stromverbrauch. Das Protokoll zählt im 5-Minuten-Takt und ist eine Untergrenze.</div>
     </div>
 
     <div class="t w4" style="margin-bottom:14px;">
@@ -250,10 +262,10 @@ function makeSampleRuntime(m) {
   const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
   const zone = (key, name, hours) => ({
     key, name,
-    days: m.days.filter(() => rnd() < 0.75).map((d) => {
+    days: [...m.days.map((d) => d.date), dayFmt.format(new Date())].filter(() => rnd() < 0.75).map((date) => {
       const byHour = Array(24).fill(0);
-      hours.forEach((h) => { byHour[h] = Math.round(25 + rnd() * 35); });
-      return { date: d.date, minutes: byHour.reduce((a, b) => a + b, 0), byHour, modes: { COOL: 0 } };
+      hours.filter((h) => date !== dayFmt.format(new Date()) || h < hourOf(new Date())).forEach((h) => { byHour[h] = Math.round(25 + rnd() * 35); });
+      return { date, minutes: byHour.reduce((a, b) => a + b, 0), byHour, modes: { COOL: 0 } };
     }),
   });
   return { since: m.days[0].date, tickMinutes: 5, zones: [zone('wohnzimmer', 'Wohnzimmer', [18, 19, 20, 21]), zone('schlafzimmer', 'Schlafzimmer', [21, 22, 23, 0])] };
@@ -316,6 +328,27 @@ function acForDay(date) {
     const day = z.days.find((x) => x.date === date);
     return { name: z.name, byHour: day ? day.byHour : Array(24).fill(0) };
   });
+}
+
+const fmtMin = (m) => (m <= 0 ? 'aus' : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`);
+
+// Kachel „Klima heute": Betriebsminuten je Anlage seit Mitternacht, dazu Gestern und Ø pro Tag.
+function drawAcToday() {
+  const box = $('acToday');
+  if (!acLog || !acLog.since || !acLog.zones.length) { box.hidden = true; return; }
+  const today = dayFmt.format(new Date());
+  const yesterday = dayFmt.format(new Date(Date.now() - 86400000));
+  const past = model.days.map((d) => d.date).filter((dt) => dt >= acLog.since && dt < today);   // Tage mit Protokoll, ohne heute
+  const minutesOn = (z, date) => { const d = z.days.find((x) => x.date === date); return d ? d.minutes : 0; };
+  $('acTiles').innerHTML = acLog.zones.map((z) => {
+    const now = minutesOn(z, today);
+    const avg = past.length ? Math.round(past.reduce((a, dt) => a + minutesOn(z, dt), 0) / past.length) : null;
+    const sub = [avg === null ? '' : `Ø ${fmtMin(avg) === 'aus' ? '0 min' : fmtMin(avg)} pro Tag`,
+      acLog.since <= yesterday ? `gestern ${fmtMin(minutesOn(z, yesterday)) === 'aus' ? '0 min' : fmtMin(minutesOn(z, yesterday))}` : ''].filter(Boolean).join(', ');
+    return `<div class="actile"><div class="nm">${escHtml(z.name)}</div><div class="val${now > 0 ? '' : ' off'}">${now > 0 ? fmtMin(now) : 'bisher aus'}</div><div class="sub">${sub}</div></div>`;
+  }).join('');
+  $('acTodayNote').textContent = `bis ${hhmmFmt.format(new Date())} Uhr`;
+  box.hidden = false;
 }
 
 // Tagesverlauf: 96 Viertelstunden (92/100 bei Zeitumstellung) als Linie oder Balken in kW.
@@ -506,6 +539,7 @@ function render() {
   if (!selDate || !model.days.some((x) => x.date === selDate)) selDate = last.date;
   drawRange();
   drawDay();
+  drawAcToday();
 
   // Durchschnitt je Wochentag (nur vollständige Tage)
   $('wk').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((w) => {
