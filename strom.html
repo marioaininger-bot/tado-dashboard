@@ -311,6 +311,7 @@ function analyse(response) {
   const days = new Map();
   const night = [];
   let peak = { kw: 0, at: null };
+  let latest = null;                                              // Beginn der jüngsten Viertelstunde mit Messwert
   for (const v of series.values) {
     const d = new Date(v.from);
     const key = dayFmt.format(d);
@@ -321,6 +322,7 @@ function analyse(response) {
     const h = hourOf(d);
     if (h >= 2 && h < 5) night.push(v.kwh * 4);
     if (v.kwh * 4 > peak.kw) peak = { kw: v.kwh * 4, at: d };
+    if (!latest || d > latest) latest = d;
   }
   const list = [...days.values()].sort((a, b) => (a.date < b.date ? -1 : 1))
     .map((d) => ({ ...d, partial: d.n < 90, weekday: new Date(d.date + 'T12:00:00Z').getUTCDay() }));            // 96 Viertelstunden, Sommer-/Winterzeit 92/100
@@ -330,7 +332,19 @@ function analyse(response) {
     days: list,
     baseW: baseKw === null ? null : baseKw * 1000,
     peak,
+    latest,
   };
+}
+
+// „heute 03:15 Uhr" / „gestern 23:45 Uhr" / „12.11., 23:45 Uhr": wie aktuell der jüngste Messwert ist.
+function latestLabel(d) {
+  if (!d) return '';
+  const key = dayFmt.format(d);
+  const now = Date.now();
+  const rel = key === dayFmt.format(new Date(now)) ? 'heute'
+    : key === dayFmt.format(new Date(now - 86400000)) ? 'gestern'
+    : shortDate(key) + ',';
+  return `${rel} ${hhmmFmt.format(d)} Uhr`;
 }
 
 /* ---------- Darstellung ---------- */
@@ -802,7 +816,7 @@ async function load() {
           acEnergy = await workerGet(`/api/klima/verbrauch?von=${iso(from)}&bis=${until}`);                         // optional: echte Werte aus Panasonic
           if (!acEnergy.zones || !acEnergy.zones.some((z) => z.days.length)) acEnergy = null;
         } catch (e) { acEnergy = null; }
-        banner(`<span>✅</span><span><b>Echte Messwerte</b> aus dem Smart Meter${response.cached ? ' (aus dem Zwischenspeicher)' : ''}.</span>`, true);
+        banner(`<span>✅</span><span><b>Echte Messwerte</b> aus dem Smart Meter · Neuester Wert: ${latestLabel(model.latest)}</span>`, true);
       }
     } catch (err) {
       note = err.reason === 'nokey' ? 'Bitte zuerst im <a href="./">Dashboard</a> anmelden, dann gilt der Zugangsschlüssel auch hier.'
