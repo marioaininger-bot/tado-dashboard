@@ -190,6 +190,12 @@ Die Seite `strom.html` zeigt, alles aus den Viertelstundenwerten der letzten
   gestrichelt eingezeichnet
 - Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast und aktiven Verbrauch
 - Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
+- **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
+  Browser erzeugt, ohne zusätzlichen Abruf. Zwei Dateien: die Liste aller
+  Viertelstunden (Datum, Uhrzeit, Wochentag, kW, kWh) und eine Tabelle Uhrzeit
+  mal Tag mit Durchschnitt und Maximum je Uhrzeit, um wiederkehrende
+  Verbraucher zu finden. Semikolon, Dezimalkomma und UTF-8 mit BOM, damit
+  Excel sie direkt öffnet. Uhrzeiten in Wiener Zeit
 
 Mit `?demo` in der Adresse zeigt die Seite Beispieldaten.
 
