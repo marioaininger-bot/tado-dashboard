@@ -301,49 +301,6 @@ liefert je Anlage und Tag `kwh` (Summe der bekannten Stunden), `hoursKnown`,
 `byHour` (24 Werte, `null` = unbekannt) und `fetchedAt`. Ohne Daten ist `zones`
 leer. `strom.html` nutzt das für Kachel, Tagesbalken, Tagesverlauf und CSV.
 
-## Push-Nachrichten aufs Handy (ntfy)
-
-Der Cron-Trigger meldet auffällige Zustände per Push über
-[ntfy](https://ntfy.sh) (`cloudflare/notify.js`, kostenlos, kein Konto nötig).
-Der Worker schickt dazu einen JSON-POST an `https://ntfy.sh` (externer Dienst).
-
-| Meldung | Wann | Entwarnung |
-| --- | --- | --- |
-| Panasonic: Anmeldung nötig | Sitzung abgelaufen (`loginRequired`), sofort | ja |
-| Fenster offen | Tado meldet ein offenes Fenster seit über 10 Minuten | ja |
-| Batterie schwach | Tado-Thermostat meldet `LOW`, einmalig | nein |
-| Tado-Gerät offline | Gerät seit über 15 Minuten nicht erreichbar | ja |
-| Keine Tado-Daten | Cron bekommt seit über 30 Minuten keine Tado-Daten (Login weg, Tado down) | ja |
-
-Schwellen stehen als Konstanten `MIN_AGE` in `notify.js`. Ein komplett
-ausgefallener Worker kann sich nicht selbst melden; dafür bräuchte es einen
-externen Wächter.
-
-**Einrichtung**
-
-1. ntfy-App aufs Handy (iOS/Android) und ein Topic mit langem, zufälligem
-   Namen abonnieren. Der Name ist das einzige "Passwort" des Topics.
-2. Topic als Secret setzen und deployen (nur der Name des Secrets steht im Repo):
-
-   ```bash
-   cd cloudflare
-   wrangler secret put NTFY_TOPIC
-   wrangler deploy
-   ```
-
-3. Testen: `POST /api/notify/test` (mit `X-Dashboard-Key`) schickt eine
-   Test-Nachricht.
-
-Optional: Variable `NTFY_URL` für einen eigenen ntfy-Server (Standard
-`https://ntfy.sh`). Ohne `NTFY_TOPIC` passiert nichts.
-
-**Speicherlogik:** KV-Schlüssel `notify_state` merkt sich je Zustand, seit wann
-er gilt und ob schon gemeldet wurde, damit nicht alle 5 Minuten dieselbe
-Nachricht kommt. Geschrieben wird nur bei einer Änderung (wenige Schreibzugriffe
-pro Tag, Free-Plan-Limit 1000). Schlägt der Versand fehl, versucht es der
-nächste Lauf erneut. Was ein Lauf nicht prüfen konnte (z. B. Tado-Abruf
-fehlgeschlagen), bleibt unverändert und löst keine falsche Entwarnung aus.
-
 ## Änderungs-Protokoll der Klimaanlagen
 
 Zusätzlich hält der Cron-Trigger fest, *wann* sich Ein/Aus, Modus,
