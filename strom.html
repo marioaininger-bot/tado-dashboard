@@ -75,6 +75,17 @@
   .chart .col.we .act{background:var(--orange);}
   .chart .col.partial{opacity:.45;}
   .chart .col:hover,.chart .col:focus-visible{opacity:.8;}
+  .chart .col.sel{outline:2px solid var(--text);outline-offset:1px;}
+  .dv{display:block;width:100%;height:210px;touch-action:pan-y;cursor:crosshair;}
+  .dv text{font-size:10px;fill:var(--text-dim);font-variant-numeric:tabular-nums;}
+  .dv .grid{stroke:var(--card-border);stroke-width:1;}
+  .dv .line{fill:none;stroke:var(--blue);stroke-width:2;stroke-linejoin:round;stroke-linecap:round;}
+  .dv .bar{fill:var(--blue);}
+  .dv .bar.we{fill:var(--orange);}
+  .dv .base{stroke:var(--text);stroke-width:1;stroke-dasharray:4 3;}
+  .dv .mark{stroke:var(--text);stroke-opacity:.3;}
+  .dv .dot{fill:var(--blue);stroke:#fff;stroke-width:2;}
+  .dv .hl{fill:var(--text);fill-opacity:.08;}
   .axis{display:flex;justify-content:space-between;font-size:11px;color:var(--text-dim);margin-top:6px;font-variant-numeric:tabular-nums;}
   .key{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:12px;color:var(--text-dim);margin-top:12px;}
   .key i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
@@ -107,13 +118,26 @@
     </div>
 
     <div class="t w4" style="margin-bottom:14px;">
+      <div class="card-head"><h2 id="dvTitle">Tagesverlauf</h2>
+        <div class="seg" id="dvMode" role="group" aria-label="Darstellung" style="margin:0">
+          <button type="button" data-m="line">Linie</button>
+          <button type="button" data-m="bars">Balken</button>
+        </div>
+      </div>
+      <div class="readout" id="dvSub"></div>
+      <div class="readout" id="dvReadout">&nbsp;</div>
+      <svg class="dv" id="dvChart" role="img" aria-label="Stromleistung in kW über den ausgewählten Tag, je Viertelstunde"></svg>
+      <div class="key"><span><i style="background:var(--blue)"></i>Leistung je Viertelstunde in kW</span><span><i style="background:var(--text)"></i>Grundlast nachts (gestrichelt)</span></div>
+    </div>
+
+    <div class="t w4" style="margin-bottom:14px;">
       <div class="seg" id="seg" role="group" aria-label="Zeitraum">
         <button type="button" data-n="7">7 Tage</button>
         <button type="button" data-n="14">14 Tage</button>
         <button type="button" data-n="30" class="on">30 Tage</button>
       </div>
       <div class="card-head"><h2 id="rangeTitle">Verbrauch pro Tag</h2></div>
-      <div class="readout" id="dayReadout">Balken antippen oder darüberfahren</div>
+      <div class="readout" id="dayReadout">Balken antippen: zeigt oben den Tagesverlauf</div>
       <div class="chart" id="dayChart" aria-label="Balkendiagramm: Stromverbrauch pro Tag in kWh, geteilt in Grundlast und aktiven Verbrauch"></div>
       <div class="axis"><span id="axFrom"></span><span id="axTo"></span></div>
       <div class="key">
@@ -228,8 +252,9 @@ function analyse(response) {
   for (const v of series.values) {
     const d = new Date(v.from);
     const key = dayFmt.format(d);
-    const day = days.get(key) || { date: key, kwh: 0, n: 0 };
+    const day = days.get(key) || { date: key, kwh: 0, n: 0, q: [] };
     day.kwh += v.kwh; day.n += 1;
+    day.q.push({ t: d, kw: v.kwh * 4 });
     days.set(key, day);
     const h = hourOf(d);
     if (h >= 2 && h < 5) night.push(v.kwh * 4);
@@ -252,6 +277,67 @@ const shortDate = (iso) => { const [, m, d] = iso.split('-'); return `${Number(d
 
 const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 let range = 30;
+let selDate = null;                         // Tag, dessen Verlauf oben gezeigt wird
+let dvMode = 'line';
+try { if (localStorage.getItem('stromDayMode') === 'bars') dvMode = 'bars'; } catch (e) { /* egal */ }
+let dv = null;                              // Geometrie des aktuellen Verlaufs fürs Hover
+
+// Tagesverlauf: 96 Viertelstunden (92/100 bei Zeitumstellung) als Linie oder Balken in kW.
+function drawDay() {
+  const d = model.days.find((x) => x.date === selDate);
+  if (!d) return;
+  const q = d.q.slice().sort((a, b) => a.t - b.t);
+  const svg = $('dvChart');
+  const W = Math.max(280, svg.clientWidth || 600), H = 210, L = 34, R = 6, T = 8, B = 22;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const peakKw = Math.max(...q.map((p) => p.kw));
+  const step = peakKw > 3 ? 1 : 0.5;
+  const max = Math.max(step, Math.ceil(peakKw / step) * step);
+  const n = q.length, bw = (W - L - R) / n;
+  const xc = (i) => L + (i + 0.5) * bw;
+  const y = (kw) => T + (H - T - B) * (1 - kw / max);
+  let out = '';
+  for (let g = 0; g <= max + 1e-9; g += step) {
+    out += `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}"/><text x="${L - 6}" y="${y(g) + 3}" text-anchor="end">${fmt(g, 1)}</text>`;
+  }
+  q.forEach((p, i) => {
+    const s = hhmmFmt.format(p.t);
+    if ((W < 500 ? /^(00|06|12|18):00$/ : /^(00|03|06|09|12|15|18|21):00$/).test(s)) {
+      out += `<text x="${i === 0 ? L : xc(i)}" y="${H - 6}" text-anchor="${i === 0 ? 'start' : 'middle'}">${s}</text>`;
+    }
+  });
+  if (dvMode === 'bars') {
+    const we = d.weekday === 0 || d.weekday === 6;
+    q.forEach((p, i) => { out += `<rect class="bar${we ? ' we' : ''}" x="${L + i * bw + 0.5}" y="${y(p.kw)}" width="${Math.max(1, bw - 1)}" height="${y(0) - y(p.kw)}" rx="1.5"/>`; });
+  } else {
+    out += `<path class="line" d="${q.map((p, i) => `${i ? 'L' : 'M'}${xc(i).toFixed(1)},${y(p.kw).toFixed(1)}`).join(' ')}"/>`;
+  }
+  if (model.baseW !== null && model.baseW / 1000 <= max) {
+    const by = y(model.baseW / 1000);
+    out += `<line class="base" x1="${L}" x2="${W - R}" y1="${by}" y2="${by}"/>`;
+  }
+  out += '<g id="dvMark"></g>';
+  svg.innerHTML = out;
+  dv = { q, W, L, R, bw, n, y, xc };
+
+  const peak = q.reduce((a, b) => (b.kw > a.kw ? b : a));
+  $('dvTitle').textContent = `Tagesverlauf ${WEEKDAYS[d.weekday]} ${shortDate(d.date)}`;
+  $('dvSub').innerHTML = `<b>${fmt(d.kwh)} kWh</b>, ca. ${fmt(dayCost(d), 2)} €, Spitze ${fmt(peak.kw, 2)} kW um ${hhmmFmt.format(peak.t)} Uhr${d.partial ? ' (unvollständiger Tag)' : ''}`;
+  $('dvReadout').innerHTML = 'Über die Grafik fahren oder tippen für Uhrzeit und Leistung';
+  document.querySelectorAll('#dayChart .col').forEach((c) => c.classList.toggle('sel', c.dataset.date === selDate));
+}
+
+function dvPoint(ev) {
+  if (!dv) return;
+  const r = $('dvChart').getBoundingClientRect();
+  const i = Math.max(0, Math.min(dv.n - 1, Math.floor((ev.clientX - r.left - dv.L) / dv.bw)));
+  const p = dv.q[i];
+  let mark;
+  if (dvMode === 'bars') mark = `<rect class="hl" x="${dv.L + i * dv.bw - 1}" y="8" width="${dv.bw + 2}" height="${dv.y(0) - 8}"/>`;
+  else mark = `<line class="mark" x1="${dv.xc(i)}" x2="${dv.xc(i)}" y1="8" y2="${dv.y(0)}"/><circle class="dot" cx="${dv.xc(i)}" cy="${dv.y(p.kw)}" r="4.5"/>`;
+  $('dvMark').innerHTML = mark;
+  $('dvReadout').innerHTML = `<b>${hhmmFmt.format(p.t)}–${hhmmFmt.format(new Date(p.t.getTime() + 900000))} Uhr</b> ${fmt(p.kw, 2)} kW (${fmt(p.kw / 4, 3)} kWh)`;
+}
 
 // Tagesbalken: je Tag Grundlast (unten, dunkel) und aktiver Verbrauch (oben).
 function drawRange() {
@@ -265,11 +351,15 @@ function drawRange() {
     const col = document.createElement('div');
     col.className = 'col' + (d.weekday === 0 || d.weekday === 6 ? ' we' : '') + (d.partial ? ' partial' : '');
     col.tabIndex = 0;
+    col.dataset.date = d.date;
     col.innerHTML = `<div class="act" style="height:${(d.kwh - base) / max * 100}%"></div><div class="base" style="height:${base / max * 100}%"></div>`;
     const show = () => {
       $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(dayCost(d), 2)} €${d.partial ? ' (unvollständig)' : ''}`;
     };
     ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
+    const pick = () => { selDate = d.date; drawDay(); };
+    col.addEventListener('click', pick);
+    col.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
     chart.appendChild(col);
   });
   const fullDays = days.filter((d) => !d.partial);
@@ -300,7 +390,9 @@ function render() {
   $('tBase').innerHTML = model.baseW === null ? '–' : `${Math.round(model.baseW)}<small>W</small>`;
   $('tBaseSub').textContent = model.baseW === null ? '' : `≈ ${fmt(model.baseW * 24 / 1000)} kWh pro Tag, die rund um die Uhr laufen`;
 
+  if (!selDate || !model.days.some((x) => x.date === selDate)) selDate = last.date;
   drawRange();
+  drawDay();
 
   // Durchschnitt je Wochentag (nur vollständige Tage)
   $('wk').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((w) => {
@@ -365,6 +457,7 @@ async function load() {
     banner(`<span>🧪</span><span><b>Beispieldaten.</b> ${note} Sobald der Zugang steht, zeigt diese Seite automatisch deine echten Werte.</span>`, false);
   }
   $('content').hidden = false;
+  [...$('dvMode').children].forEach((x) => x.classList.toggle('on', x.dataset.m === dvMode));
   render();
 }
 
@@ -375,6 +468,18 @@ $('seg').addEventListener('click', (e) => {
   [...$('seg').children].forEach((x) => x.classList.toggle('on', x === b));
   render();
 });
+$('dvMode').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || !model) return;
+  dvMode = b.dataset.m;
+  try { localStorage.setItem('stromDayMode', dvMode); } catch (err) { /* egal */ }
+  [...$('dvMode').children].forEach((x) => x.classList.toggle('on', x === b));
+  drawDay();
+});
+$('dvChart').addEventListener('pointermove', dvPoint);
+$('dvChart').addEventListener('pointerdown', dvPoint);
+$('dvChart').addEventListener('pointerleave', () => { const m = $('dvMark'); if (m) m.innerHTML = ''; });
+window.addEventListener('resize', () => { if (model) drawDay(); });
 load();
 </script>
 </body>
