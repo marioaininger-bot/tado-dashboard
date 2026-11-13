@@ -94,6 +94,8 @@
   .actile .val{font-size:26px;font-weight:700;letter-spacing:-.02em;margin:4px 0 2px;font-variant-numeric:tabular-nums;}
   .actile .val.off{color:var(--text-dim);}
   .actile .sub{font-size:12px;color:var(--text-dim);line-height:1.4;}
+  .actile .est{font-size:12px;color:var(--text);line-height:1.4;margin-top:6px;padding-top:6px;border-top:1px dashed var(--card-border);}
+  .actile .est i{font-style:normal;font-weight:600;color:var(--text-dim);}
   .dl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:14px;font-size:12px;color:var(--text-dim);}
   .dl .icon-btn{padding:7px 14px;font-size:12px;border:1px solid var(--card-border);box-shadow:none;}
   .dl .icon-btn.dl-blue,.dl .icon-btn.dl-orange{color:#fff;font-weight:600;border-color:transparent;}
@@ -134,7 +136,7 @@
     <div class="t w4" id="acToday" style="margin-bottom:14px;" hidden>
       <div class="card-head"><h2>Klima heute</h2><div class="readout" id="acTodayNote"></div></div>
       <div class="actiles" id="acTiles"></div>
-      <div class="foot" style="margin-top:12px;">Betriebszeit der Klimaanlagen, kein Stromverbrauch. Das Protokoll zählt im 5-Minuten-Takt und ist eine Untergrenze.</div>
+      <div class="foot" id="acFoot" style="margin-top:12px;"></div>
     </div>
 
     <div class="t w4" style="margin-bottom:14px;">
@@ -334,6 +336,78 @@ function acForDay(date) {
   });
 }
 
+// Schätzung der Leistung je Klimaanlage. Der Zähler misst nur die ganze Wohnung, deshalb wird verglichen:
+// Stromverbrauch je Stunde = typischer Wert dieser Uhrzeit + Leistung der Anlage x Minuten, die sie in der Stunde lief.
+// Gerechnet wird eine Regression über alle vollständigen Stunden seit Beginn des Protokolls, mit festem Wert je
+// Uhrzeit (dadurch fallen tägliche Gewohnheiten wie Kochen am Abend heraus) und je einer Leistung pro Anlage.
+// Ergebnis je Anlage: kW im Betrieb und ein 95-%-Bereich. Ist die Leistung nicht größer als null oder der
+// Bereich größer als der Wert selbst, gilt sie als "nicht erkennbar".
+const MIN_EST_DAYS = 7;
+function solveInverse(A) {                       // Gauss-Jordan, null bei singulärer Matrix
+  const n = A.length;
+  const M = A.map((r, i) => [...r, ...Array.from({ length: n }, (_, j) => (i === j ? 1 : 0))]);
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[piv][c])) piv = r;
+    if (Math.abs(M[piv][c]) < 1e-9) return null;
+    [M[c], M[piv]] = [M[piv], M[c]];
+    const d = M[c][c];
+    for (let j = 0; j < 2 * n; j++) M[c][j] /= d;
+    for (let r = 0; r < n; r++) {
+      if (r === c) continue;
+      const f = M[r][c];
+      for (let j = 0; j < 2 * n; j++) M[r][j] -= f * M[c][j];
+    }
+  }
+  return M.map((r) => r.slice(n));
+}
+
+function estimateAc() {
+  if (!acLog || !acLog.since || !acLog.zones.length) return null;
+  const today = dayFmt.format(new Date());
+  const days = model.days.filter((d) => d.date >= acLog.since && d.date < today && !d.partial);
+  if (days.length < MIN_EST_DAYS) return { few: days.length };
+  const Z = acLog.zones.length;
+  const rows = [];                                // je vollständiger Stunde: Uhrzeit, kWh, Minuten je Anlage
+  days.forEach((d) => {
+    const byH = new Map();
+    d.q.forEach((p) => { const h = hourOf(p.t); const o = byH.get(h) || { kwh: 0, n: 0 }; o.kwh += p.kw / 4; o.n += 1; byH.set(h, o); });
+    byH.forEach((o, h) => {
+      if (o.n !== 4) return;                      // Zeitumstellung: doppelte/fehlende Stunden auslassen
+      rows.push({ h, y: o.kwh, x: acLog.zones.map((z) => { const dd = z.days.find((x) => x.date === d.date); return dd ? dd.byHour[h] : 0; }) });
+    });
+  });
+  const grp = new Map();
+  rows.forEach((r) => {
+    const g = grp.get(r.h) || { n: 0, y: 0, x: Array(Z).fill(0) };
+    g.n += 1; g.y += r.y; r.x.forEach((v, k) => { g.x[k] += v; });
+    grp.set(r.h, g);
+  });
+  const A = Array.from({ length: Z }, () => Array(Z).fill(0));
+  const b = Array(Z).fill(0);
+  let syy = 0;
+  rows.forEach((r) => {
+    const g = grp.get(r.h);
+    const yd = r.y - g.y / g.n;
+    const xd = r.x.map((v, k) => v - g.x[k] / g.n);
+    for (let i = 0; i < Z; i++) { b[i] += xd[i] * yd; for (let j = 0; j < Z; j++) A[i][j] += xd[i] * xd[j]; }
+    syy += yd * yd;
+  });
+  const inv = solveInverse(A);
+  if (!inv) return { zones: acLog.zones.map(() => ({ ok: false })), days: days.length };
+  const beta = inv.map((row) => row.reduce((a, v, j) => a + v * b[j], 0));   // kWh je Minute Betrieb
+  const sse = Math.max(0, syy - beta.reduce((a, v, i) => a + v * b[i], 0));
+  const dof = rows.length - grp.size - Z;
+  const sigma2 = dof > 0 ? sse / dof : 0;
+  return {
+    days: days.length,
+    zones: beta.map((be, k) => {
+      const kw = be * 60, ci = 1.96 * Math.sqrt(sigma2 * inv[k][k]) * 60;
+      return { kw, ci, ok: dof > 0 && kw > 0 && ci < kw };
+    }),
+  };
+}
+
 const fmtMin = (m) => (m <= 0 ? 'aus' : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`);
 
 // Kachel „Klima heute": Betriebsminuten je Anlage seit Mitternacht, dazu Gestern und Ø pro Tag.
@@ -344,14 +418,29 @@ function drawAcToday() {
   const yesterday = dayFmt.format(new Date(Date.now() - 86400000));
   const past = model.days.map((d) => d.date).filter((dt) => dt >= acLog.since && dt < today);   // Tage mit Protokoll, ohne heute
   const minutesOn = (z, date) => { const d = z.days.find((x) => x.date === date); return d ? d.minutes : 0; };
-  $('acTiles').innerHTML = acLog.zones.map((z) => {
+  const est = estimateAc();
+  const disc = today <= TARIFF.discountUntil;
+  $('acTiles').innerHTML = acLog.zones.map((z, k) => {
     const now = minutesOn(z, today);
     const avg = past.length ? Math.round(past.reduce((a, dt) => a + minutesOn(z, dt), 0) / past.length) : null;
     const sub = [avg === null ? '' : `Ø ${fmtMin(avg) === 'aus' ? '0 min' : fmtMin(avg)} pro Tag`,
       acLog.since <= yesterday ? `gestern ${fmtMin(minutesOn(z, yesterday)) === 'aus' ? '0 min' : fmtMin(minutesOn(z, yesterday))}` : ''].filter(Boolean).join(', ');
-    return `<div class="actile"><div class="nm">${escHtml(z.name)}</div><div class="val${now > 0 ? '' : ' off'}">${now > 0 ? fmtMin(now) : 'bisher aus'}</div><div class="sub">${sub}</div></div>`;
+    let estHtml = '';
+    if (est && est.zones && est.zones[k]) {
+      const e = est.zones[k];
+      if (!e.ok) estHtml = '<div class="est"><i>geschätzt:</i> Leistung noch nicht erkennbar</div>';
+      else {
+        const kwhNow = e.kw * now / 60, kwhAvg = avg === null ? null : e.kw * avg / 60;
+        estHtml = `<div class="est"><i>geschätzt:</i> ≈ ${fmt(e.kw, 2)} kW im Betrieb (± ${fmt(e.ci, 2)})<br>heute ≈ ${fmt(kwhNow, 2)} kWh`
+          + (kwhAvg === null ? '' : `, Ø ≈ ${fmt(kwhAvg, 1)} kWh pro Tag (ca. ${fmt(costOf(kwhAvg, 0, disc), 2)} €)`) + '</div>';
+      }
+    }
+    return `<div class="actile"><div class="nm">${escHtml(z.name)}</div><div class="val${now > 0 ? '' : ' off'}">${now > 0 ? fmtMin(now) : 'bisher aus'}</div><div class="sub">${sub}</div>${estHtml}</div>`;
   }).join('');
   $('acTodayNote').textContent = `bis ${hhmmFmt.format(new Date())} Uhr`;
+  $('acFoot').textContent = est && est.few !== undefined
+    ? `Betriebszeit der Klimaanlagen, kein gemessener Stromverbrauch. Eine Schätzung der Leistung braucht mindestens ${MIN_EST_DAYS} Tage Protokoll (bisher ${est.few}).`
+    : 'Betriebszeit der Klimaanlagen. kW und kWh sind geschätzt: Der Zähler misst nur die ganze Wohnung, die Schätzung vergleicht Stunden mit und ohne Klimaanlage (je Uhrzeit, über alle Tage seit Beginn des Protokolls) und wird mit mehr Tagen genauer. ± ist ein 95-%-Bereich. Die Zählung im 5-Minuten-Takt ist eine Untergrenze.';
   box.hidden = false;
 }
 
@@ -607,6 +696,13 @@ async function load() {
   if (!model) {
     model = analyse(makeSampleResponse());
     acLog = makeSampleRuntime(model);
+    // Demo: Beispielverbrauch steigt, wenn die Beispiel-Anlage läuft (0,9 und 0,6 kW), damit die Schätzung etwas findet.
+    acLog.zones.forEach((z, k) => z.days.forEach((zd) => {
+      const day = model.days.find((d) => d.date === zd.date);
+      if (!day) return;
+      day.q.forEach((p) => { p.kw += (k ? 0.6 : 0.9) * zd.byHour[hourOf(p.t)] / 60; });
+      day.kwh = day.q.reduce((a, p) => a + p.kw / 4, 0);
+    }));
     banner(`<span>🧪</span><span><b>Beispieldaten.</b> ${note} Sobald der Zugang steht, zeigt diese Seite automatisch deine echten Werte.</span>`, false);
   }
   $('content').hidden = false;
