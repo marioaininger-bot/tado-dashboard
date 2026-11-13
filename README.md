@@ -237,8 +237,10 @@ Endpunkte (alle mit `X-Dashboard-Key`, nur GET):
 
 Ohne `von`/`bis` werden die letzten 7 Tage geliefert. Die Daten stehen beim
 Netzbetreiber erst am Folgetag bereit und müssen im Smart-Meter-Portal für
-Viertelstundenwerte freigeschaltet sein. Antworten werden eine Stunde in KV
-gecacht. Je Zählwerk (`obis`) kommt eine Liste mit `from`, `to`, `value`,
+Viertelstundenwerte freigeschaltet sein. Antworten werden 15 Minuten in KV
+gecacht (höchstens 96 Schreibzugriffe pro Tag und Abfrage; das Dashboard
+fragt je Seitenaufruf nur eine Abfrage-Variante ab, der Cron nutzt den Cache
+nicht). Je Zählwerk (`obis`) kommt eine Liste mit `from`, `to`, `value`,
 `kwh` (aus Wh/kWh umgerechnet, sonst `null`) und `quality`. Die genaue Einheit
 und die OBIS-Codes sind nach dem ersten echten Abruf zu prüfen.
 

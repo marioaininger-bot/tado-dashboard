@@ -22,7 +22,7 @@ const BASE_URL = 'https://api.wstw.at/gateway/WN_SMART_METER_API/1.0/';
 
 const REQUIRED_SECRETS = ['WN_CLIENT_ID', 'WN_CLIENT_SECRET', 'WN_API_KEY', 'WN_ZAEHLPUNKT'];
 const CACHE_PREFIX = 'strom_cache:';
-const CACHE_TTL_SECONDS = 3600;
+const CACHE_TTL_SECONDS = 900;   // 15 Minuten; je Abfrage-Schlüssel höchstens 96 KV-Schreibzugriffe pro Tag
 const DAY_MS = 24 * 3600 * 1000;
 
 // Maximale Zeitspanne je Abfrage (Viertelstunden erzeugen sonst riesige Antworten).
