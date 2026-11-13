@@ -130,11 +130,7 @@
     </div>
 
     <div class="t w4">
-      <div class="card-head"><h2>Kosten</h2></div>
-      <div class="controls">
-        <label for="grid">Netz, Abgaben und Steuern (ct/kWh, Schätzung)</label>
-        <input id="grid" type="number" min="0" max="100" step="0.1" value="14.5" inputmode="decimal">
-      </div>
+      <div class="card-head"><h2>So wird gerechnet</h2></div>
       <div class="foot" id="foot"></div>
     </div>
   </div>
@@ -145,12 +141,34 @@
 const API_ENDPOINT = 'https://tado-dashboard-api.mario-aininger.workers.dev';
 const KEY_STORAGE = 'dashboardKey';       // gleicher Schlüssel wie im Dashboard
 const REFERENCE_KWH_PER_DAY = 16.75;       // Jahresabrechnung 2024/25 (6.115 kWh in 365 Tagen)
-// Tarif V-Strom-ÖSTERREICH-H-0326 (VERBUND), jeweils inkl. USt.
-const ENERGY_CT = 15.00;                   // Arbeitspreis in ct/kWh
-const BASE_EUR_MONTH = 4.79;               // Grundpreis in EUR pro Monat
-// Netz, Abgaben und Steuern: Schätzung aus der Monatsinfo August 2026 (437,72 kWh = 134,05 EUR inkl. allem):
-// (134,05 - 437,72 * 0,15 - 4,79) / 437,72 = 14,5 ct/kWh. Enthält anteilig die festen Netzkosten.
-const DEFAULT_GRID_CT = 14.5;
+// Kostenmodell. Quellen: Vertrag V-Strom-ÖSTERREICH-H-0326 (VERBUND) und Jahresabrechnung 09.12.2024 bis 08.12.2025
+// (Netzentgelte und Abgaben, Stand 2025). Alle Posten netto in EUR, die USt. kommt am Ende dazu.
+// Gegenprobe: August 2026 (437,72 kWh) ergibt 135,00 EUR, VERBUND nennt 134,05 EUR ohne Rabatt.
+const TARIFF = {
+  vat: 0.20,
+  energyGrossCt: 15.00,        // Arbeitspreis in ct/kWh inkl. USt.
+  discountGrossCt: 3.60,       // Rabatt in ct/kWh inkl. USt., ergibt 11,40 ct/kWh
+  discountUntil: '2027-03-31', // Rabatt und Preisgarantie gültig bis einschließlich
+  baseGrossMonth: 4.79,        // Energie-Grundpreis in EUR pro Monat inkl. USt.
+  gridKwh: 0.074 + 0.007,      // Netznutzungsentgelt + Netzverlustentgelt, EUR/kWh
+  gridDay: 0.131507 + 0.071671,// Leistungspreis + Entgelt für Messleistungen, EUR/Tag
+  eagKwh: 0.00737 + 0.00059,   // EAG-Förderbeitrag Netznutzung + Netzverlust, EUR/kWh
+  eagDay: 0.012863 + 0.05211,  // EAG-Förderbeitrag Leistung + Pauschale, EUR/Tag
+  energyTaxKwh: 0.001,         // Elektrizitätsabgabe 2026 (0,1 ct/kWh netto; 2025 waren es 1,5 ct)
+  usageTax: 0.06,              // Gebrauchsabgabe in Wien auf Energie- und Netzkosten
+};
+
+// Kosten in EUR (inkl. USt.) für kwh Verbrauch über days Tage; discounted = Rabatt aktiv.
+function costOf(kwh, days, discounted) {
+  const t = TARIFF;
+  const energy = kwh * (t.energyGrossCt - (discounted ? t.discountGrossCt : 0)) / 100 / (1 + t.vat)
+    + t.baseGrossMonth / (1 + t.vat) * 12 / 365 * days;
+  const grid = kwh * t.gridKwh + days * t.gridDay;
+  const levies = kwh * (t.eagKwh + t.energyTaxKwh) + days * t.eagDay;
+  const usageTax = t.usageTax * (energy + grid);
+  return (energy + grid + levies + usageTax) * (1 + t.vat);
+}
+const dayCost = (d) => costOf(d.kwh, 1, d.date <= TARIFF.discountUntil);
 const DAYS = 30;
 const TZ = 'Europe/Vienna';
 
@@ -236,7 +254,7 @@ const WEEKDAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 let range = 30;
 
 // Tagesbalken: je Tag Grundlast (unten, dunkel) und aktiver Verbrauch (oben).
-function drawRange(price, baseDay) {
+function drawRange() {
   const days = model.days.slice(-range);
   const baseKwh = model.baseW === null ? 0 : model.baseW * 24 / 1000;
   const max = Math.max(...days.map((d) => d.kwh)) * 1.05;
@@ -249,7 +267,7 @@ function drawRange(price, baseDay) {
     col.tabIndex = 0;
     col.innerHTML = `<div class="act" style="height:${(d.kwh - base) / max * 100}%"></div><div class="base" style="height:${base / max * 100}%"></div>`;
     const show = () => {
-      $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(d.kwh * price / 100 + baseDay, 2)} €${d.partial ? ' (unvollständig)' : ''}`;
+      $('dayReadout').innerHTML = `<b>${WEEKDAYS[d.weekday]} ${shortDate(d.date)}</b> ${fmt(d.kwh)} kWh, ca. ${fmt(dayCost(d), 2)} €${d.partial ? ' (unvollständig)' : ''}`;
     };
     ['mouseenter', 'focus', 'click'].forEach((ev) => col.addEventListener(ev, show));
     chart.appendChild(col);
@@ -257,15 +275,12 @@ function drawRange(price, baseDay) {
   const fullDays = days.filter((d) => !d.partial);
   const total = fullDays.reduce((s, d) => s + d.kwh, 0);
   const share = total ? Math.min(baseKwh * fullDays.length / total, 1) : 0;
-  $('rangeTitle').textContent = `${days.length} Tage: ${fmt(total)} kWh, ca. ${fmt(total * price / 100 + baseDay * fullDays.length, 2)} €, davon Grundlast ${Math.round(share * 100)} %`;
+  $('rangeTitle').textContent = `${days.length} Tage: ${fmt(total)} kWh, ca. ${fmt(fullDays.reduce((s, d) => s + dayCost(d), 0), 2)} €, davon Grundlast ${Math.round(share * 100)} %`;
   $('axFrom').textContent = shortDate(days[0].date);
   $('axTo').textContent = shortDate(days[days.length - 1].date);
 }
 
 function render() {
-  const gridCt = parseFloat($('grid').value);
-  const price = ENERGY_CT + (Number.isFinite(gridCt) ? gridCt : DEFAULT_GRID_CT);   // ct/kWh gesamt
-  const baseDay = BASE_EUR_MONTH * 12 / 365;                                       // Grundpreis pro Tag
   const full = model.days.filter((d) => !d.partial);
   const total = full.reduce((s, d) => s + d.kwh, 0);
   const avg = full.length ? total / full.length : 0;
@@ -275,13 +290,17 @@ function render() {
   $('tLastSub').textContent = `am ${shortDate(last.date)}, ${last.kwh > avg ? Math.round((last.kwh / avg - 1) * 100) + ' % über' : Math.round((1 - last.kwh / avg) * 100) + ' % unter'} dem Schnitt`;
   $('tAvg').innerHTML = `${fmt(avg)}<small>kWh</small>`;
   $('tAvgSub').textContent = `Jahresschnitt laut Rechnung: ${fmt(REFERENCE_KWH_PER_DAY, 2)} kWh`;
-  const cost = total * price / 100 + baseDay * full.length;
+  const cost = full.reduce((s, d) => s + dayCost(d), 0);
   $('tCost').innerHTML = `${fmt(cost, 2)}<small>€</small>`;
-  $('tCostSub').textContent = `${full.length} Tage, hochgerechnet ca. ${Math.round(avg * 365 * price / 100 + BASE_EUR_MONTH * 12).toLocaleString('de-AT')} € pro Jahr`;
+  // Jahreshochrechnung: Rabatt nur für die Tage, die er noch gilt, danach voller Arbeitspreis.
+  const todayKey = dayFmt.format(new Date());
+  const discDays = Math.min(365, Math.max(0, Math.round((Date.parse(TARIFF.discountUntil + 'T00:00:00Z') - Date.parse(todayKey + 'T00:00:00Z')) / 86400000) + 1));
+  const yearCost = costOf(avg * 365, 365, false) - (costOf(avg * discDays, discDays, false) - costOf(avg * discDays, discDays, true));
+  $('tCostSub').textContent = `${full.length} Tage, hochgerechnet ca. ${Math.round(yearCost).toLocaleString('de-AT')} € pro Jahr${discDays ? ' (Rabatt bis 31.3.2027 eingerechnet)' : ''}`;
   $('tBase').innerHTML = model.baseW === null ? '–' : `${Math.round(model.baseW)}<small>W</small>`;
   $('tBaseSub').textContent = model.baseW === null ? '' : `≈ ${fmt(model.baseW * 24 / 1000)} kWh pro Tag, die rund um die Uhr laufen`;
 
-  drawRange(price, baseDay);
+  drawRange();
 
   // Durchschnitt je Wochentag (nur vollständige Tage)
   $('wk').innerHTML = [1, 2, 3, 4, 5, 6, 0].map((w) => {
@@ -292,8 +311,9 @@ function render() {
   const p = model.peak;
   $('foot').textContent = p.at
     ? `Höchste Leistung im Zeitraum: ${fmt(p.kw, 2)} kW am ${shortDate(dayFmt.format(p.at))} um ${hhmmFmt.format(p.at)} Uhr. `
-      + `Tarif V-Strom-ÖSTERREICH-H-0326: ${fmt(ENERGY_CT, 2)} ct/kWh plus ${fmt(BASE_EUR_MONTH, 2)} € Grundpreis pro Monat (inkl. USt.). `
-      + 'Netz, Abgaben und Steuern sind aus der VERBUND-Monatsinfo August 2026 geschätzt; Boni und Rabatte sind nicht berücksichtigt. '
+      + `Tarif V-Strom-ÖSTERREICH-H-0326: ${fmt(TARIFF.energyGrossCt, 2)} ct/kWh, mit Rabatt bis 31.3.2027 ${fmt(TARIFF.energyGrossCt - TARIFF.discountGrossCt, 2)} ct/kWh, plus ${fmt(TARIFF.baseGrossMonth, 2)} € Grundpreis pro Monat. `
+      + 'Netzentgelte, Abgaben und Steuern nach deiner Jahresabrechnung 2025 (Elektrizitätsabgabe auf den Stand 2026 gesenkt), alles inkl. USt. '
+      + 'Ändern sich die Netzentgelte, weicht die Rechnung leicht ab. '
       + 'Die Werte kommen vom Netzbetreiber mit einem Tag Verzug.'
     : '';
 }
@@ -355,7 +375,6 @@ $('seg').addEventListener('click', (e) => {
   [...$('seg').children].forEach((x) => x.classList.toggle('on', x === b));
   render();
 });
-$('grid').addEventListener('input', () => { if (model) render(); });
 load();
 </script>
 </body>
