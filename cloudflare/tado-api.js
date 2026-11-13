@@ -18,7 +18,7 @@ import { handleRuntime, recordRuntime, viennaDayHour } from './runtime-log.js';
 import { handleAcChanges, recordAcChanges, markDashboardCommand } from './ac-changes.js';
 import { handleEnergy, syncAcEnergy } from './ac-energy.js';
 import {
-  MIN_AGE, isNotifyConfigured, sendPush, evaluateNotifications, conditionsFromZones,
+  MIN_AGE, isNotifyConfigured, sendPushDetailed, evaluateNotifications, conditionsFromZones,
 } from './notify.js';
 
 const TADO_CLIENT_ID = '1bb50063-6b0c-4d11-bd99-387f4a91cc46'; // öffentliche Tado-Client-ID (Device-Flow, kein Secret nötig)
@@ -796,13 +796,19 @@ async function handleNotifyTest(env) {
   if (!isNotifyConfigured(env)) {
     return json(400, { error: 'NTFY_TOPIC ist nicht gesetzt.' }, env);
   }
-  const ok = await sendPush(env, {
+  const result = await sendPushDetailed(env, {
     title: 'Tado-Dashboard',
     message: 'Test: Push-Nachrichten funktionieren.',
     priority: 3,
     tags: ['white_check_mark'],
   });
-  return json(ok ? 200 : 502, ok ? { status: 'ok' } : { error: 'ntfy hat die Nachricht nicht angenommen.' }, env);
+  if (result.ok) return json(200, { status: 'ok' }, env);
+  return json(502, {
+    error: 'ntfy hat die Nachricht nicht angenommen.',
+    ntfyStatus: result.status,
+    ntfyAntwort: result.detail,
+    topicLaenge: String(env.NTFY_TOPIC).length,
+  }, env);
 }
 
 // Diagnose (nur lesend): Modell und Verbrauchsdaten der Panasonic-Geräte. ?datum=JJJJ-MM-TT, sonst gestern.

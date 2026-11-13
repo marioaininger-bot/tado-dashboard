@@ -31,17 +31,26 @@ export function isNotifyConfigured(env) {
 
 // Schickt eine Nachricht. Gibt true zurück, wenn ntfy sie angenommen hat.
 // JSON-Variante, damit Umlaute und Emojis in Titel/Text keine Header-Probleme machen.
-export async function sendPush(env, { title, message, priority = 3, tags = [] }) {
-  if (!isNotifyConfigured(env)) return false;
+export async function sendPush(env, msg) {
+  return (await sendPushDetailed(env, msg)).ok;
+}
+
+// Wie sendPush, liefert aber { ok, status, detail } für die Diagnose
+// (Testroute). Der Topic-Name wird aus dem Text entfernt, damit er nie in einer
+// Antwort oder einem Log auftaucht.
+export async function sendPushDetailed(env, { title, message, priority = 3, tags = [] }) {
+  if (!isNotifyConfigured(env)) return { ok: false, status: null, detail: 'NTFY_TOPIC ist nicht gesetzt.' };
+  const scrub = (text) => String(text).split(env.NTFY_TOPIC).join('***').slice(0, 300);
   try {
     const res = await fetch(env.NTFY_URL || DEFAULT_NTFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ topic: env.NTFY_TOPIC, title, message, priority, tags }),
     });
-    return res.ok;
+    const detail = res.ok ? '' : scrub(await res.text().catch(() => ''));
+    return { ok: res.ok, status: res.status, detail };
   } catch (err) {
-    return false;
+    return { ok: false, status: null, detail: scrub(err && err.message ? err.message : err) };
   }
 }
 

@@ -332,7 +332,9 @@ externen Wächter.
    ```
 
 3. Testen: `POST /api/notify/test` (mit `X-Dashboard-Key`) schickt eine
-   Test-Nachricht.
+   Test-Nachricht. Lehnt ntfy sie ab, zeigt die Antwort `ntfyStatus`,
+   `ntfyAntwort` (Text von ntfy, ohne Topic-Namen) und `topicLaenge`
+   (Anzahl Zeichen des Secrets, um Leerzeichen oder Tippfehler zu erkennen).
 
 Optional: Variable `NTFY_URL` für einen eigenen ntfy-Server (Standard
 `https://ntfy.sh`). Ohne `NTFY_TOPIC` passiert nichts.
