@@ -190,31 +190,35 @@ trotzdem benutzbar):
   da; ein Klick auf einen Tagesbalken wechselt den Tag. Darstellung als Linie
   oder Balken umschaltbar (die Wahl merkt sich der Browser), die Grundlast ist
   gestrichelt eingezeichnet. Darunter steht je Klimaanlage ein Streifen, wann sie
-  an war (aus `/api/klima/laufzeit`, Stundenraster, kräftiger = mehr Minuten in
-  der Stunde). So lassen sich Strom-Spitzen den Anlagen zuordnen. Vor dem
-  `since` des Protokolls gibt es keine Streifen
-- Kachel **Klima heute**: Betriebszeit je Klimaanlage seit Mitternacht (aus
-  `/api/klima/laufzeit`), dazu gestern und Ø pro Tag seit Beginn des Protokolls.
-  Der Zähler misst nur die ganze Wohnung, die Leistung je Anlage ist deshalb
-  **geschätzt**: eine Regression im Browser über alle vollständigen Stunden seit
-  Beginn des Protokolls (Stromverbrauch je Stunde = typischer Wert der Uhrzeit +
-  Leistung der Anlage × Minuten in der Stunde). Die Kachel zeigt kW im Betrieb mit
-  95-%-Bereich sowie kWh heute und Ø pro Tag samt Kosten, erst ab 7 Tagen Protokoll.
-  Ist die Leistung nicht eindeutig, steht „noch nicht erkennbar“. Ohne
-  Laufzeit-Protokoll bleibt die Kachel ausgeblendet
+  Strom brauchte (Stundenraster, kräftiger = mehr kWh in der Stunde; ohne
+  Panasonic-Daten nach Betriebsminuten aus `/api/klima/laufzeit`). So lassen sich
+  Strom-Spitzen den Anlagen zuordnen. Vor dem `since` des Protokolls gibt es keine
+  Streifen
+- Kachel **Klima heute**: je Klimaanlage der **gemessene** Stromverbrauch seit
+  Mitternacht in kWh (aus `/api/klima/verbrauch`, Panasonic-Messwerte inklusive
+  Standby), dazu Ø pro Tag samt Kosten, gestern, Betriebszeit heute (aus
+  `/api/klima/laufzeit`) und Standby in Watt. Die Werte sind wenige Minuten bis
+  eine halbe Stunde verzögert; die Kachel nennt den Stand. Ohne Panasonic-Daten
+  (Route fehlt, nichts abgeholt) fällt die Seite auf den Betrieb nach Laufzeit
+  zurück: Betriebszeit und eine **Schätzung** der Leistung per Regression im
+  Browser (Verbrauch je Stunde = typischer Wert der Uhrzeit + Leistung der
+  Anlage × Minuten, erst ab 7 Tagen Protokoll, sonst „noch nicht erkennbar“).
+  Ohne beide Quellen bleibt die Kachel ausgeblendet
 - Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast (schwarz), aktiven
-  Verbrauch (blau, am Wochenende orange) und die **geschätzte** Klimaanlage
-  (grün, oben): Betriebsminuten × geschätzte Leistung (siehe Kachel „Klima heute“),
-  aus dem aktiven Teil herausgerechnet, nicht zusätzlich. Ist die Schätzung für
-  eine Anlage (noch) nicht belastbar, gilt die Annahme `AC_ASSUMED_KW` (0,8 kW im
-  Betrieb, in `strom.html`); der Teil ist dann **schraffiert** und in Legende und
-  Hover-Text als „angenommen“ gekennzeichnet. Vor Beginn des Protokolls gibt es
-  keinen grünen Teil
+  Verbrauch (blau, am Wochenende orange) und die Klimaanlage (grün, oben). Der
+  grüne Teil ist der Panasonic-Messwert über dem Standby (`STANDBY_KWH_H`, rund
+  4 W; der Standby steckt schon in der Grundlast) und wird aus dem aktiven Teil
+  herausgerechnet, nicht zusätzlich gezeichnet. Für Tage ohne Panasonic-Daten
+  gilt der Rückfall: Betriebsminuten × geschätzte Leistung, sonst die Annahme
+  `AC_ASSUMED_KW` (0,8 kW im Betrieb, in `strom.html`), dann **schraffiert**.
+  Legende, Titel und Hover-Text nennen jeweils die Quelle („gemessen“,
+  „geschätzt“, „angenommen“). Vor Beginn des Protokolls gibt es keinen grünen Teil
 - Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
 - **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
   Browser erzeugt, ohne zusätzlichen Abruf. Zwei Dateien: die Liste aller
   Viertelstunden (Datum, Uhrzeit, Wochentag, kW, kWh, dazu je Klimaanlage die
-  Minuten, die sie in der jeweiligen Stunde lief) und eine Tabelle Uhrzeit
+  gemessenen kWh der jeweiligen Stunde, ohne Panasonic-Daten die Minuten, die
+  sie lief) und eine Tabelle Uhrzeit
   mal Tag mit Durchschnitt und Maximum je Uhrzeit, um wiederkehrende
   Verbraucher zu finden. Semikolon, Dezimalkomma und UTF-8 mit BOM, damit
   Excel sie direkt öffnet. Uhrzeiten in Wiener Zeit
@@ -266,6 +270,34 @@ Fall. Die Seite `geraete.html` ruft ihn mit dem gespeicherten Zugangsschlüssel
 auf und zeigt das Ergebnis. Der Abruf läuft nur auf Anfrage, nicht im Cron, und
 schreibt nichts nach KV. Pro Aufruf sind es 1 + 2 Anfragen je Gerät an
 Panasonic (Free-Plan: höchstens 50 pro Aufruf).
+
+## Stromverbrauch der Klimaanlagen (Panasonic-Messwerte)
+
+Die Panasonic-Geräte mit Energiemessung (`powerConsumptionFlg`, bei diesem
+Haushalt alle drei: CS-TZ42CKEW und zweimal CS-TZ20CKEW) liefern über die
+Comfort-Cloud den Verbrauch je Tag und Stunde in kWh (`deviceHistoryData`,
+`dataMode` 0, inoffiziell). `-255` heißt dort „kein Wert“ (z. B. vor der
+Registrierung des Geräts). Der Cron-Trigger holt die Werte in kleinen Portionen
+und legt sie dauerhaft in KV ab (`cloudflare/ac-energy.js`, Schlüssel
+`ac_energy`, 400 Tage). Das Dashboard liest nur aus KV, nie direkt von Panasonic.
+
+- Je Lauf höchstens 3 Tage, je Gerät eine Anfrage (bei 3 Geräten also 10
+  Anfragen mit der Geräteliste; zusammen mit Tado und Status bleibt der Lauf
+  unter dem Free-Plan-Limit von 50 Subrequests).
+- Reihenfolge: heute (höchstens alle 30 Minuten neu), gestern (nach 3 Uhr
+  früh noch einmal, damit die letzte Stunde stimmt), dann rückwärts bis 60 Tage,
+  was noch fehlt. Das Auffüllen dauert beim ersten Mal rund 20 Läufe
+  (etwa 100 Minuten).
+- Geschrieben wird nur, wenn etwas geholt wurde: rund 50 KV-Schreibzugriffe pro
+  Tag zusätzlich (Limit im Free-Plan: 1000 pro Tag). Panasonic wird nicht
+  dauernd abgefragt, das ist bei einer inoffiziellen Schnittstelle wichtig.
+- Fehlt die Panasonic-Anmeldung, bleibt der Abgleich still stehen (wie die
+  anderen Cron-Schritte); nach dem Login macht er weiter.
+
+`GET /api/klima/verbrauch?von=JJJJ-MM-TT&bis=JJJJ-MM-TT` (mit `X-Dashboard-Key`)
+liefert je Anlage und Tag `kwh` (Summe der bekannten Stunden), `hoursKnown`,
+`byHour` (24 Werte, `null` = unbekannt) und `fetchedAt`. Ohne Daten ist `zones`
+leer. `strom.html` nutzt das für Kachel, Tagesbalken, Tagesverlauf und CSV.
 
 ## Änderungs-Protokoll der Klimaanlagen
 
