@@ -179,7 +179,9 @@ ausgeliefert, **nutzbar sobald die vier Secrets gesetzt sind**. Die Seite
    `WN_CLIENT_ID`, `WN_CLIENT_SECRET`, `WN_API_KEY`, `WN_ZAEHLPUNKT`.
 
 Die Seite `strom.html` zeigt, alles aus den Viertelstundenwerten der letzten
-30 Tage (ein Abruf von `/api/strom/quarter-hours`, kein zusätzlicher Aufruf):
+30 Tage (ein Abruf von `/api/strom/quarter-hours`) und, falls vorhanden, den
+Laufzeiten der Klimaanlagen (`/api/klima/laufzeit`, fehlt sie, bleibt die Seite
+trotzdem benutzbar):
 
 - vier Kennzahlen: letzter Tag, Durchschnitt pro Tag, Kosten, Grundlast nachts
   (Median der Leistung zwischen 2 und 5 Uhr)
@@ -187,12 +189,16 @@ Die Seite `strom.html` zeigt, alles aus den Viertelstundenwerten der letzten
   Werte bei Zeitumstellung). Beim Öffnen steht der letzte vollständige Tag
   da; ein Klick auf einen Tagesbalken wechselt den Tag. Darstellung als Linie
   oder Balken umschaltbar (die Wahl merkt sich der Browser), die Grundlast ist
-  gestrichelt eingezeichnet
+  gestrichelt eingezeichnet. Darunter steht je Klimaanlage ein Streifen, wann sie
+  an war (aus `/api/klima/laufzeit`, Stundenraster, kräftiger = mehr Minuten in
+  der Stunde). So lassen sich Strom-Spitzen den Anlagen zuordnen. Vor dem
+  `since` des Protokolls gibt es keine Streifen
 - Tagesbalken für 7, 14 oder 30 Tage, geteilt in Grundlast und aktiven Verbrauch
 - Durchschnitt je Wochentag und die Kostenrechnung (Tarif im Kopf der Datei)
 - **CSV-Download** für den gewählten Zeitraum (7, 14 oder 30 Tage), direkt im
   Browser erzeugt, ohne zusätzlichen Abruf. Zwei Dateien: die Liste aller
-  Viertelstunden (Datum, Uhrzeit, Wochentag, kW, kWh) und eine Tabelle Uhrzeit
+  Viertelstunden (Datum, Uhrzeit, Wochentag, kW, kWh, dazu je Klimaanlage die
+  Minuten, die sie in der jeweiligen Stunde lief) und eine Tabelle Uhrzeit
   mal Tag mit Durchschnitt und Maximum je Uhrzeit, um wiederkehrende
   Verbraucher zu finden. Semikolon, Dezimalkomma und UTF-8 mit BOM, damit
   Excel sie direkt öffnet. Uhrzeiten in Wiener Zeit
